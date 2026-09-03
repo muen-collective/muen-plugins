@@ -18,9 +18,10 @@ plugins/
 The package declares `name` (`@muen/mitsu-brand`), `version`, `files`, and `dsh.bundle`
 (`cordis.patch.yml`), so it packs and installs cleanly with no build step.
 
-> The other `@muen/mitsu-*` plugins (`mitsu-assets`, `mitsu-docs`, `mitsu-modes`, `mitsu-rail`, …)
-> were the old "Mitsu surface plugins" and are **superseded** — not shipped. Their sources remain in
-> the fork (`mitsu-dsh/plugins/`) and in this repo's git history.
+> **History note:** this repo previously held the other `@muen/mitsu-*` plugins (the old "Mitsu
+> surface plugins"). Those were **failed experiments** — only `@muen/mitsu-brand` is a real first-party
+> plugin. They were removed permanently and are no longer published, listed, or referenced as live
+> plugins anywhere. If you see them mentioned, treat it as stale.
 
 ## Publish (register with the DSH market)
 
