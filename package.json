@@ -1,0 +1,14 @@
+{
+  "name": "muen-plugins",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Muen-authored plugins for the DSH market. Published as GitHub Release tarballs (and optionally @muen npm packages).",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "pack:all": "node scripts/pack-all.mjs",
+    "pack:brand": "npm pack --pack-destination dist ./plugins/mitsu-brand"
+  }
+}
