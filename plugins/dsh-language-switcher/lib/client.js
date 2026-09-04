@@ -88,6 +88,82 @@ window.__ModuleLoader__.load({
         translate: 'この画面を翻訳',
         translateNote: 'この画面の翻訳は次のスライスで接続されます (L2.6).',
       },
+      fr: {
+        title: 'Langue et traduction',
+        intro: 'Corriger le texte non traduit dans l’interface et les plugins installés, puis définir des remplacements par langue.',
+        fix: 'Corriger la traduction',
+        scanning: 'Analyse…',
+        apply: 'Appliquer',
+        showOriginal: 'Afficher l’original',
+        hideOriginal: 'Afficher la traduction',
+        noResults: 'Aucun texte non traduit trouvé sur cette page.',
+        scanHint: 'Chaînes détectées comme n’étant pas dans la langue courante. Laissez vide pour conserver l’original.',
+        translated: 'Traduit',
+        skipped: 'déjà dans la langue',
+        globe: 'Changer la langue',
+        lang: 'Langue',
+        translate: 'Traduire cette surface',
+        translateNote: 'La traduction de la surface courante arrivera dans le prochain volet (L2.6).',
+      },
+      es: {
+        title: 'Idioma y traducción',
+        intro: 'Corrige el texto sin traducir en la interfaz y los plugins instalados, y define traducciones por idioma.',
+        fix: 'Corregir traducción',
+        scanning: 'Analizando…',
+        apply: 'Aplicar',
+        showOriginal: 'Mostrar original',
+        hideOriginal: 'Mostrar traducción',
+        noResults: 'No se encontró texto sin traducir en esta página.',
+        scanHint: 'Cadena detectada como no perteneciente al idioma actual. Déjalo vacío para conservar el original.',
+        translated: 'Traducido',
+        skipped: 'ya en el idioma',
+        globe: 'Cambiar idioma',
+        lang: 'Idioma',
+        translate: 'Traducir esta superficie',
+        translateNote: 'La traducción de la superficie actual llegará en la próxima fase (L2.6).',
+      },
+    }
+
+    // ── data-driven language set (en/zh are DSH built-ins; we register the rest) ──
+    // Adding a language = one entry here (id/label/fallback) + a CORE_DICTS block.
+    const LOCALES = {
+      ko: { label: '한국어', fallback: 'en' },
+      ja: { label: '日本語', fallback: 'en' },
+      fr: { label: 'Français', fallback: 'en' },
+      es: { label: 'Español', fallback: 'en' },
+    }
+
+    // Curated (plan 53 option A) dictionaries for the central namespaces our clients touch.
+    // Starter subset; the Fix-translation overlay grows coverage on demand.
+    const CORE_DICTS = {
+      ko: {
+        common: { ok: '확인', cancel: '취소', close: '닫기', save: '저장', copy: '복사', search: '검색', loading: '불러오는 중…', retry: '다시 시도', delete: '삭제', edit: '편집', submit: '제출' },
+        'settings.locale': { 'language.title': '언어' },
+        sidebar: { 'toggle.open': '사이드바 열기', 'toggle.collapse': '사이드바 접기', 'session.new': '새 세션' },
+        conversation: { 'placeholder.default': '에이전트에게 메시지 보내기', 'input.send': '보내기', 'input.stop': '중지' },
+        settings: { trigger: '설정', title: '설정', 'general.nav': '일반' },
+      },
+      ja: {
+        common: { ok: 'OK', cancel: 'キャンセル', close: '閉じる', save: '保存', copy: 'コピー', search: '検索', loading: '読み込み中…', retry: '再試行', delete: '削除', edit: '編集', submit: '送信' },
+        'settings.locale': { 'language.title': '言語' },
+        sidebar: { 'toggle.open': 'サイドバーを開く', 'toggle.collapse': 'サイドバーを折りたたむ', 'session.new': '新規セッション' },
+        conversation: { 'placeholder.default': 'エージェントにメッセージを送信', 'input.send': '送信', 'input.stop': '停止' },
+        settings: { trigger: '設定', title: '設定', 'general.nav': '一般' },
+      },
+      fr: {
+        common: { ok: 'OK', cancel: 'Annuler', close: 'Fermer', save: 'Enregistrer', copy: 'Copier', search: 'Rechercher', loading: 'Chargement…', retry: 'Réessayer', delete: 'Supprimer', edit: 'Modifier', submit: 'Envoyer' },
+        'settings.locale': { 'language.title': 'Langue' },
+        sidebar: { 'toggle.open': 'Ouvrir la barre latérale', 'toggle.collapse': 'Replier la barre latérale', 'session.new': 'Nouvelle session' },
+        conversation: { 'placeholder.default': 'Envoyer un message à l’agent', 'input.send': 'Envoyer', 'input.stop': 'Arrêter' },
+        settings: { trigger: 'Paramètres', title: 'Paramètres', 'general.nav': 'Général' },
+      },
+      es: {
+        common: { ok: 'Aceptar', cancel: 'Cancelar', close: 'Cerrar', save: 'Guardar', copy: 'Copiar', search: 'Buscar', loading: 'Cargando…', retry: 'Reintentar', delete: 'Eliminar', edit: 'Editar', submit: 'Enviar' },
+        'settings.locale': { 'language.title': 'Idioma' },
+        sidebar: { 'toggle.open': 'Abrir la barra lateral', 'toggle.collapse': 'Plegar la barra lateral', 'session.new': 'Nueva sesión' },
+        conversation: { 'placeholder.default': 'Enviar un mensaje al agente', 'input.send': 'Enviar', 'input.stop': 'Detener' },
+        settings: { trigger: 'Ajustes', title: 'Ajustes', 'general.nav': 'General' },
+      },
     }
 
     function activeLang() {
@@ -96,6 +172,8 @@ window.__ModuleLoader__.load({
         if (l.startsWith('zh')) return 'zh'
         if (l.startsWith('ko')) return 'ko'
         if (l.startsWith('ja')) return 'ja'
+        if (l.startsWith('fr')) return 'fr'
+        if (l.startsWith('es')) return 'es'
         return 'en'
       } catch { return 'en' }
     }
@@ -349,7 +427,17 @@ window.__ModuleLoader__.load({
       try {
         const locale = typeof ctx.get === 'function' ? ctx.get('locale') : undefined
         if (locale && typeof locale.register === 'function') {
-          locale.register(NS, { en: DICT.en, zh: DICT.zh, ko: DICT.ko, ja: DICT.ja })
+          locale.register(NS, { en: DICT.en, zh: DICT.zh, ko: DICT.ko, ja: DICT.ja, fr: DICT.fr, es: DICT.es })
+        }
+        if (locale && typeof locale.addLanguage === 'function') {
+          for (const [id, meta] of Object.entries(LOCALES)) {
+            try { locale.addLanguage({ id, label: meta.label, fallback: meta.fallback }) } catch { /* already registered */ }
+          }
+          for (const [id, dicts] of Object.entries(CORE_DICTS)) {
+            for (const [ns, dict] of Object.entries(dicts)) {
+              try { locale.register(ns, id, dict) } catch { /* duplicate (ns, locale) or unknown namespace */ }
+            }
+          }
         }
       } catch { /* locale optional */ }
 
