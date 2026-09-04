@@ -9,6 +9,6 @@
   },
   "scripts": {
     "pack:all": "node scripts/pack-all.mjs",
-    "pack:brand": "npm pack --pack-destination dist ./plugins/mitsu-brand"
+    "pack:brand": "npm pack --pack-destination dist ./plugins/dsh-brand-swap"
   }
 }

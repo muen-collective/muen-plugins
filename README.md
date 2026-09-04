@@ -13,12 +13,12 @@ community plugins) without restructuring.
 | Thing | Convention | Example |
 |---|---|---|
 | GitHub repo | `muen-collective/muen-plugins` | — |
-| Source dir | `plugins/<slug>/` | `plugins/mitsu-brand/` |
-| Package (`package.json` `name`) | `@muen/<slug>` | `@muen/mitsu-brand` |
+| Source dir | `plugins/<slug>/` | `plugins/dsh-brand-swap/` |
+| Package (`package.json` `name`) | `@muen/<slug>` | `@muen/dsh-brand-swap` |
 | Version | `0.x.y` semver | `0.1.0` |
 | Installability | `dsh.bundle.patch` + a `cordis.patch.yml` (NOT just `dsh.client`) | required |
-| Market entry `url` | `.../tree/main/plugins/<slug>` (subdir of this monorepo) | `…/plugins/mitsu-brand` |
-| Market entry `name` | `muen-collective/muen-plugins#<slug>` | `muen-collective/muen-plugins#mitsu-brand` |
+| Market entry `url` | `.../tree/main/plugins/<slug>` (subdir of this monorepo) | `…/plugins/dsh-brand-swap` |
+| Market entry `name` | `muen-collective/muen-plugins#<slug>` | `muen-collective/muen-plugins#dsh-brand-swap` |
 | Market `category` | from the market's valid set (`theme`, `ui`, `docs`, `tools`, …) | `theme` |
 | Market `description` | accurate one-liner (checked against source) | — |
 
@@ -69,11 +69,11 @@ register a plugin:
 3. **Open a PR** to `awesome-dsh-plugin/awesome-dsh-plugin` adding ONE file
    `data/plugins/muen-collective__muen-plugins--plugins-<slug>.yml`. Example:
    ```yaml
-   url: https://github.com/muen-collective/muen-plugins/tree/main/plugins/mitsu-brand
-   name: muen-collective/muen-plugins#mitsu-brand
+   url: https://github.com/muen-collective/muen-plugins/tree/main/plugins/dsh-brand-swap
+   name: muen-collective/muen-plugins#dsh-brand-swap
    category: theme
    description:
-     en: A configurable brand-slot plugin for DeepSeek Harness. Registers a wordmark + dot into the sidebar and conversation-hero brand slots (replacing the DeepSeek mark). Ships neutral defaults; wordmark text, colors and font are overridable per profile via the plugin's cordis config.
+     en: White-label brand swap for DeepSeek Harness. Replaces the DeepSeek mark in the sidebar and conversation-hero brand slots with a per-profile wordmark, colors and font (each Brand OS configures its own identity on the plugin row). Ships neutral defaults.
    ```
 4. Verify from a fresh profile: `dsh plugin --profile demo add <tarball-url | github:...>`.
 
@@ -84,16 +84,20 @@ Update an entry the same way — edit **only your** `data/plugins/*.yml` and reg
 
 Published plugins are **neutral/generic** — no client (or Muen) brand is baked into the package.
 Per-profile `config:` on a plugin's `cordis.patch.yml` row supplies the specific values (e.g. a
-client's wordmark via the `mitsu-brand` row's `wordmark`/`fontFamily`/`dotColor`). The market card
+client's wordmark via the `brand-swap` row's `wordmark`/`fontFamily`/`dotColor`). The market card
 can show a branded screenshot as an illustration; the shipped package stays neutral.
 
 ## History note
 
 This repo previously held the old `@muen/mitsu-*` surface plugins (assets, docs, write, krea,
 runninghub, modes, rail, settings, sidebar-tree, task-switcher, starter-pack, updater,
-open-in-sidebar, browser). Those were **failed experiments and are permanently deleted** — only
-`@muen/mitsu-brand` is a real first-party plugin, and everything else is sourced from the community
-DSH market. Do not recreate, publish, or reference them as live plugins.
+open-in-sidebar, browser). Those were **failed experiments and are permanently deleted**. The brand
+plugin was generalized on **2026-09-04** to the white-label **`@muen/dsh-brand-swap`** (row
+`brand-swap`, service `brand`) — one generic plugin every Brand OS (mitsu, yammaman, vent)
+configures with its own identity; the Mitsumeru app's internal copy keeps the legacy
+`@muen/mitsu-brand` identity (row `mitsu-brand`, service `mitsu.brand`) until the next app release.
+Everything else is sourced from the community DSH market. Do not recreate, publish, or reference
+deleted `@muen/mitsu-*` names as live plugins.
 
 ## Optional: npm
 

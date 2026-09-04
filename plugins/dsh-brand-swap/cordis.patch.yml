@@ -1,0 +1,7 @@
+- insert:
+    - id: brand-swap
+      name: '@muen/dsh-brand-swap'
+      # NEUTRAL white-label: a generic brand-slot plugin. The wordmark / colors / font are
+      # supplied per profile by an overlay `config` block on this row (or neutral defaults).
+      # Each Brand OS (mitsu, yammaman, vent, ...) configures its own identity; no client or
+      # Muen brand is baked in.

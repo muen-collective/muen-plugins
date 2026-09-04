@@ -1,6 +1,0 @@
-- insert:
-    - id: mitsu-brand
-      name: '@muen/mitsu-brand'
-      # NEUTRAL: the published market plugin is a generic brand slot. The wordmark / colors /
-      # font are supplied per profile by an overlay `config` block (or the plugin's defaults).
-      # No client or Muen brand is baked in here.
