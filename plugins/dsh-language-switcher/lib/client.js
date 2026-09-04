@@ -248,7 +248,6 @@ window.__ModuleLoader__.load({
             },
               h('span', null, translate('translate'))),
             note && h('div', { style: { padding: '0 10px 6px', color: 'var(--dsw-alias-label-secondary)', fontSize: 11 } }, note)))
-        )
       }
 
       // Register own locale dictionaries when the locale service is present.
