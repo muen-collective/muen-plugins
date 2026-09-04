@@ -19,7 +19,7 @@ window.__ModuleLoader__.load({
       en: {
         title: 'Language & translation',
         intro: 'Fix installed plugins that are not properly localized, or translate the current surface.',
-        fix: 'Fix plugins',
+        fix: 'Fix translation',
         scanning: 'Scanning…',
         ok: 'All good — no unlocalized plugins found.',
         demoNote: 'Preview (real plugin scan is wired in the next slice).',
@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({
       zh: {
         title: '语言与翻译',
         intro: '修复未正确本地化的已安装插件，或翻译当前界面。',
-        fix: '修复插件',
+        fix: '修复翻译',
         scanning: '正在扫描…',
         ok: '一切正常——未发现未本地化的插件。',
         demoNote: '预览（真实插件扫描将在下一阶段接入）。',
@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
       ko: {
         title: '언어 및 번역',
         intro: '제대로 지역화되지 않은 설치 플러그인을 고치거나 현재 화면을 번역합니다.',
-        fix: '플러그인 수정',
+        fix: '번역 수정',
         scanning: '스캔 중…',
         ok: '모두 정상입니다 — 지역화되지 않은 플러그인이 없습니다.',
         demoNote: '미리보기 (실제 플러그인 스캔은 다음 단계에서 연결됩니다).',
@@ -58,7 +58,7 @@ window.__ModuleLoader__.load({
       ja: {
         title: '言語と翻訳',
         intro: 'ローカライズされていないインストール済みプラグインを修正するか、現在の画面を翻訳します。',
-        fix: 'プラグインを修正',
+        fix: '翻訳を修正',
         scanning: 'スキャン中…',
         ok: '問題ありません — ローカライズされていないプラグインはありません。',
         demoNote: 'プレビュー (実際のプラグインスキャンは次のスライスで接続されます).',
