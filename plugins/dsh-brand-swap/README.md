@@ -7,7 +7,9 @@ vent, …) configures its own identity; the plugin itself ships neutral.
 Two ways to set the identity (Settings → **Brand** page):
 
 1. **Logo upload (v0.2)** — transparent PNG logos for **light and dark themes** are uploaded in
-   the Brand settings page and rendered in the sidebar brand seat immediately.
+   the Brand settings page, staged as a live preview, and applied with the **Save brand** button
+   (Revert discards unsaved edits). Saved logos render in the sidebar brand seat and persist in
+   the host settings doc across restarts.
 2. **Wordmark config (v0.1)** — `wordmark` text + colors + font on the plugin row's `config`
    block (shown when no logo is uploaded).
 
@@ -23,13 +25,17 @@ Registers into three DSH slots:
 
 - Settings → **Brand** (additive `settings.section`, own locale namespace in en/zh/ko/ja).
 - Two upload fields: **Light theme** and **Dark theme** (dark optional → falls back to light).
-  Validation: `image/png`, ≤ 1 MB; live preview; replace/remove per field.
+  Validation: `image/png`, ≤ 1 MB; live preview on a dark canvas (the seat these logos render
+  on is dark, independent of the app theme); replace/remove per field.
 - Rendering: both logos are mounted in the name seat and switched with pure CSS on DSH's resolved
   theme attribute (`body[data-ds-dark-theme]`) — follows DSH's light/dark/system preference, no
   JS theme plumbing.
-- Storage: PNGs are stored as data URLs in the plugin's `brand-swap` settings namespace
-  (host settings doc; `localStorage` fallback if the settings scope is unavailable). Uploads
-  survive plugin updates and app restarts — nothing edits the installed bundle.
+- Saving: edits are staged locally and committed only by **Save brand**. Each save writes the
+  four fields to the plugin's `brand-swap` settings namespace in the **host settings doc**
+  (durable across restarts). The host half registers that namespace synchronously at boot
+  (`ctx.inject(['settings'])` + the schemastery **default** export). If no host settings service
+  is available the page keeps a `localStorage` mirror and visibly warns that the save is
+  local-only — nothing edits the installed bundle.
 - Size guidance shown in the page: lockup artwork ≥ 48 px tall (2× of the 24 px render) with side
   padding; square marks ≥ 96 px; the render is height-capped at 24 px (sidebar) / 34 px (hero).
 

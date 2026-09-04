@@ -35,7 +35,11 @@ window.__ModuleLoader__.load({
         heroIconLabel: 'Square icon — 34×34',
         heroHint:
           'The hero seat above the composer only fits a square 34 px mark — wide lockups won’t fit. Upload a transparent square PNG or SVG to use it.',
-        saved: 'Saved — the brand updates immediately.',
+        saved: 'Saved — your brand is live now.',
+        saveBtn: 'Save brand',
+        revertBtn: 'Revert',
+        dirtyHint: 'Changes apply when you click “Save brand”.',
+        localOnly: 'Warning: saved to this browser only — it will be lost when the app restarts.',
         invalidType: 'Please choose a PNG or SVG file.',
         tooLarge: 'That image is larger than 1 MB — please use a smaller export.',
         readError: 'Could not read that file — please try again.',
@@ -55,7 +59,11 @@ window.__ModuleLoader__.load({
         heroShow: '显示起始页品牌标志',
         heroIconLabel: '方形图标 — 34×34',
         heroHint: '输入框上方的起始页槽位只放得下 34px 方形标志——宽锁型标志放不下。请上传透明方形 PNG 或 SVG。',
-        saved: '已保存——品牌即刻更新。',
+        saved: '已保存——品牌已生效。',
+        saveBtn: '保存品牌',
+        revertBtn: '还原',
+        dirtyHint: '修改需点击“保存品牌”后才会生效。',
+        localOnly: '警告：仅保存在当前浏览器中，应用重启后会丢失。',
         invalidType: '请选择 PNG 或 SVG 文件。',
         tooLarge: '该图片超过 1MB，请使用更小的导出。',
         readError: '无法读取该文件，请重试。',
@@ -75,7 +83,11 @@ window.__ModuleLoader__.load({
         heroShow: '히어로 브랜드 마크 표시',
         heroIconLabel: '정사각형 아이콘 — 34×34',
         heroHint: '컴포저 위 히어로 슬롯은 34px 정사각형만 맞습니다 — 넓은 로고는 안 맞아요. 투명 정사각형 PNG 또는 SVG를 업로드하세요.',
-        saved: '저장됨 — 브랜드가 즉시 갱신됩니다.',
+        saved: '저장됨 — 브랜드가 적용되었습니다.',
+        saveBtn: '브랜드 저장',
+        revertBtn: '되돌리기',
+        dirtyHint: '변경 사항은 “브랜드 저장”을 누르면 적용됩니다.',
+        localOnly: '경고: 이 브라우저에만 저장됨 — 앱을 다시 시작하면 사라집니다.',
         invalidType: 'PNG 또는 SVG 파일을 선택해 주세요.',
         tooLarge: '이미지가 1MB를 초과합니다. 더 작은 파일을 사용하세요.',
         readError: '파일을 읽을 수 없습니다. 다시 시도해 주세요.',
@@ -95,7 +107,11 @@ window.__ModuleLoader__.load({
         heroShow: 'ヒーローのブランドマークを表示',
         heroIconLabel: '正方形アイコン — 34×34',
         heroHint: 'コンポーザー上のヒーロースロットは34pxの正方形のみ収まります — 横長は入りません。透明の正方形PNGまたはSVGをアップロードしてください。',
-        saved: '保存しました — ブランドが即時更新されます。',
+        saved: '保存しました — ブランドが反映されました。',
+        saveBtn: 'ブランドを保存',
+        revertBtn: '元に戻す',
+        dirtyHint: '変更は「ブランドを保存」を押すと反映されます。',
+        localOnly: '警告: このブラウザのみに保存 — 再起動すると失われます。',
         invalidType: 'PNG または SVG ファイルを選択してください。',
         tooLarge: '画像が1MBを超えています。より小さい書き出しを使用してください。',
         readError: 'ファイルを読み込めませんでした。もう一度お試しください。',
@@ -112,32 +128,61 @@ window.__ModuleLoader__.load({
 
     function readPersisted() {
       const out = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '' }
-      const applyString = (source) => {
+      const applyString = (source, target) => {
         for (const key of STRING_KEYS) {
-          if (typeof source[key] === 'string') out[key] = source[key]
+          if (typeof source[key] === 'string' && source[key]) target[key] = source[key]
         }
-        if (typeof source.heroShow === 'boolean') out.heroShow = source.heroShow
-        else if (source.heroShow === 'true' || source.heroShow === 'false') out.heroShow = source.heroShow === 'true'
+        if (typeof source.heroShow === 'boolean') target.heroShow = source.heroShow
+        else if (source.heroShow === 'true' || source.heroShow === 'false') target.heroShow = source.heroShow === 'true'
       }
+      // Read the settings scope AND the localStorage cache independently, then merge.
+      // The old code bailed as soon as the scope had *any* truthy field, so if the
+      // scope carried e.g. `heroShow` but the (large) SVG logo had failed to write or
+      // had been truncated there, a logo that WAS in localStorage was silently dropped —
+      // the brand reverted to the wordmark+dot fallback after a reload / language switch.
+      const fromScope = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '' }
       try {
-        const scopeValue = SCOPE && typeof SCOPE.getSnapshot === 'function'
-          ? (SCOPE.getSnapshot().value) : undefined
-        if (scopeValue && typeof scopeValue === 'object') {
-          applyString(scopeValue)
-          const hasAny = out.logoLight || out.logoDark || out.heroIcon || out.heroShow
-          if (hasAny) return out
-        }
+        // The settings scope snapshot carries the namespace fields flat (plus a
+        // `revision`), e.g. { logoLight, logoDark, heroShow, heroIcon, revision }.
+        // Accept a legacy `{ value: {...} }` envelope too, for older runtimes.
+        const snap = SCOPE && typeof SCOPE.getSnapshot === 'function'
+          ? SCOPE.getSnapshot() : undefined
+        const scopeValue = (snap && typeof snap === 'object'
+          && snap.value && typeof snap.value === 'object')
+          ? snap.value
+          : snap
+        if (scopeValue && typeof scopeValue === 'object') applyString(scopeValue, fromScope)
       } catch { /* scope may be mid-adoption */ }
+      const fromLocal = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '' }
       try {
         const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(LS_KEY)
         if (raw) {
           const parsed = JSON.parse(raw)
-          if (parsed && typeof parsed === 'object') applyString(parsed)
+          if (parsed && typeof parsed === 'object') applyString(parsed, fromLocal)
         }
       } catch { /* ignore corrupt cache */ }
+      // Merge per field. Never let an empty/truncated value in one store shadow a real
+      // logo in the other: prefer the longer (uncorrupted) data URL for image fields.
+      const pick = (a, b) => {
+        if (!a) return b
+        if (!b) return a
+        return b.length > a.length ? b : a
+      }
+      out.logoLight = pick(fromScope.logoLight, fromLocal.logoLight)
+      out.logoDark = pick(fromScope.logoDark, fromLocal.logoDark)
+      out.heroIcon = pick(fromScope.heroIcon, fromLocal.heroIcon)
+      out.heroShow = fromScope.heroShow || fromLocal.heroShow
       return out
     }
 
+    // Commit one field. The value is applied locally (mirrored to the port-local
+    // localStorage cache) immediately so the brand updates in-session; the
+    // durable host-doc write is attempted through the settings scope and its
+    // outcome reported (Promise<boolean>) — the Save flow only claims “saved”
+    // when the host accepted it, because a local-only copy is lost on restart.
+    // Host rejections are async (namespace unregistered, read-only provider), so
+    // any thenable returned by set() is awaited and its failure turned into a
+    // false instead of being swallowed.
     function persist(field, value) {
       VALUE = { ...VALUE, [field]: value }
       REV += 1
@@ -146,10 +191,16 @@ window.__ModuleLoader__.load({
           localStorage.setItem(LS_KEY, JSON.stringify(VALUE))
         }
       } catch { /* storage may be unavailable */ }
-      try {
-        if (SCOPE && typeof SCOPE.set === 'function') SCOPE.set(field, value)
-      } catch { /* settings scope may be absent */ }
       for (const fn of [...listeners]) fn()
+      if (!SCOPE || typeof SCOPE.set !== 'function') return Promise.resolve(false)
+      let outcome
+      try {
+        outcome = SCOPE.set(field, value)
+      } catch { return Promise.resolve(false) }
+      if (outcome && typeof outcome.then === 'function') {
+        return outcome.then(() => true, () => false)
+      }
+      return Promise.resolve(true)
     }
 
     function subscribe(fn) {
@@ -180,13 +231,19 @@ window.__ModuleLoader__.load({
       '.bs-brand-page{display:flex;flex-direction:column;gap:18px;max-width:620px}',
       '.bs-brand-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:14px;background:var(--dsw-alias-bg-layer-1);display:flex;flex-direction:column;gap:10px}',
       '.bs-brand-card h3{margin:0;font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}',
-      '.bs-brand-preview{min-height:64px;border:1px dashed var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-layer-2);display:flex;align-items:center;justify-content:center;padding:10px;overflow:hidden}',
+      // Preview canvas matches the uploader's theme: the LIGHT-theme cell gets a
+      // light canvas (its artwork is drawn for light surfaces), the DARK-theme
+      // cell keeps the dark canvas. Static colors (not theme tokens) so each
+      // preview reads correctly no matter which app theme is active.
+      '.bs-brand-preview{min-height:64px;border:1px dashed rgba(255,255,255,.16);border-radius:8px;background:var(--dsw-static-neutral-bluish-900,#1b1b1c);display:flex;align-items:center;justify-content:center;padding:10px;overflow:hidden}',
+      '.bs-brand-preview--light{background:#f4f3f0;border-color:rgba(18,18,24,.16)}',
+      '.bs-brand-preview--light .bs-brand-preview--empty{color:#8a8a92}',
       '.bs-brand-preview img{max-height:44px;max-width:100%;object-fit:contain}',
       '.bs-brand-preview--empty{color:var(--dsw-alias-label-tertiary);font-size:12px}',
       '.bs-brand-hint{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.6;margin:0}',
       '.bs-logo-cell-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}',
       '.bs-brand-btn{font:inherit;font-size:13px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border-radius:7px;padding:5px 12px;cursor:pointer}',
-      '.bs-brand-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}',
+      '.bs-brand-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}',
       '.bs-brand-msg{font-size:13px;color:var(--dsw-alias-state-success-primary)}',
       '.bs-logo-row{display:flex;gap:12px}',
       '.bs-logo-cell{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}',
@@ -198,6 +255,12 @@ window.__ModuleLoader__.load({
       '.bs-switch input:checked + .bs-switch-track{background:var(--dsw-alias-state-business-primary);box-shadow:inset 0 0 0 1px var(--dsw-alias-state-business-primary)}',
       '.bs-switch input:checked + .bs-switch-track:after{transform:translateX(16px);background:#fff}',
       '.bs-switch input:focus-visible + .bs-switch-track{outline:2px solid var(--dsw-alias-label-tertiary);outline-offset:2px}',
+      '.bs-brand-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}',
+      '.bs-brand-btn--primary{background:var(--dsw-alias-state-business-primary);border-color:transparent;color:#fff;font-weight:600}',
+      '.bs-brand-btn--primary:hover:not(:disabled){background:var(--dsw-alias-state-business-primary);filter:brightness(1.12)}',
+      '.bs-brand-btn:disabled{opacity:.45;cursor:default}',
+      '.bs-brand-msg--warn{color:var(--dsw-alias-state-warn-primary)}',
+      '.bs-brand-msg--ok{color:var(--dsw-alias-state-success-primary)}',
     ].join('\n')
 
     function injectCss() {
@@ -292,6 +355,7 @@ window.__ModuleLoader__.load({
 
       const WordmarkName = () =>
         h('span', {
+          'data-ls-skip': '',
           style: {
             color: BRAND.text,
             fontFamily: BRAND.font,
@@ -314,12 +378,12 @@ window.__ModuleLoader__.load({
         if (!hasLight && !hasDark) return WordmarkName()
         // One variant → always show it; both → theme-switched pair.
         if (hasLight && hasDark) {
-          return h('span', { style: { display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0, overflow: 'hidden' } },
+          return h('span', { 'data-ls-skip': '', style: { display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0, overflow: 'hidden' } },
             h('img', { key: 'light', className: 'bs-logo bs-logo--light', src: logos.logoLight, alt: '', draggable: false }),
             h('img', { key: 'dark', className: 'bs-logo bs-logo--dark', src: logos.logoDark, alt: '', draggable: false }))
         }
         const src = hasLight ? logos.logoLight : logos.logoDark
-        return h('img', { className: 'bs-logo', src, alt: '', draggable: false })
+        return h('img', { 'data-ls-skip': '', className: 'bs-logo', src, alt: '', draggable: false })
       }
 
       const SidebarMark = () => null
@@ -329,7 +393,7 @@ window.__ModuleLoader__.load({
       const HeroMark = () => {
         const logos = useSyncExternalStoreSafe(subscribe, getSnapshot)
         if (!logos.heroShow || !logos.heroIcon) return null
-        return h('img', { className: 'bs-hero', src: logos.heroIcon, alt: '', draggable: false })
+        return h('img', { 'data-ls-skip': '', className: 'bs-hero', src: logos.heroIcon, alt: '', draggable: false })
       }
 
       ctx.slots.inject('sidebar.brand.mark', () =>
@@ -340,29 +404,38 @@ window.__ModuleLoader__.load({
             yield ctx.slots.register({ name: 'conversation.hero.brand.mark' }, HeroMark)
           })))
 
-      // ── Settings → Brand page ────────────────────────────────────────────
-      const pickImage = (field, setNotice) => (event) => {
-        const file = event.target.files && event.target.files[0]
-        if (!file) return
-        if (!isAcceptedImage(file)) { setNotice(translate('invalidType')); return }
-        if (file.size > MAX_BYTES) { setNotice(translate('tooLarge')); return }
+      // ── Settings → Brand page (draft → explicit Save) ─────────────────────
+      // Uploads and toggles are staged in local state (live previews, nothing
+      // persisted). “Save brand” commits all fields through persist(), which
+      // writes the host settings doc (durable) + a localStorage mirror and
+      // reports whether the host write succeeded — the page warns when only the
+      // browser copy was saved (lost when the app restarts and rebinds its port).
+      const readFileAsDataUrl = (file, onOk, onError) => {
         const reader = new FileReader()
-        reader.onload = () => { persist(field, String(reader.result)); setNotice(translate('saved')) }
-        reader.onerror = () => setNotice(translate('readError'))
+        reader.onload = () => onOk(String(reader.result))
+        reader.onerror = () => onError(translate('readError'))
         reader.readAsDataURL(file)
-        event.target.value = ''
       }
 
-      const LogoCell = ({ field, label, logos }) => {
-        const src = logos[field]
-        const [notice, setNotice] = React.useState(null)
-        const onPick = pickImage(field, setNotice)
-        const btnLabel = src ? translate('replace') : translate('choose')
+      const LogoCell = ({ field, label, value, onChange }) => {
+        const [error, setError] = React.useState(null)
+        const pick = (event) => {
+          const file = event.target.files && event.target.files[0]
+          event.target.value = ''
+          if (!file) return
+          if (!isAcceptedImage(file)) { setError(translate('invalidType')); return }
+          if (file.size > MAX_BYTES) { setError(translate('tooLarge')); return }
+          setError(null)
+          readFileAsDataUrl(file,
+            (dataUrl) => onChange(field, dataUrl),
+            (message) => setError(message))
+        }
+        const btnLabel = value ? translate('replace') : translate('choose')
         return h('div', { className: 'bs-logo-cell' },
           h('div', { className: 'bs-logo-cell-label' }, label),
-          h('div', { className: 'bs-brand-preview' },
-            src
-              ? h('img', { src, alt: '', draggable: false })
+          h('div', { className: 'bs-brand-preview' + (field === 'logoLight' ? ' bs-brand-preview--light' : '') },
+            value
+              ? h('img', { src: value, alt: '', draggable: false })
               : h('span', { className: 'bs-brand-preview--empty' }, translate('preview'))),
           h('div', { className: 'bs-logo-cell-actions' },
             h('label', { className: 'bs-brand-btn', style: { display: 'inline-block' } },
@@ -371,55 +444,54 @@ window.__ModuleLoader__.load({
                 type: 'file',
                 accept: ACCEPT_IMAGE,
                 style: { display: 'none' },
-                onChange: onPick,
+                onChange: pick,
               })),
-            src && h('button', { className: 'bs-brand-btn', onClick: () => { persist(field, ''); setNotice(null) } },
+            value && h('button', { className: 'bs-brand-btn', onClick: () => { onChange(field, ''); setError(null) } },
               translate('remove'))),
-          notice && h('div', { className: 'bs-brand-msg' }, notice))
-      }
-
-      const HeroCard = () => {
-        const logos = useSyncExternalStoreSafe(subscribe, getSnapshot)
-        const [notice, setNotice] = React.useState(null)
-        const onPick = pickImage('heroIcon', setNotice)
-        const src = logos.heroIcon
-        return h('div', { className: 'bs-brand-card' },
-          h('label', { className: 'bs-switch' },
-            h('input', {
-              type: 'checkbox',
-              checked: Boolean(logos.heroShow),
-              onChange: (e) => persist('heroShow', e.target.checked),
-            }),
-            h('span', { className: 'bs-switch-track', 'aria-hidden': true }),
-            h('span', { className: 'bs-switch-label' }, translate('heroShow'))),
-          logos.heroShow && h('div', { className: 'bs-logo-cell' },
-            h('div', { className: 'bs-logo-cell-label' }, translate('heroIconLabel')),
-            h('div', { className: 'bs-brand-preview' },
-              src
-                ? h('img', { src, alt: '', draggable: false })
-                : h('span', { className: 'bs-brand-preview--empty' }, translate('preview'))),
-            h('div', { className: 'bs-logo-cell-actions' },
-              h('label', { className: 'bs-brand-btn', style: { display: 'inline-block' } },
-                src ? translate('replace') : translate('choose'),
-                h('input', { type: 'file', accept: ACCEPT_IMAGE, style: { display: 'none' }, onChange: onPick })),
-              src && h('button', { className: 'bs-brand-btn', onClick: () => { persist('heroIcon', ''); setNotice(null) } },
-                translate('remove')))),
-          h('p', { className: 'bs-brand-hint' }, translate('heroHint')),
-          notice && h('div', { className: 'bs-brand-msg' }, notice))
+          error && h('div', { className: 'bs-brand-msg bs-brand-msg--warn' }, error))
       }
 
       const BrandSettingsPage = () => {
-        const logos = useSyncExternalStoreSafe(subscribe, getSnapshot)
+        const committed = useSyncExternalStoreSafe(subscribe, getSnapshot)
+        const [draft, setDraft] = React.useState(() => ({ ...committed }))
+        const [saving, setSaving] = React.useState(false)
+        const [notice, setNotice] = React.useState(null) // { kind: 'ok'|'warn', text }
+        const FIELDS = ['logoLight', 'logoDark', 'heroIcon', 'heroShow']
+        const setField = (field, value) => { setDraft((d) => ({ ...d, [field]: value })); setNotice(null) }
+        const dirty = FIELDS.some((key) => draft[key] !== committed[key])
+        const save = async () => {
+          setSaving(true)
+          const results = await Promise.all(FIELDS.map((key) => persist(key, draft[key])))
+          setSaving(false)
+          const hostOk = results.every(Boolean)
+          setNotice({ kind: hostOk ? 'ok' : 'warn', text: translate(hostOk ? 'saved' : 'localOnly') })
+        }
+        const revert = () => { setDraft({ ...committed }); setNotice(null) }
         return h('div', { className: 'bs-brand-page' },
           h('p', { style: { color: 'var(--dsw-alias-label-secondary)', fontSize: 13, lineHeight: 1.6, margin: 0 } },
             translate('intro')),
           h('h3', null, translate('title')),
           h('div', { className: 'bs-brand-card' },
             h('div', { className: 'bs-logo-row' },
-              h(LogoCell, { field: 'logoLight', label: translate('lightLabel'), logos }),
-              h(LogoCell, { field: 'logoDark', label: translate('darkLabel'), logos }))),
+              h(LogoCell, { field: 'logoLight', label: translate('lightLabel'), value: draft.logoLight, onChange: setField }),
+              h(LogoCell, { field: 'logoDark', label: translate('darkLabel'), value: draft.logoDark, onChange: setField }))),
           h('p', { className: 'bs-brand-hint' }, translate('sizeHint')),
-          h(HeroCard))
+          h('div', { className: 'bs-brand-card' },
+            h('label', { className: 'bs-switch' },
+              h('input', { type: 'checkbox', checked: Boolean(draft.heroShow), onChange: (e) => setField('heroShow', e.target.checked) }),
+              h('span', { className: 'bs-switch-track', 'aria-hidden': true }),
+              h('span', { className: 'bs-switch-label' }, translate('heroShow'))),
+            draft.heroShow && h(LogoCell, { field: 'heroIcon', label: translate('heroIconLabel'), value: draft.heroIcon, onChange: setField }),
+            h('p', { className: 'bs-brand-hint' }, translate('heroHint'))),
+          h('div', { className: 'bs-brand-actions' },
+            h('button', { className: 'bs-brand-btn bs-brand-btn--primary', disabled: !dirty || saving, onClick: save },
+              translate('saveBtn')),
+            h('button', { className: 'bs-brand-btn', disabled: !dirty || saving, onClick: revert },
+              translate('revertBtn'))),
+          dirty && !saving && h('p', { className: 'bs-brand-hint', style: { margin: 0 } }, translate('dirtyHint')),
+          notice && h('div',
+            { className: notice.kind === 'warn' ? 'bs-brand-msg bs-brand-msg--warn' : 'bs-brand-msg bs-brand-msg--ok' },
+            notice.text))
       }
 
       ctx.slots.inject('settings.section', () =>
@@ -438,6 +510,6 @@ window.__ModuleLoader__.load({
         : (React.useState(get)[0])
     }
 
-    return { inject: ['slots'], apply }
+    return { inject: ['slots', 'settingsScope'], apply }
   },
 })
