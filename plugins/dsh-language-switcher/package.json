@@ -1,0 +1,26 @@
+{
+  "name": "@muen/dsh-language-switcher",
+  "version": "0.1.0",
+  "description": "Language & translation control for DeepSeek Harness — a Settings > General row with a Fix plugins action that patches any installed plugin that isn't properly localized, plus a sidebar globe for one-click language switch / on-demand translate. Ships neutral; en/zh/ko/ja.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [],
+      "platform": "web"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ]
+}
