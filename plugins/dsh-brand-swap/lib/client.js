@@ -15,7 +15,14 @@ window.__ModuleLoader__.load({
 
     const NS = 'brand-swap'
     const LS_KEY = 'muen:brand-swap:logos'
+    // Default Mitsumeru brand (production): 123x24 wordmark + cyan-blue dot.
+    // dark_b.svg = white text (dark theme); light_b.svg = black text (light theme).
+    const DEFAULT_BRAND_DARK = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIzIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMTIzIDI0IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNMTE4LjA2NSAyMC40NjhDMTE2LjIyOSAyMC40NjggMTE0Ljc1MyAxOC45OTIgMTE0Ljc1MyAxNy4yMjhDMTE0Ljc1MyAxNS40MjggMTE2LjIyOSAxMy45NTIgMTE4LjA2NSAxMy45NTJDMTE5LjgyOSAxMy45NTIgMTIxLjM3NyAxNS40MjggMTIxLjM3NyAxNy4yMjhDMTIxLjM3NyAxOC45OTIgMTE5LjgyOSAyMC40NjggMTE4LjA2NSAyMC40NjhaIiBmaWxsPSIjMDBFRUZGIi8+CjxwYXRoIGQ9Ik0xMDguMDEgOS4xMzJIMTEwLjY5NFYyMEgxMDguMjA4TDEwOC4wMSAxOC41NDhDMTA3LjM1IDE5LjU4MiAxMDUuOTQyIDIwLjI4NiAxMDQuNDkgMjAuMjg2QzEwMS45ODIgMjAuMjg2IDEwMC41MDggMTguNTkyIDEwMC41MDggMTUuOTNWOS4xMzJIMTAzLjE5MlYxNC45ODRDMTAzLjE5MiAxNy4wNTIgMTA0LjAwNiAxNy44ODggMTA1LjUwMiAxNy44ODhDMTA3LjE5NiAxNy44ODggMTA4LjAxIDE2Ljg5OCAxMDguMDEgMTQuODNWOS4xMzJaIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNOTguMzgzNiA5LjA4OFYxMS41NzRIOTcuMzkzNkM5NS40NTc2IDExLjU3NCA5NC4yNDc2IDEyLjYwOCA5NC4yNDc2IDE0LjcyVjIwSDkxLjU2MzZWOS4xNTRIOTQuMDkzNkw5NC4yNDc2IDEwLjczOEM5NC43MDk2IDkuNjYgOTUuNzQzNiA4LjkzNCA5Ny4xOTU2IDguOTM0Qzk3LjU2OTYgOC45MzQgOTcuOTQzNiA4Ljk3OCA5OC4zODM2IDkuMDg4WiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTgzLjczOTUgMjAuMjg2QzgwLjUwNTUgMjAuMjg2IDc4LjIzOTUgMTcuOTMyIDc4LjIzOTUgMTQuNTY2Qzc4LjIzOTUgMTEuMTU2IDgwLjQ2MTYgOC44MDIgODMuNjUxNiA4LjgwMkM4Ni45MDc2IDguODAyIDg4Ljk3NTUgMTAuOTggODguOTc1NSAxNC4zNjhWMTUuMTgyTDgwLjc5MTUgMTUuMjA0QzgwLjk4OTUgMTcuMTE4IDgyLjAwMTUgMTguMDg2IDgzLjc4MzUgMTguMDg2Qzg1LjI1NzUgMTguMDg2IDg2LjIyNTUgMTcuNTE0IDg2LjUzMzUgMTYuNDhIODkuMDE5NUM4OC41NTc1IDE4Ljg1NiA4Ni41Nzc1IDIwLjI4NiA4My43Mzk1IDIwLjI4NlpNODMuNjczNSAxMS4wMDJDODIuMDg5NSAxMS4wMDIgODEuMTIxNSAxMS44NiA4MC44NTc1IDEzLjQ4OEg4Ni4zMTM1Qzg2LjMxMzUgMTEuOTkyIDg1LjI3OTUgMTEuMDAyIDgzLjY3MzUgMTEuMDAyWiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTYxLjY1NjcgMjBINTguOTcyN1Y5LjEzMkg2MS40MzY3TDYxLjY1NjcgMTAuNDA4QzYyLjIwNjcgOS41MDYgNjMuMzA2NyA4LjgwMiA2NC44Njg3IDguODAyQzY2LjUxODcgOC44MDIgNjcuNjYyNyA5LjYxNiA2OC4yMzQ3IDEwLjg3QzY4Ljc4NDcgOS42MTYgNzAuMDYwNyA4LjgwMiA3MS43MTA3IDguODAyQzc0LjM1MDcgOC44MDIgNzUuODAyNyAxMC4zODYgNzUuODAyNyAxMi44OTRWMjBINzMuMTQwN1YxMy41OThDNzMuMTQwNyAxMi4wMzYgNzIuMzA0NyAxMS4yMjIgNzEuMDI4NyAxMS4yMjJDNjkuNzMwNyAxMS4yMjIgNjguNzQwNyAxMi4wNTggNjguNzQwNyAxMy44NFYyMEg2Ni4wNTY3VjEzLjU3NkM2Ni4wNTY3IDEyLjA1OCA2NS4yNDI3IDExLjI0NCA2My45NjY3IDExLjI0NEM2Mi42OTA3IDExLjI0NCA2MS42NTY3IDEyLjA4IDYxLjY1NjcgMTMuODRWMjBaIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNNTMuMDc2NSA5LjEzMkg1NS43NjA1VjIwSDUzLjI3NDVMNTMuMDc2NSAxOC41NDhDNTIuNDE2NSAxOS41ODIgNTEuMDA4NSAyMC4yODYgNDkuNTU2NSAyMC4yODZDNDcuMDQ4NSAyMC4yODYgNDUuNTc0NSAxOC41OTIgNDUuNTc0NSAxNS45M1Y5LjEzMkg0OC4yNTg1VjE0Ljk4NEM0OC4yNTg1IDE3LjA1MiA0OS4wNzI1IDE3Ljg4OCA1MC41Njg1IDE3Ljg4OEM1Mi4yNjI1IDE3Ljg4OCA1My4wNzY1IDE2Ljg5OCA1My4wNzY1IDE0LjgzVjkuMTMyWiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTM0LjI0NjkgMTYuN0gzNi43OTg5QzM2LjgyMDkgMTcuNjQ2IDM3LjUyNDkgMTguMjQgMzguNzU2OSAxOC4yNEM0MC4wMTA5IDE4LjI0IDQwLjY5MjkgMTcuNzM0IDQwLjY5MjkgMTYuOTQyQzQwLjY5MjkgMTYuMzkyIDQwLjQwNjkgMTUuOTk2IDM5LjQzODkgMTUuNzc2TDM3LjQ4MDkgMTUuMzE0QzM1LjUyMjkgMTQuODc0IDM0LjU3NjkgMTMuOTUgMzQuNTc2OSAxMi4yMTJDMzQuNTc2OSAxMC4wNzggMzYuMzgwOSA4LjgwMiAzOC44ODg5IDguODAyQzQxLjMzMDkgOC44MDIgNDIuOTgwOSAxMC4yMSA0My4wMDI5IDEyLjMyMkg0MC40NTA5QzQwLjQyODkgMTEuMzk4IDM5LjgxMjkgMTAuODA0IDM4Ljc3ODkgMTAuODA0QzM3LjcyMjkgMTAuODA0IDM3LjEwNjkgMTEuMjg4IDM3LjEwNjkgMTIuMTAyQzM3LjEwNjkgMTIuNzE4IDM3LjU5MDkgMTMuMTE0IDM4LjUxNDkgMTMuMzM0TDQwLjQ3MjkgMTMuNzk2QzQyLjI5ODkgMTQuMjE0IDQzLjIyMjkgMTUuMDUgNDMuMjIyOSAxNi43MjJDNDMuMjIyOSAxOC45MjIgNDEuMzUyOSAyMC4yODYgMzguNjY4OSAyMC4yODZDMzUuOTYyOSAyMC4yODYgMzQuMjQ2OSAxOC44MzQgMzQuMjQ2OSAxNi43WiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTMwLjg2MjQgMjBIMjguMTc4NFYxMS4zNzZIMjYuMDg4NFY5LjEzMkgyOC4xNzg0VjUuNzQ0SDMwLjg2MjRWOS4xMzJIMzIuOTc0NFYxMS4zNzZIMzAuODYyNFYyMFoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0yMi42MTEzIDYuOTU0QzIxLjY4NzMgNi45NTQgMjAuOTYxMyA2LjIyOCAyMC45NjEzIDUuMzI2QzIwLjk2MTMgNC40MjQgMjEuNjg3MyAzLjcyIDIyLjYxMTMgMy43MkMyMy40OTEzIDMuNzIgMjQuMjE3MyA0LjQyNCAyNC4yMTczIDUuMzI2QzI0LjIxNzMgNi4yMjggMjMuNDkxMyA2Ljk1NCAyMi42MTEzIDYuOTU0Wk0yMS4yNjkzIDIwVjkuMTMySDIzLjk1MzNWMjBIMjEuMjY5M1oiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik00LjUwOTk4IDIwSDEuNzgxOThWMy45MThINC41MDk5OEw5LjcwMTk4IDE2LjcyMkwxNC44OTQgMy45MThIMTcuNjY2VjIwSDE0LjkzOFYxNS4wNUMxNC45MzggMTEuODE2IDE0LjkzOCAxMC44NyAxNS4wOTIgOS43MjZMMTEgMjBIOC40MDM5OEw0LjMzMzk4IDkuNzQ4QzQuNDg3OTggMTAuNzE2IDQuNTA5OTggMTIuMjM0IDQuNTA5OTggMTQuMjM2VjIwWiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg=="
+    const DEFAULT_BRAND_LIGHT = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIzIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMTIzIDI0IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNMTE4LjA2NSAyMC40NjhDMTE2LjIyOSAyMC40NjggMTE0Ljc1MyAxOC45OTIgMTE0Ljc1MyAxNy4yMjhDMTE0Ljc1MyAxNS40MjggMTE2LjIyOSAxMy45NTIgMTE4LjA2NSAxMy45NTJDMTE5LjgyOSAxMy45NTIgMTIxLjM3NyAxNS40MjggMTIxLjM3NyAxNy4yMjhDMTIxLjM3NyAxOC45OTIgMTE5LjgyOSAyMC40NjggMTE4LjA2NSAyMC40NjhaIiBmaWxsPSIjMDBFRUZGIi8+CjxwYXRoIGQ9Ik0xMDguMDEgOS4xMzJIMTEwLjY5NFYyMEgxMDguMjA4TDEwOC4wMSAxOC41NDhDMTA3LjM1IDE5LjU4MiAxMDUuOTQyIDIwLjI4NiAxMDQuNDkgMjAuMjg2QzEwMS45ODIgMjAuMjg2IDEwMC41MDggMTguNTkyIDEwMC41MDggMTUuOTNWOS4xMzJIMTAzLjE5MlYxNC45ODRDMTAzLjE5MiAxNy4wNTIgMTA0LjAwNiAxNy44ODggMTA1LjUwMiAxNy44ODhDMTA3LjE5NiAxNy44ODggMTA4LjAxIDE2Ljg5OCAxMDguMDEgMTQuODNWOS4xMzJaIiBmaWxsPSJibGFjayIvPgo8cGF0aCBkPSJNOTguMzgzNiA5LjA4OFYxMS41NzRIOTcuMzkzNkM5NS40NTc2IDExLjU3NCA5NC4yNDc2IDEyLjYwOCA5NC4yNDc2IDE0LjcyVjIwSDkxLjU2MzZWOS4xNTRIOTQuMDkzNkw5NC4yNDc2IDEwLjczOEM5NC43MDk2IDkuNjYgOTUuNzQzNiA4LjkzNCA5Ny4xOTU2IDguOTM0Qzk3LjU2OTYgOC45MzQgOTcuOTQzNiA4Ljk3OCA5OC4zODM2IDkuMDg4WiIgZmlsbD0iYmxhY2siLz4KPHBhdGggZD0iTTgzLjczOTUgMjAuMjg2QzgwLjUwNTUgMjAuMjg2IDc4LjIzOTUgMTcuOTMyIDc4LjIzOTUgMTQuNTY2Qzc4LjIzOTUgMTEuMTU2IDgwLjQ2MTYgOC44MDIgODMuNjUxNiA4LjgwMkM4Ni45MDc2IDguODAyIDg4Ljk3NTUgMTAuOTggODguOTc1NSAxNC4zNjhWMTUuMTgyTDgwLjc5MTUgMTUuMjA0QzgwLjk4OTUgMTcuMTE4IDgyLjAwMTUgMTguMDg2IDgzLjc4MzUgMTguMDg2Qzg1LjI1NzUgMTguMDg2IDg2LjIyNTUgMTcuNTE0IDg2LjUzMzUgMTYuNDhIODkuMDE5NUM4OC41NTc1IDE4Ljg1NiA4Ni41Nzc1IDIwLjI4NiA4My43Mzk1IDIwLjI4NlpNODMuNjczNSAxMS4wMDJDODIuMDg5NSAxMS4wMDIgODEuMTIxNSAxMS44NiA4MC44NTc1IDEzLjQ4OEg4Ni4zMTM1Qzg2LjMxMzUgMTEuOTkyIDg1LjI3OTUgMTEuMDAyIDgzLjY3MzUgMTEuMDAyWiIgZmlsbD0iYmxhY2siLz4KPHBhdGggZD0iTTYxLjY1NjcgMjBINTguOTcyN1Y5LjEzMkg2MS40MzY3TDYxLjY1NjcgMTAuNDA4QzYyLjIwNjcgOS41MDYgNjMuMzA2NyA4LjgwMiA2NC44Njg3IDguODAyQzY2LjUxODcgOC44MDIgNjcuNjYyNyA5LjYxNiA2OC4yMzQ3IDEwLjg3QzY4Ljc4NDcgOS42MTYgNzAuMDYwNyA4LjgwMiA3MS43MTA3IDguODAyQzc0LjM1MDcgOC44MDIgNzUuODAyNyAxMC4zODYgNzUuODAyNyAxMi44OTRWMjBINzMuMTQwN1YxMy41OThDNzMuMTQwNyAxMi4wMzYgNzIuMzA0NyAxMS4yMjIgNzEuMDI4NyAxMS4yMjJDNjkuNzMwNyAxMS4yMjIgNjguNzQwNyAxMi4wNTggNjguNzQwNyAxMy44NFYyMEg2Ni4wNTY3VjEzLjU3NkM2Ni4wNTY3IDEyLjA1OCA2NS4yNDI3IDExLjI0NCA2My45NjY3IDExLjI0NEM2Mi42OTA3IDExLjI0NCA2MS42NTY3IDEyLjA4IDYxLjY1NjcgMTMuODRWMjBaIiBmaWxsPSJibGFjayIvPgo8cGF0aCBkPSJNNTMuMDc2NSA5LjEzMkg1NS43NjA1VjIwSDUzLjI3NDVMNTMuMDc2NSAxOC41NDhDNTIuNDE2NSAxOS41ODIgNTEuMDA4NSAyMC4yODYgNDkuNTU2NSAyMC4yODZDNDcuMDQ4NSAyMC4yODYgNDUuNTc0NSAxOC41OTIgNDUuNTc0NSAxNS45M1Y5LjEzMkg0OC4yNTg1VjE0Ljk4NEM0OC4yNTg1IDE3LjA1MiA0OS4wNzI1IDE3Ljg4OCA1MC41Njg1IDE3Ljg4OEM1Mi4yNjI1IDE3Ljg4OCA1My4wNzY1IDE2Ljg5OCA1My4wNzY1IDE0LjgzVjkuMTMyWiIgZmlsbD0iYmxhY2siLz4KPHBhdGggZD0iTTM0LjI0NjkgMTYuN0gzNi43OTg5QzM2LjgyMDkgMTcuNjQ2IDM3LjUyNDkgMTguMjQgMzguNzU2OSAxOC4yNEM0MC4wMTA5IDE4LjI0IDQwLjY5MjkgMTcuNzM0IDQwLjY5MjkgMTYuOTQyQzQwLjY5MjkgMTYuMzkyIDQwLjQwNjkgMTUuOTk2IDM5LjQzODkgMTUuNzc2TDM3LjQ4MDkgMTUuMzE0QzM1LjUyMjkgMTQuODc0IDM0LjU3NjkgMTMuOTUgMzQuNTc2OSAxMi4yMTJDMzQuNTc2OSAxMC4wNzggMzYuMzgwOSA4LjgwMiAzOC44ODg5IDguODAyQzQxLjMzMDkgOC44MDIgNDIuOTgwOSAxMC4yMSA0My4wMDI5IDEyLjMyMkg0MC40NTA5QzQwLjQyODkgMTEuMzk4IDM5LjgxMjkgMTAuODA0IDM4Ljc3ODkgMTAuODA0QzM3LjcyMjkgMTAuODA0IDM3LjEwNjkgMTEuMjg4IDM3LjEwNjkgMTIuMTAyQzM3LjEwNjkgMTIuNzE4IDM3LjU5MDkgMTMuMTE0IDM4LjUxNDkgMTMuMzM0TDQwLjQ3MjkgMTMuNzk2QzQyLjI5ODkgMTQuMjE0IDQzLjIyMjkgMTUuMDUgNDMuMjIyOSAxNi43MjJDNDMuMjIyOSAxOC45MjIgNDEuMzUyOSAyMC4yODYgMzguNjY4OSAyMC4yODZDMzUuOTYyOSAyMC4yODYgMzQuMjQ2OSAxOC44MzQgMzQuMjQ2OSAxNi43WiIgZmlsbD0iYmxhY2siLz4KPHBhdGggZD0iTTMwLjg2MjQgMjBIMjguMTc4NFYxMS4zNzZIMjYuMDg4NFY5LjEzMkgyOC4xNzg0VjUuNzQ0SDMwLjg2MjRWOS4xMzJIMzIuOTc0NFYxMS4zNzZIMzAuODYyNFYyMFoiIGZpbGw9ImJsYWNrIi8+CjxwYXRoIGQ9Ik0yMi42MTEzIDYuOTU0QzIxLjY4NzMgNi45NTQgMjAuOTYxMyA2LjIyOCAyMC45NjEzIDUuMzI2QzIwLjk2MTMgNC40MjQgMjEuNjg3MyAzLjcyIDIyLjYxMTMgMy43MkMyMy40OTEzIDMuNzIgMjQuMjE3MyA0LjQyNCAyNC4yMTczIDUuMzI2QzI0LjIxNzMgNi4yMjggMjMuNDkxMyA2Ljk1NCAyMi42MTEzIDYuOTU0Wk0yMS4yNjkzIDIwVjkuMTMySDIzLjk1MzNWMjBIMjEuMjY5M1oiIGZpbGw9ImJsYWNrIi8+CjxwYXRoIGQ9Ik00LjUwOTk4IDIwSDEuNzgxOThWMy45MThINC41MDk5OEw5LjcwMTk4IDE2LjcyMkwxNC44OTQgMy45MThIMTcuNjY2VjIwSDE0LjkzOFYxNS4wNUMxNC45MzggMTEuODE2IDE0LjkzOCAxMC44NyAxNS4wOTIgOS43MjZMMTEgMjBIOC40MDM5OEw0LjMzMzk4IDkuNzQ4QzQuNDg3OTggMTAuNzE2IDQuNTA5OTggMTIuMjM0IDQuNTA5OTggMTQuMjM2VjIwWiIgZmlsbD0iYmxhY2siLz4KPC9zdmc+Cg=="
+
     const MAX_BYTES = 1024 * 1024 // 1 MB per image
+    // Storage-side bound: base64 inflation (+~33%) over a 1 MB source, plus margin.
+    const MAX_STORED = MAX_BYTES * 2
     const ACCEPT_IMAGE = 'image/png,image/svg+xml'
 
     // ── locale dictionaries (en / zh / ko / ja, en fallback) ──────────────
@@ -47,7 +54,7 @@ window.__ModuleLoader__.load({
       },
       zh: {
         title: '品牌',
-        intro: '换上你的品牌：上传浅色/深色主题的标志，并选择起始页标志。',
+        intro: '换上你的品牌：上传浅色/深色主题的标志，并选择主品牌标志。',
         lightLabel: '标志 — 浅色主题',
         darkLabel: '标志 — 深色主题',
         choose: '选择图片…',
@@ -55,19 +62,19 @@ window.__ModuleLoader__.load({
         remove: '移除',
         preview: '预览',
         sizeHint:
-          '透明 PNG 或 SVG。横向锁型标志：图案高度 ≥ 48px（渲染高度 24px 的 2 倍）并留出边距；方形标志 ≥ 96px。页面按高度约束显示——宽度不限，高度不可超。',
-        heroShow: '显示起始页品牌标志',
+          '透明 PNG 或 SVG。横向组合标志：图案高度 ≥ 48px（渲染高度 24px 的 2 倍）并留出两侧边距；方形标志 ≥ 96px。页面按高度上限显示——宽度不限，高度受限。',
+        heroShow: '显示主品牌标志',
         heroIconLabel: '方形图标 — 34×34',
-        heroHint: '输入框上方的起始页槽位只放得下 34px 方形标志——宽锁型标志放不下。请上传透明方形 PNG 或 SVG。',
+        heroHint: '输入框上方的主标志槽位只能容纳 34px 方形标志——横向组合标志放不下。请上传透明方形 PNG 或 SVG。',
         saved: '已保存——品牌已生效。',
         saveBtn: '保存品牌',
         revertBtn: '还原',
         dirtyHint: '修改需点击“保存品牌”后才会生效。',
         localOnly: '警告：仅保存在当前浏览器中，应用重启后会丢失。',
         invalidType: '请选择 PNG 或 SVG 文件。',
-        tooLarge: '该图片超过 1MB，请使用更小的导出。',
+        tooLarge: '该图片超过 1MB，请用更小尺寸的文件。',
         readError: '无法读取该文件，请重试。',
-        notConfigured: '尚未配置文字标识——请在上方上传标志，或配置该插件的 config。',
+        notConfigured: '尚未配置文字标识——请在上方上传标志，或设置该插件。',
       },
       ko: {
         title: '브랜드',
@@ -79,10 +86,10 @@ window.__ModuleLoader__.load({
         remove: '제거',
         preview: '미리보기',
         sizeHint:
-          '투명 PNG 또는 SVG. 가로형 로고: 그림 높이 ≥ 48px(24px 렌더의 2배), 여백 포함. 정사각형: ≥ 96px. 높이 제한으로 표시됩니다 — 가로는 자유, 높이는 불가.',
+          '투명 PNG 또는 SVG. 가로형 로고: 그림 높이 ≥ 48px(24px 렌더의 2배) · 여백 포함. 정사각형: ≥ 96px. 높이는 제한 — 너비는 무관합니다.',
         heroShow: '히어로 브랜드 마크 표시',
         heroIconLabel: '정사각형 아이콘 — 34×34',
-        heroHint: '컴포저 위 히어로 슬롯은 34px 정사각형만 맞습니다 — 넓은 로고는 안 맞아요. 투명 정사각형 PNG 또는 SVG를 업로드하세요.',
+        heroHint: '컴포저 위 히어로 슬롯은 34px 정사각형만 맞습니다 — 넓은 가로형 로고는 안 맞아요. 투명 정사각형 PNG 또는 SVG를 업로드하세요.',
         saved: '저장됨 — 브랜드가 적용되었습니다.',
         saveBtn: '브랜드 저장',
         revertBtn: '되돌리기',
@@ -91,7 +98,7 @@ window.__ModuleLoader__.load({
         invalidType: 'PNG 또는 SVG 파일을 선택해 주세요.',
         tooLarge: '이미지가 1MB를 초과합니다. 더 작은 파일을 사용하세요.',
         readError: '파일을 읽을 수 없습니다. 다시 시도해 주세요.',
-        notConfigured: '워드마크가 아직 없습니다 — 위에서 로고를 올리거나 config를 설정하세요.',
+        notConfigured: '워드마크가 아직 없습니다 — 위에서 로고를 올리거나 이 구성을 설정하세요.',
       },
       ja: {
         title: 'ブランド',
@@ -103,7 +110,7 @@ window.__ModuleLoader__.load({
         remove: '削除',
         preview: 'プレビュー',
         sizeHint:
-          '透明PNGまたはSVG。横長ロゴ: 図柄の高さは48px以上(24px表示の2倍)・余白付き。正方形マーク: 96px以上。高さ上限で表示されます — 幅は自由、高さは厳守。',
+          '透明PNGまたはSVG。横長ロゴ: 図柄の高さは48px以上(24px表示の2倍)・余白付き。正方形マーク: 96px以上。高さ上限で表示されます — 幅は自由、高さは上限までです。',
         heroShow: 'ヒーローのブランドマークを表示',
         heroIconLabel: '正方形アイコン — 34×34',
         heroHint: 'コンポーザー上のヒーロースロットは34pxの正方形のみ収まります — 横長は入りません。透明の正方形PNGまたはSVGをアップロードしてください。',
@@ -115,7 +122,7 @@ window.__ModuleLoader__.load({
         invalidType: 'PNG または SVG ファイルを選択してください。',
         tooLarge: '画像が1MBを超えています。より小さい書き出しを使用してください。',
         readError: 'ファイルを読み込めませんでした。もう一度お試しください。',
-        notConfigured: 'ワードマーク未設定です — 上でロゴをアップロードするか、configを設定してください。',
+        notConfigured: 'ワードマーク未設定です — 上でロゴをアップロードするか、この構成を設定してください。',
       },
     }
 
@@ -163,14 +170,21 @@ window.__ModuleLoader__.load({
       } catch { /* ignore corrupt cache */ }
       // Merge per field. Never let an empty/truncated value in one store shadow a real
       // logo in the other: prefer the longer (uncorrupted) data URL for image fields.
+      // Only accept genuine image data-URLs; drop anything a tampered/oversized
+      // store injected (the upload cap is not a read boundary). The pick() heuristic
+      // assumes longer => less-truncated, which is fine for the two mirrors the doc
+      // writes, but is a heuristic rather than a correctness rule.
+      const isImageDataUrl = (v) =>
+        typeof v === 'string' && v.startsWith('data:image/') && v.length <= MAX_STORED
+      const clean = (v) => (isImageDataUrl(v) ? v : '')
       const pick = (a, b) => {
         if (!a) return b
         if (!b) return a
         return b.length > a.length ? b : a
       }
-      out.logoLight = pick(fromScope.logoLight, fromLocal.logoLight)
-      out.logoDark = pick(fromScope.logoDark, fromLocal.logoDark)
-      out.heroIcon = pick(fromScope.heroIcon, fromLocal.heroIcon)
+      out.logoLight = pick(clean(fromScope.logoLight), clean(fromLocal.logoLight))
+      out.logoDark = pick(clean(fromScope.logoDark), clean(fromLocal.logoDark))
+      out.heroIcon = pick(clean(fromScope.heroIcon), clean(fromLocal.heroIcon))
       out.heroShow = fromScope.heroShow || fromLocal.heroShow
       return out
     }
@@ -183,6 +197,18 @@ window.__ModuleLoader__.load({
     // Host rejections are async (namespace unregistered, read-only provider), so
     // any thenable returned by set() is awaited and its failure turned into a
     // false instead of being swallowed.
+    // True only when the bound scope is the durable HOST settings doc: loopback
+    // "host" persistence, ready, and writable. A "memory" scope (non-loopback
+    // page) is origin-scoped and lost on the next launch, so it must be reported
+    // as local-only. The controller snapshot exposes mode / status / writable.
+    function isDurableScope() {
+      if (!SCOPE || typeof SCOPE.getSnapshot !== 'function') return false
+      try {
+        const snap = SCOPE.getSnapshot() || {}
+        return snap.mode === 'host' && snap.status === 'ready' && snap.writable !== false
+      } catch { return false }
+    }
+
     function persist(field, value) {
       VALUE = { ...VALUE, [field]: value }
       REV += 1
@@ -197,10 +223,19 @@ window.__ModuleLoader__.load({
       try {
         outcome = SCOPE.set(field, value)
       } catch { return Promise.resolve(false) }
-      if (outcome && typeof outcome.then === 'function') {
-        return outcome.then(() => true, () => false)
+      // The settings scope settles its promise even when the host write was
+      // skipped or rejected (non-loopback "memory" persistence, an unregistered
+      // or read-only namespace) — the failure is folded into the mirror, not
+      // thrown. So never infer "saved" from the promise resolving; confirm the
+      // durable host doc actually accepted the value first.
+      const confirm = async (settled) => {
+        try { await settled } catch { return false }
+        return isDurableScope()
       }
-      return Promise.resolve(true)
+      if (outcome && typeof outcome.then === 'function') {
+        return outcome.then(confirm)
+      }
+      return Promise.resolve(isDurableScope())
     }
 
     function subscribe(fn) {
@@ -223,7 +258,7 @@ window.__ModuleLoader__.load({
 
     // ── theme-aware logo CSS (switches on DSH's resolved theme attribute) ──
     const CSS = [
-      '.bs-logo{max-height:20px;width:auto;max-width:100%;object-fit:contain;vertical-align:middle;flex:none}',
+      '.bs-logo{max-height:24px;width:auto;max-width:100%;object-fit:contain;vertical-align:middle;flex:none}',
       '.bs-logo--dark{display:none}',
       'body[data-ds-dark-theme] .bs-logo--light{display:none}',
       'body[data-ds-dark-theme] .bs-logo--dark{display:inline-block}',
@@ -274,24 +309,6 @@ window.__ModuleLoader__.load({
       document.head.appendChild(tag)
     }
 
-    // ── row-config values (wordmark fallback, legacy v0.1 path) ────────────
-    function readRowConfig(ctx) {
-      let cfg = {}
-      try {
-        const get = typeof ctx?.get === 'function' ? ctx.get : () => null
-        cfg = get('brand') || get('config') || {}
-      } catch { /* no config channel */ }
-      return {
-        wordmark: cfg.wordmark || '',
-        text: cfg.textColor || 'var(--dsw-alias-label-primary)',
-        dot: cfg.dotColor || 'var(--dsw-alias-state-business-primary)',
-        font: cfg.fontFamily || 'ui-sans-serif, system-ui, sans-serif',
-        fontSize: cfg.fontSize || 18,
-        fontWeight: cfg.fontWeight || 700,
-        letterSpacing: cfg.letterSpacing || '0.02em',
-      }
-    }
-
     function activeLang() {
       try {
         const l = (typeof document !== 'undefined' && document.documentElement.lang) || 'en'
@@ -326,8 +343,6 @@ window.__ModuleLoader__.load({
       } catch { SCOPE = null }
       VALUE = readPersisted()
 
-      const BRAND = readRowConfig(ctx)
-
       // Register own locale dictionaries when the locale service is present.
       try {
         const locale = typeof ctx.get === 'function' ? ctx.get('locale') : undefined
@@ -338,52 +353,26 @@ window.__ModuleLoader__.load({
       } catch { /* locale optional */ }
 
       // ── brand seats ──────────────────────────────────────────────────────
-      const Dot = ({ size = 6 }) =>
-        h('span', {
-          'aria-hidden': true,
-          style: {
-            display: 'inline-block',
-            width: size,
-            height: size,
-            marginLeft: '0.2em',
-            borderRadius: 999,
-            backgroundColor: BRAND.dot,
-            verticalAlign: 'baseline',
-            transform: 'translateY(-1px)',
-          },
-        })
-
-      const WordmarkName = () =>
-        h('span', {
-          'data-ls-skip': '',
-          style: {
-            color: BRAND.text,
-            fontFamily: BRAND.font,
-            fontWeight: BRAND.fontWeight,
-            fontSize: BRAND.fontSize,
-            letterSpacing: BRAND.letterSpacing,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            display: 'inline-flex',
-            alignItems: 'baseline',
-            minWidth: 0,
-          },
-        }, BRAND.wordmark, h(Dot, { size: 6 }))
+      // The brand is a single 24px-height slot rendering a PNG or SVG logo — the
+      // logo IS the brand. No wordmark text, no dot fallback (removed: the bare
+      // dot looked broken when no wordmark was configured).
 
       const SidebarName = () => {
         const logos = useSyncExternalStoreSafe(subscribe, getSnapshot)
-        const hasLight = Boolean(logos.logoLight)
-        const hasDark = Boolean(logos.logoDark)
-        if (!hasLight && !hasDark) return WordmarkName()
-        // One variant → always show it; both → theme-switched pair.
+        // Client logo wins; else fall back to the default Mitsumeru brand (blue dot).
+        const light = logos.logoLight || DEFAULT_BRAND_LIGHT
+        const dark = logos.logoDark || DEFAULT_BRAND_DARK
+        const hasLight = Boolean(light)
+        const hasDark = Boolean(dark)
+        // Both present → theme-switched pair (client pair, or the default pair).
         if (hasLight && hasDark) {
           return h('span', { 'data-ls-skip': '', style: { display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0, overflow: 'hidden' } },
-            h('img', { key: 'light', className: 'bs-logo bs-logo--light', src: logos.logoLight, alt: '', draggable: false }),
-            h('img', { key: 'dark', className: 'bs-logo bs-logo--dark', src: logos.logoDark, alt: '', draggable: false }))
+            h('img', { key: 'light', className: 'bs-logo bs-logo--light', src: light, alt: '', draggable: false }),
+            h('img', { key: 'dark', className: 'bs-logo bs-logo--dark', src: dark, alt: '', draggable: false }))
         }
-        const src = hasLight ? logos.logoLight : logos.logoDark
-        return h('img', { 'data-ls-skip': '', className: 'bs-logo', src, alt: '', draggable: false })
+        const src = hasLight ? light : dark
+        return h('span', { 'data-ls-skip': '', style: { display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0, overflow: 'hidden' } },
+          h('img', { className: 'bs-logo', src, alt: '', draggable: false }))
       }
 
       const SidebarMark = () => null
@@ -461,7 +450,11 @@ window.__ModuleLoader__.load({
         const dirty = FIELDS.some((key) => draft[key] !== committed[key])
         const save = async () => {
           setSaving(true)
-          const results = await Promise.all(FIELDS.map((key) => persist(key, draft[key])))
+          // Persist only the fields the user actually changed — the draft is seeded
+          // from a mount-time snapshot, so writing everything would clobber a newer
+          // host value (e.g. an external edit) with the stale draft.
+          const dirtyKeys = FIELDS.filter((key) => draft[key] !== committed[key])
+          const results = await Promise.all(dirtyKeys.map((key) => persist(key, draft[key])))
           setSaving(false)
           const hostOk = results.every(Boolean)
           setNotice({ kind: hostOk ? 'ok' : 'warn', text: translate(hostOk ? 'saved' : 'localOnly') })
@@ -510,6 +503,9 @@ window.__ModuleLoader__.load({
         : (React.useState(get)[0])
     }
 
-    return { inject: ['slots', 'settingsScope'], apply }
+    // settingsScope is read optionally via ctx.get() so a host without the
+    // service falls back to the local-only mirror (with a warning) instead of
+    // blocking apply() — declaring it in inject would make the fallback dead.
+    return { inject: ['slots'], apply }
   },
 })

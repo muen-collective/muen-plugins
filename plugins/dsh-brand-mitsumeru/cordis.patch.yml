@@ -1,0 +1,6 @@
+# @muen/dsh-brand-mitsumeru — insert one loader entry for the Mitsumeru
+# self-brand package. It fills the DSH brand slots with the hardcoded Mitsumeru
+# wordmark + cyan-blue dot (the replacement for the DeepSeek official brand).
+- insert:
+    - id: brand-mitsumeru
+      name: '@muen/dsh-brand-mitsumeru'

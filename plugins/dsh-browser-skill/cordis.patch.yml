@@ -1,0 +1,9 @@
+# @muen/dsh-browser-skill — Muen fork of BrowserSkill's dsh plugin (upstream
+# @wxg-prc-cpg/browser-skill-dsh-plugin v0.2.0), re-skinned to the Mitsu/EVA
+# theme (overlay follows the host theme, tab icon removed, no third-party brand
+# mark), de-oranged, and rebranded. Same bsk bridge + browser_* tools as upstream.
+# Install: `dsh plugin --profile <name> add <this package or tarball>`.
+- insert:
+    - id: browserskill
+      # Quoted because YAML reserves a leading '@' in plain scalars.
+      name: '@muen/dsh-browser-skill'

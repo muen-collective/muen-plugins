@@ -202,7 +202,11 @@ window.__ModuleLoader__.load({
     }
 
     // ── DOM scan + language heuristic ───────────────────────────────────────
-    const SKIP = 'script,style,code,pre,textarea,input,select,option,[contenteditable="true"],[data-ls-skip]'
+    // Skip fields/controls, editor surfaces, and any SVG subtree — inline SVG (icons,
+    // logos) carries graphics, not UI copy, so its <text>/<title> must never be
+    // scanned or overwritten as "untranslated" strings. [data-ls-skip] lets a plugin
+    // opt a whole subtree out (brand mark/logo seats use it).
+    const SKIP = 'script,style,code,pre,textarea,input,select,option,svg,math,[contenteditable="true"],[data-ls-skip]'
 
     function detectScript(text) {
       let latin = 0; let han = 0; let hangul = 0; let kana = 0
@@ -330,7 +334,7 @@ window.__ModuleLoader__.load({
           refreshOverlay()
         }
 
-        return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 640 } },
+        return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, width: '100%', padding: '14px 0 16px', borderBottom: '1px solid var(--dsw-alias-border-l2)' } },
           h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 } },
             h('span', { style: { color: 'var(--dsw-alias-label-primary)', fontSize: 14, fontWeight: 400 } }, translate('title')),
             h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
@@ -366,7 +370,7 @@ window.__ModuleLoader__.load({
       }
 
       // ── sidebar globe: quick language switch ───────────────────────────────
-      function GlobeAction() {
+      function GlobeAction({ wide } = {}) {
         const locale = typeof ctx.get === 'function' ? ctx.get('locale') : undefined
         const state = useSyncExternalStoreSafe(
           (fn) => (locale && typeof locale.subscribe === 'function') ? locale.subscribe(fn) : () => {},
@@ -375,7 +379,6 @@ window.__ModuleLoader__.load({
         )
         const active = (state && state.active) || ''
         const locales = (state && state.locales) || []
-        const activeLabel = locales.find((l) => l.id === active)?.label || ''
         const [open, setOpen] = React.useState(false)
         const [note, setNote] = React.useState('')
         const menuRef = React.useRef(null)
@@ -389,7 +392,9 @@ window.__ModuleLoader__.load({
           return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
         }, [open])
 
-        const overridden = active && active !== 'en'
+        // Always show the globe glyph, with the short language code (EN/ZH/KO/JA/FR/ES)
+        // as a label to its right — instead of swapping the glyph for a full language name.
+        const label = (active || 'en').toUpperCase()
 
         return h('div', { style: { position: 'relative' } },
           h('button', {
@@ -397,14 +402,15 @@ window.__ModuleLoader__.load({
             'aria-label': translate('globe'), title: translate('lang'),
             'aria-haspopup': 'menu', 'aria-expanded': open,
             onClick: () => { setOpen((v) => !v); setNote('') },
-            style: { display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', background: 'transparent', border: 'none', color: 'var(--dsw-alias-label-primary)', padding: 0, font: 'inherit', fontSize: 12 },
+            style: { display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', background: 'transparent', border: 'none', color: 'var(--dsw-alias-label-primary)', padding: wide ? '0 6px' : 0, font: 'inherit', fontSize: 12 },
           },
-            overridden
-              ? h('span', { style: { color: 'var(--dsw-alias-label-primary)', fontWeight: 600 } }, activeLabel)
-              : h(GlobeGlyph)),
+            h(GlobeGlyph),
+            h('span', {
+              style: { color: 'var(--dsw-alias-label-primary)', fontWeight: 600, fontSize: 12, lineHeight: 1, letterSpacing: '0.04em' },
+            }, label)),
           open && h('div', {
             ref: menuRef, role: 'menu',
-            style: { position: 'absolute', right: 0, bottom: 'calc(100% + 6px)', zIndex: 1000, minWidth: 168, background: 'var(--dsw-alias-bg-layer-2)', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, padding: 4, boxShadow: 'var(--dsw-shadow-lv1)' },
+            style: { position: 'absolute', left: 0, bottom: 'calc(100% + 6px)', zIndex: 1000, minWidth: 168, background: 'var(--dsw-alias-bg-layer-2)', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, padding: 4, boxShadow: 'var(--dsw-shadow-lv1)' },
           },
             locales.map((l) => h('button', {
               key: l.id, role: 'menuitem', type: 'button',

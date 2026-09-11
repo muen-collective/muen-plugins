@@ -1,0 +1,5 @@
+# @muen/dsh-muen-plugins — insert one loader entry for the Settings > Muen
+# plugins tab (the informational Muen-delivered plugin catalog).
+- insert:
+    - id: muen-plugins
+      name: '@muen/dsh-muen-plugins'

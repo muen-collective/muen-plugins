@@ -1,0 +1,7 @@
+# @muen/dsh-theme-runtime profile patch layer — insert one loader entry for
+# the plugin package (Muen fork of dsh-dream-skin). The entry is a normal
+# cordis loader entry (id + package name); the browser half is picked up by
+# dsh-client-modules through the package's dsh.client declaration.
+- insert:
+    - id: theme-runtime
+      name: '@muen/dsh-theme-runtime'

@@ -1,0 +1,411 @@
+diff --git a/apps/extension/assets/logo.png b/apps/extension/assets/logo.png
+index 762a082..3e600c1 100644
+Binary files a/apps/extension/assets/logo.png and b/apps/extension/assets/logo.png differ
+diff --git a/apps/extension/src/content/BorrowConfirmationOverlay.tsx b/apps/extension/src/content/BorrowConfirmationOverlay.tsx
+index 6bb915f..b2309cc 100644
+--- a/apps/extension/src/content/BorrowConfirmationOverlay.tsx
++++ b/apps/extension/src/content/BorrowConfirmationOverlay.tsx
+@@ -127,7 +127,7 @@ function BorrowRequestItem({ request, isModal }: { request: BorrowRequestData; i
+     return (
+       <div
+         data-slot="borrow-confirmation-modal"
+-        className={`flex w-[400px] flex-col gap-4 rounded-2xl bg-white px-7 pb-6 pt-7 shadow-[0_25px_50px_rgba(124,45,18,0.1)] ${cardClass}`}
++        className={`flex w-[400px] flex-col gap-4 rounded-2xl bg-white px-7 pb-6 pt-7 shadow-[0_25px_50px_rgba(0,0,0,0.2)] ${cardClass}`}
+       >
+         <div className="flex items-center gap-2.5">
+           <img src={logoUrl} alt="browser-skill" className="size-6 rounded" />
+@@ -158,7 +158,7 @@ function BorrowRequestItem({ request, isModal }: { request: BorrowRequestData; i
+   return (
+     <div
+       data-slot="borrow-confirmation-toast"
+-      className={`flex w-80 flex-col rounded-xl border border-[#ffedd5] bg-[#FFFBF7] p-4 pb-3.5 shadow-[0_10px_40px_rgba(124,45,18,0.1)] ${cardClass}`}
++      className={`flex w-80 flex-col rounded-xl border border-[#d4d4d8] bg-[#fafafa] p-4 pb-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.2)] ${cardClass}`}
+     >
+       <BorrowToastHeader onDeny={handleDeny} />
+       <p className="mb-2.5 text-[13px] leading-relaxed text-[#555]">
+@@ -210,7 +210,7 @@ function BorrowProgressBar({
+   return (
+     <div className="mb-3 h-1 overflow-hidden rounded-sm bg-gray-100">
+       <div
+-        className="h-full rounded-sm bg-orange-500 transition-[width] duration-1000 ease-linear"
++        className="h-full rounded-sm bg-neutral-800 transition-[width] duration-1000 ease-linear"
+         style={{ width: `${progress * 100}%` }}
+         onTransitionEnd={onProgressTransitionEnd}
+       />
+@@ -242,7 +242,7 @@ function ActionButtons({
+         type="button"
+         data-slot="borrow-confirmation-allow-button"
+         onClick={onAllow}
+-        className="cursor-pointer rounded-lg border-0 bg-orange-500 px-4 py-2 text-[13px] font-semibold text-white"
++        className="cursor-pointer rounded-lg border-0 bg-neutral-800 px-4 py-2 text-[13px] font-semibold text-white"
+       >
+         {t("borrowConfirmation.allow")}
+       </button>
+@@ -270,7 +270,7 @@ function CountdownRing({
+         cy={36}
+         r={r}
+         fill="none"
+-        stroke="#f97316"
++        stroke="#71717a"
+         strokeWidth={5}
+         strokeDasharray={circ}
+         strokeDashoffset={offset}
+diff --git a/apps/extension/src/content/ControlOverlay.tsx b/apps/extension/src/content/ControlOverlay.tsx
+index 02544b4..b3d03fa 100644
+--- a/apps/extension/src/content/ControlOverlay.tsx
++++ b/apps/extension/src/content/ControlOverlay.tsx
+@@ -1,7 +1,6 @@
+ import { useTranslation } from "@browser-skill/i18n/react";
+ import { RiStopCircleLine } from "@remixicon/react";
+ import { useEffect, useRef, useState } from "react";
+-import logoUrl from "../../assets/logo.png";
+ 
+ export interface ControlOverlayProps {
+   visible: boolean;
+@@ -64,17 +63,6 @@ export function ControlOverlay({
+ 
+   return (
+     <>
+-      <style>{`
+-        @keyframes bsk-breathe {
+-          0%, 100% {
+-            box-shadow: inset 0 0 20px 4px rgba(249,115,22,0.25);
+-          }
+-          50% {
+-            box-shadow: inset 0 0 40px 8px rgba(249,115,22,0.5);
+-          }
+-        }
+-      `}</style>
+-
+       <div
+         data-slot="control-overlay"
+         style={{
+@@ -82,7 +70,6 @@ export function ControlOverlay({
+           inset: 0,
+           zIndex: 2147483646,
+           pointerEvents: "none",
+-          animation: "bsk-breathe 3s ease-in-out infinite",
+           opacity: show ? 1 : 0,
+           transition: "opacity 300ms ease-out",
+         }}
+@@ -127,18 +114,13 @@ export function ControlOverlay({
+           backgroundColor: "#fff",
+           borderRadius: 9999,
+           padding: "10px 10px 10px 20px",
+-          boxShadow: "0 8px 32px rgba(124,45,18,0.16), 0 2px 8px rgba(0,0,0,0.1)",
++          boxShadow: "0 8px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.1)",
+           opacity: show ? 1 : 0,
+           transition: "opacity 300ms ease-out",
+           fontFamily:
+             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+         }}
+       >
+-        <img
+-          src={logoUrl}
+-          alt="browser-skill"
+-          style={{ width: 24, height: 24, borderRadius: 4, flexShrink: 0 }}
+-        />
+         <span
+           style={{
+             fontSize: 16,
+@@ -166,7 +148,7 @@ export function ControlOverlay({
+             fontSize: 15,
+             fontWeight: 600,
+             color: "#fff",
+-            backgroundColor: interrupting ? "#9ca3af" : "#f97316",
++            backgroundColor: interrupting ? "#52525b" : "#111827",
+             cursor: interrupting ? "default" : "pointer",
+             opacity: interrupting ? 0.7 : 1,
+             transition: "background-color 150ms ease-out, opacity 150ms ease-out",
+diff --git a/apps/extension/src/content/HelpRequestOverlay.tsx b/apps/extension/src/content/HelpRequestOverlay.tsx
+index 0f39bc6..19d859b 100644
+--- a/apps/extension/src/content/HelpRequestOverlay.tsx
++++ b/apps/extension/src/content/HelpRequestOverlay.tsx
+@@ -372,8 +372,8 @@ export function HelpRequestOverlay({ request }: Props) {
+     <>
+       <style>{`
+         @keyframes bsk-help-flash {
+-          0%, 100% { box-shadow: 0 0 0 2px rgba(249,115,22,0.9), 0 0 12px 2px rgba(249,115,22,0.5); }
+-          50% { box-shadow: 0 0 0 3px rgba(249,115,22,1), 0 0 22px 6px rgba(249,115,22,0.8); }
++          0%, 100% { box-shadow: 0 0 0 2px rgba(0,0,0,0.85), 0 0 12px 2px rgba(0,0,0,0.45); }
++          50% { box-shadow: 0 0 0 3px rgba(0,0,0,1), 0 0 22px 6px rgba(0,0,0,0.7); }
+         }
+ 
+         .bsk-help-banner {
+@@ -395,7 +395,7 @@ export function HelpRequestOverlay({ request }: Props) {
+           background: #fff;
+           border-radius: 16px;
+           padding: 16px;
+-          box-shadow: 0 12px 40px rgba(124,45,18,0.18), 0 2px 8px rgba(0,0,0,0.1);
++          box-shadow: 0 12px 40px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.1);
+           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+           transition:
+             padding var(--bsk-help-duration) var(--bsk-help-ease),
+@@ -609,7 +609,7 @@ export function HelpRequestOverlay({ request }: Props) {
+         .bsk-help-btn-continue {
+           cursor: pointer;
+           border: none;
+-          background: #f97316;
++          background: #111827;
+           border-radius: 8px;
+           font-size: 13px;
+           font-weight: 600;
+diff --git a/apps/extension/src/entrypoints/popup/index.html b/apps/extension/src/entrypoints/popup/index.html
+index 15bfe91..0059184 100644
+--- a/apps/extension/src/entrypoints/popup/index.html
++++ b/apps/extension/src/entrypoints/popup/index.html
+@@ -3,7 +3,7 @@
+   <head>
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-    <title>browser-skill</title>
++    <title>Mitsumeru Browser</title>
+   </head>
+   <body>
+     <div id="root"></div>
+diff --git a/apps/extension/wxt.config.ts b/apps/extension/wxt.config.ts
+index ff4fc53..49bdd24 100644
+--- a/apps/extension/wxt.config.ts
++++ b/apps/extension/wxt.config.ts
+@@ -22,9 +22,9 @@ export default defineConfig({
+   outDir: "dist",
+   modules: ["@wxt-dev/module-react"],
+   manifest: {
+-    name: "BrowserSkill",
++    name: "Mitsumeru Browser",
+     description:
+-      "Let AI agents use your logged-in browser in a separate Agent Window—without interrupting your work. Powered by the bsk CLI.",
++      "Muen fork of BrowserSkill: lets AI agents use your logged-in browser in a separate Agent Window, without interrupting your work. Powered by the bsk CLI.",
+     // Flat debugger sessions are required to address out-of-process iframes.
+     minimum_chrome_version: "125",
+     permissions: [
+@@ -46,7 +46,7 @@ export default defineConfig({
+       128: "icon/logo.png",
+     },
+     action: {
+-      default_title: "BrowserSkill",
++      default_title: "Mitsumeru Browser",
+       default_icon: {
+         16: "icon/logo.png",
+         32: "icon/logo.png",
+diff --git a/packages/dsh-plugin-browserskill/src/client/bsk-tokens.nomodule.css b/packages/dsh-plugin-browserskill/src/client/bsk-tokens.nomodule.css
+index f557c79..f7d2041 100644
+--- a/packages/dsh-plugin-browserskill/src/client/bsk-tokens.nomodule.css
++++ b/packages/dsh-plugin-browserskill/src/client/bsk-tokens.nomodule.css
+@@ -1,49 +1,29 @@
+ /*
+  * BrowserSkill UI design tokens, scoped to the observation overlay root.
+- * VALUES MIRROR packages/ui/src/styles/tailwind.css (:root and .dark) — keep
+- * in sync with that file; it is the canonical source. Scoped here (instead of
+- * :root) so the dsh host theme can neither leak in nor be polluted by us.
+- * Dark follows prefers-color-scheme, same as the extension popup.
++ * Muen fork: follow the host DSH theme instead of an isolated warm palette.
++ * Mapped to the DSH/EVA design tokens (--dsw-alias-*) so the overlay inherits
++ * the app's actual (dark) theme, with neutral fallbacks if a token is absent.
++ * Keep the fallbacks so it renders on any host that lacks the theme variables.
+  */
+ .bsk-obs {
+   color-scheme: light dark;
+-  --background: oklch(0.99 0.005 50);
+-  --foreground: oklch(0.14 0.03 50);
+-  --card: oklch(0.995 0.003 50 / 0.82);
+-  --card-foreground: oklch(0.14 0.03 50);
+-  --primary: oklch(0.62 0.22 45);
+-  --primary-foreground: oklch(0.99 0.01 50);
+-  --secondary: oklch(0.96 0.04 65);
+-  --secondary-foreground: oklch(0.25 0.08 65);
+-  --muted: oklch(0.96 0.01 50);
+-  --muted-foreground: oklch(0.55 0.04 50);
+-  --accent: oklch(0.96 0.04 65);
+-  --accent-foreground: oklch(0.25 0.08 65);
+-  --destructive: oklch(0.6 0.25 25);
+-  --destructive-foreground: oklch(0.99 0.01 50);
+-  --border: oklch(0.9 0.025 60);
+-  --input: oklch(0.9 0.025 60);
+-  --ring: oklch(0.62 0.22 45);
++  --background: var(--dsw-alias-bg-layer-2, #1c1a26);
++  --foreground: var(--dsw-alias-label-primary, #e6e6f0);
++  --card: var(--dsw-alias-bg-layer-1, #1a1826);
++  --card-foreground: var(--dsw-alias-label-primary, #e6e6f0);
++  --primary: var(--dsw-alias-state-business-primary, #7c7cf4);
++  --primary-foreground: #ffffff;
++  --secondary: var(--dsw-alias-bg-layer-2, #211f31);
++  --secondary-foreground: var(--dsw-alias-label-primary, #e6e6f0);
++  --muted: var(--dsw-alias-bg-layer-2, #211f31);
++  --muted-foreground: var(--dsw-alias-label-secondary, #a0a0b0);
++  --accent: var(--dsw-alias-bg-layer-2, #211f31);
++  --accent-foreground: var(--dsw-alias-label-primary, #e6e6f0);
++  --destructive: var(--dsw-alias-state-error-primary, #f87171);
++  --destructive-foreground: #ffffff;
++  --border: var(--dsw-alias-border-l2, #2b2838);
++  --input: var(--dsw-alias-border-l2, #2b2838);
++  --ring: var(--dsw-alias-state-business-primary, #7c7cf4);
+   --radius: 0.75rem;
+ }
+-@media (prefers-color-scheme: dark) {
+-  .bsk-obs {
+-    --background: oklch(0.2 0.02 50);
+-    --foreground: oklch(0.98 0.01 50);
+-    --card: oklch(0.24 0.02 50 / 0.82);
+-    --card-foreground: oklch(0.98 0.01 50);
+-    --primary: oklch(0.7 0.18 45);
+-    --primary-foreground: oklch(0.14 0.03 50);
+-    --secondary: oklch(0.32 0.03 60);
+-    --secondary-foreground: oklch(0.98 0.01 50);
+-    --muted: oklch(0.3 0.02 50);
+-    --muted-foreground: oklch(0.75 0.03 50);
+-    --accent: oklch(0.32 0.03 60);
+-    --accent-foreground: oklch(0.98 0.01 50);
+-    --destructive: oklch(0.45 0.2 25);
+-    --destructive-foreground: oklch(0.98 0.01 50);
+-    --border: oklch(0.35 0.02 60);
+-    --input: oklch(0.35 0.02 60);
+-    --ring: oklch(0.7 0.18 45);
+-  }
+-}
++
+diff --git a/packages/dsh-plugin-browserskill/src/client/observation-sidebar.tsx b/packages/dsh-plugin-browserskill/src/client/observation-sidebar.tsx
+index a4fea16..427f009 100644
+--- a/packages/dsh-plugin-browserskill/src/client/observation-sidebar.tsx
++++ b/packages/dsh-plugin-browserskill/src/client/observation-sidebar.tsx
+@@ -19,18 +19,9 @@ import { setSidebarMode } from "./sidebar-mode";
+ /** The tab title — "Browser Skill", distinct from the sidebar's built-in "browser" tab. */
+ const TAB_TITLE = "Browser Skill";
+ 
+-/** Tab strip icon: the BrowserSkill product mark at the requested size. */
++/** Tab strip icon: Muen fork — no brand mark; keep the tab label clean. */
+ function TabIcon({ size }: { size: number }) {
+-  return (
+-    <img
+-      src={BSK_LOGO_URL}
+-      width={size}
+-      height={size}
+-      alt=""
+-      aria-hidden
+-      className={css["brand-icon"]}
+-    />
+-  );
++  return null;
+ }
+ 
+ /**
+diff --git a/packages/i18n/src/locales/en-US/extension.json b/packages/i18n/src/locales/en-US/extension.json
+index 62851c8..6fb4cc1 100644
+--- a/packages/i18n/src/locales/en-US/extension.json
++++ b/packages/i18n/src/locales/en-US/extension.json
+@@ -1,7 +1,7 @@
+ {
+   "popup": {
+     "brandCategory": "Browser Automation",
+-    "brandName": "BrowserSkill",
++    "brandName": "Mitsumeru",
+     "stateLabel": {
+       "disconnected": "Disconnected",
+       "connecting": "Connecting…",
+@@ -10,8 +10,8 @@
+       "disabled": "Connection off"
+     },
+     "stateDetail": {
+-      "disconnected": "Open BrowserSkill to connect.",
+-      "connecting": "Connecting to BrowserSkill…",
++      "disconnected": "Open Mitsumeru to connect.",
++      "connecting": "Connecting to Mitsumeru…",
+       "connected": "Ready for automation tasks.",
+       "version_skew": "Protocol versions differ. Please upgrade."
+     },
+@@ -22,7 +22,7 @@
+       "version_skew": "Upgradable",
+       "disabled": "Off"
+     },
+-    "connectionToggleTitle": "BrowserSkill connection",
++    "connectionToggleTitle": "Mitsumeru connection",
+     "controlHintsToggleTitle": "Control hints",
+     "controlHintsToggleHint": "Show the status pill and orange glow while the Agent controls a page.",
+     "controlHintsInfoLabel": "About control hints",
+@@ -56,7 +56,7 @@
+       "copyButton": "Copy recording instructions",
+       "copied": "Copied",
+       "hintDisconnected": "Available when connected",
+-      "promptTemplate": "Use BrowserSkill's `bsk` CLI to record the browser actions I'm about to demonstrate.\n\nSteps:\n1. Run: {{command}}\n2. Once you confirm it's started, I'll operate in the opened window myself.\n3. After I click Finish, read the written `./trace` bundle (`trace.json` + `states/`) and summarize what I did."
++      "promptTemplate": "Use Mitsumeru's `bsk` CLI to record the browser actions I'm about to demonstrate.\n\nSteps:\n1. Run: {{command}}\n2. Once you confirm it's started, I'll operate in the opened window myself.\n3. After I click Finish, read the written `./trace` bundle (`trace.json` + `states/`) and summarize what I did."
+     }
+   },
+   "controlOverlay": {
+@@ -72,7 +72,7 @@
+     "autoDeny": "Request expires in {{count}}s",
+     "deny": "Deny",
+     "allow": "Allow",
+-    "notificationTitle": "BrowserSkill: Agent wants to borrow a tab",
++    "notificationTitle": "Mitsumeru: Agent wants to borrow a tab",
+     "notificationBody": "Approve or deny the borrow of \"{{tabTitle}}\" in your browser."
+   },
+   "helpRequest": {
+@@ -85,7 +85,7 @@
+     "collapse": "Collapse",
+     "expand": "Expand",
+     "dragHandle": "Drag to move",
+-    "notificationTitle": "BrowserSkill: Agent needs your help"
++    "notificationTitle": "Mitsumeru: Agent needs your help"
+   },
+   "recordOverlay": {
+     "recording": "Recording your actions",
+diff --git a/packages/i18n/src/locales/zh-CN/extension.json b/packages/i18n/src/locales/zh-CN/extension.json
+index 338d5df..56f6ad8 100644
+--- a/packages/i18n/src/locales/zh-CN/extension.json
++++ b/packages/i18n/src/locales/zh-CN/extension.json
+@@ -1,7 +1,7 @@
+ {
+   "popup": {
+     "brandCategory": "Browser Automation",
+-    "brandName": "BrowserSkill",
++    "brandName": "Mitsumeru",
+     "stateLabel": {
+       "disconnected": "未连接",
+       "connecting": "连接中…",
+@@ -10,8 +10,8 @@
+       "disabled": "连接已关闭"
+     },
+     "stateDetail": {
+-      "disconnected": "请先打开 BrowserSkill。",
+-      "connecting": "正在连接 BrowserSkill…",
++      "disconnected": "请先打开 Mitsumeru。",
++      "connecting": "正在连接 Mitsumeru…",
+       "connected": "可接收自动化任务。",
+       "version_skew": "协议版本不同，请及时升级。"
+     },
+@@ -22,7 +22,7 @@
+       "version_skew": "可升级",
+       "disabled": "Off"
+     },
+-    "connectionToggleTitle": "BrowserSkill 连接",
++    "connectionToggleTitle": "Mitsumeru 连接",
+     "controlHintsToggleTitle": "控制提示",
+     "controlHintsToggleHint": "Agent 控制页面时显示提示条和橙色闪光。",
+     "controlHintsInfoLabel": "控制提示说明",
+@@ -56,7 +56,7 @@
+       "copyButton": "复制录制指令",
+       "copied": "已复制",
+       "hintDisconnected": "连接后可用",
+-      "promptTemplate": "用 BrowserSkill 的 `bsk` CLI 录制我接下来的浏览器操作。\n\n步骤：\n1. 执行：{{command}}\n2. 你确认已开始后，我会在打开的窗口里自己操作。\n3. 我点“结束”后，读取写出的 `./trace` 目录包（`trace.json` + `states/`），总结我做了什么。"
++      "promptTemplate": "用 Mitsumeru 的 `bsk` CLI 录制我接下来的浏览器操作。\n\n步骤：\n1. 执行：{{command}}\n2. 你确认已开始后，我会在打开的窗口里自己操作。\n3. 我点“结束”后，读取写出的 `./trace` 目录包（`trace.json` + `states/`），总结我做了什么。"
+     }
+   },
+   "controlOverlay": {
+@@ -72,7 +72,7 @@
+     "autoDeny": "{{count}} 秒后自动拒绝",
+     "deny": "拒绝",
+     "allow": "允许",
+-    "notificationTitle": "BrowserSkill：Agent 请求借用标签页",
++    "notificationTitle": "Mitsumeru：Agent 请求借用标签页",
+     "notificationBody": "请在浏览器中允许或拒绝对「{{tabTitle}}」的借用。"
+   },
+   "helpRequest": {
+@@ -85,7 +85,7 @@
+     "collapse": "折叠",
+     "expand": "展开",
+     "dragHandle": "拖动以移动",
+-    "notificationTitle": "BrowserSkill：Agent 需要你的帮助"
++    "notificationTitle": "Mitsumeru：Agent 需要你的帮助"
+   },
+   "recordOverlay": {
+     "recording": "正在录制你的操作",

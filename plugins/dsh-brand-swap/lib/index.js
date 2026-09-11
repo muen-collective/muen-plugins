@@ -2,6 +2,9 @@ import Schema from 'schemastery'
 
 const name = 'brand-swap'
 const inject = []
+// Storage-side bound, aligned with the client cap (1 MB source → ~1.37 MB base64
+// data-URL). Keeps the host settings doc from accepting unbounded logo strings.
+const MAX_STORED = 2 * 1024 * 1024
 // Provide the brand config to the client half so the rendered wordmark is
 // overridable per profile (value separation). Reads this row's cordis `config`.
 // Also registers the 'brand-swap' settings namespace (logoLight / logoDark /
@@ -40,9 +43,11 @@ function apply(ctx, config) {
     ctx.inject(['settings'], (host) => {
       try {
         host.settings.register('brand-swap', Schema.object({
-          logoLight: Schema.string().default(''),
-          logoDark: Schema.string().default(''),
-          heroIcon: Schema.string().default(''),
+          // Pattern validates the data-URL prefix while allowing '' (a cleared logo)
+          // — schemastery's pattern() is a regexp.test(), so anchor with ^.
+          logoLight: Schema.string().max(MAX_STORED).pattern(/^(?:$|data:image\/)/).default(''),
+          logoDark: Schema.string().max(MAX_STORED).pattern(/^(?:$|data:image\/)/).default(''),
+          heroIcon: Schema.string().max(MAX_STORED).pattern(/^(?:$|data:image\/)/).default(''),
           heroShow: Schema.boolean().default(false),
         }))
       } catch (error) { /* namespace may already be registered — keep the owner */ }

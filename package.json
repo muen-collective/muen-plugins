@@ -9,6 +9,7 @@
   },
   "scripts": {
     "pack:all": "node scripts/pack-all.mjs",
-    "pack:brand": "npm pack --pack-destination dist ./plugins/dsh-brand-swap"
+    "pack:brand": "npm pack --pack-destination dist ./plugins/dsh-brand-swap",
+    "pack:browser-skill": "npm pack --pack-destination dist ./plugins/dsh-browser-skill"
   }
 }

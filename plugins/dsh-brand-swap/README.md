@@ -69,3 +69,8 @@ Before 2026-09-04 this package was authored as `@muen/mitsu-brand`. The app-bund
 (installed in the Mitsumeru desktop under the old identity, row id `mitsu-brand`, service
 `mitsu.brand`) stays as-is until the next app release; new installs and the market artifact use
 `@muen/dsh-brand-swap` (row id `brand-swap`, service `brand`).
+
+> **Do not co-install.** `@muen/dsh-brand-swap` and the legacy `@muen/mitsu-brand` register the
+> **same three brand slots** (`sidebar.brand.mark`, `sidebar.brand.name`,
+> `conversation.hero.brand.mark`). Remounting the legacy copy while this plugin is installed
+> double-mounts the sidebar brand seat. Mount **exactly one** — use `@muen/dsh-brand-swap`.
