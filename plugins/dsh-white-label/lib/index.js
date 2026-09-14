@@ -23,9 +23,10 @@
 
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const name = 'white-label'
-const inject = ['baseDir']
+const inject = []
 
 const BRAND_DIR = 'brand'
 const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2 MB
@@ -176,10 +177,11 @@ async function readBrand(profileHome) {
 // ── cordis apply ───────────────────────────────────────────────────────────
 
 function apply(ctx) {
-  // The brand folder lives at <DSH_HOME>/brand/. ctx.baseDir is the profile's
-  // home directory (set by cordis when the plugin is loaded into a profile).
-  // Fall back to process.cwd() if baseDir is not set (dev/testing).
-  const profileHome = ctx.baseDir || process.cwd()
+  // The brand folder lives at <DSH_HOME>/brand/. ctx.baseUrl is a file:// URL
+  // set by cordis at boot, pointing at the profile directory.
+  const profileHome = ctx.baseUrl
+    ? fileURLToPath(ctx.baseUrl)
+    : process.cwd()
 
   // Provide the white-label service: the client half calls
   // ctx.get('white-label') to read brand files.
