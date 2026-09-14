@@ -827,15 +827,13 @@ window.__ModuleLoader__.load({
         }
       }
 
-      // Register locale dictionaries
-      ctx.effect(() => {
-        try {
-          const locale = typeof ctx.get === "function" ? ctx.get("locale") : undefined
-          if (locale && typeof locale.register === "function") {
-            locale.register(WL_NS, DICT)
-          }
-        } catch {}
-      }, "white-label: dictionaries")
+      // Register locale dictionaries (synchronous — must be available before slots render)
+      try {
+        const locale = typeof ctx.get === "function" ? ctx.get("locale") : undefined
+        if (locale && typeof locale.register === "function") {
+          locale.register(WL_NS, DICT)
+        }
+      } catch {}
 
       // Bind brand upload persistence
       try {
@@ -946,14 +944,16 @@ window.__ModuleLoader__.load({
       )
 
       // ── upload settings section ─────────────────────────────────────────
-      ctx.slots.inject("settings.section", () =>
-        ctx.slots.register({
-          name: "settings.section",
-          id: "white-label-brand",
-          order: 15,
-          label: () => translate("upload.title"),
-        }, BrandUploadPage)
-      )
+      try {
+        ctx.slots.inject("settings.section", () =>
+          ctx.slots.register({
+            name: "settings.section",
+            id: "white-label-brand",
+            order: 15,
+            label: () => translate("upload.title"),
+          }, BrandUploadPage)
+        )
+      } catch {}
 
       // ── sidebar marks ───────────────────────────────────────────────────
       ctx.slots.inject("sidebar.brand.mark", () =>
