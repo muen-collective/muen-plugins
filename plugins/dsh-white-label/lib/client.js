@@ -415,6 +415,7 @@ window.__ModuleLoader__.load({
     var exports = module.exports
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" })
 
+    var React = require("react")
     var react_jsx_runtime = require("react/jsx-runtime")
     var store = require("@deepseek-ai/dsh-client-store")
 
