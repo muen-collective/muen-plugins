@@ -16,32 +16,38 @@ window.__ModuleLoader__.load({
       en: {
         title: "Muen Plugins",
         intro:
-          "Muen plugins are curated, tested, and delivered to this Mitsumeru install through the built-in update mechanism. They ship enabled; you can't install arbitrary plugins, but you can see what's delivered here.",
+          "Muen plugins are curated, tested, and delivered to this Mitsumeru install through the built-in update mechanism. They ship enabled. Some plugins can also be installed by hand — those survive app updates and appear here alongside the delivered set.",
         mech: "Muen Plugin",
         mechDesc: "Delivers & updates the Muen plugin set to this install.",
         delivered: "Delivered",
         tooltip: "Delivered — managed by Muen (not user-toggleable in this version)",
+        handInstalled: "Installed",
+        handTooltip: "Installed — survives app updates (user-installed plugin)",
         catalog: "Catalog",
       },
       zh: {
         title: "Muen 插件",
         intro:
-          "Muen 插件经筛选、测试后通过内置更新机制交付到本 Mitsumeru 安装。它们默认启用；你无法安装任意插件，但可在此查看已交付的插件。",
+          "Muen 插件经筛选、测试后通过内置更新机制交付到本 Mitsumeru 安装。它们默认启用。部分插件也可手动安装——手动安装的插件会在更新后保留，并与交付的插件一起显示在此处。",
         mech: "Muen Plugin",
         mechDesc: "向本安装交付并更新 Muen 插件集。",
         delivered: "已交付",
         tooltip: "已交付 — 由 Muen 管理（此版本不可由用户切换）",
+        handInstalled: "已安装",
+        handTooltip: "已安装 — 更新后保留（用户手动安装的插件）",
         catalog: "目录",
       },
     };
 
     // Muen catalog. Card 1 = "Muen Plugin" (delivery mechanism); then the set.
+    // Plugins with `installed: true` are hand-installed (survive updates),
+    // not bundled by the app. The switch shows a different tooltip for those.
     const MUEN_PLUGINS = [
       { id: "muen-plugins", name: "mech", desc: "mechDesc", mech: true },
+      { id: "dsh-white-label", name: "White label", desc: "Appearance plugin — per-mode accent colour + brand icon/logo swap. Reads brand files from the profile's brand folder. Survives app updates.", installed: true },
       { id: "dsh-brand-mitsumeru", name: "Mitsumeru brand", desc: "Default Mitsumeru wordmark + cyan-blue dot (the product mark)." },
-      { id: "dsh-brand-swap", name: "Brand swap", desc: "Client brand override — upload a logo, persists across updates." },
+      { id: "dsh-eva-theme", name: "EVA theme", desc: "EVA-themed colour scheme for dark and light modes." },
       { id: "dsh-language-switcher", name: "Language & translation", desc: "Language switch + fix-translation overrides." },
-      { id: "dsh-theme-runtime", name: "Theme runtime", desc: "Theme/token runtime — propagates the brand color across plugins." },
     ];
 
     const css = [
@@ -79,7 +85,7 @@ window.__ModuleLoader__.load({
               h("div", { className: "mp-body" },
                 h("div", { className: "mp-name" }, p.mech ? t("mech") : p.name),
                 h("div", { className: "mp-desc" }, p.mech ? t("mechDesc") : p.desc)),
-              h(Switch, { title: t("tooltip") })))));
+              h(Switch, { title: p.installed ? t("handTooltip") : t("tooltip") })))));
 
     function apply(ctx) {
       injectCss();
