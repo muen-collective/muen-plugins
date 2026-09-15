@@ -866,6 +866,43 @@ window.__ModuleLoader__.load({
       accentCurrent = accentStorage.read()
       applyAccent(ctx)
 
+      // ── brand service + store (must be set up before the inject) ───────
+      let brandService = null
+      try { brandService = typeof ctx.get === "function" ? ctx.get("white-label") : null } catch { brandService = null }
+
+      const fsBrandStore = store.defineStore({
+        init: () => ({
+          icon: null, logo: null,
+          folder: "", errors: [],
+          revealFolder: null, revision: 0
+        }),
+        actions: {
+          sync: (d, icon, logo, folder, errors, revealFolder, revision) => {
+            if (revision <= d.revision) return
+            d.icon = icon; d.logo = logo; d.folder = folder
+            d.errors = errors; d.revealFolder = revealFolder; d.revision = revision
+          }
+        }
+      })
+
+      let brandBound
+      let brandRev2 = 0
+      const loadBrand = async () => {
+        if (!brandService || typeof brandService.readBrand !== "function") return
+        try {
+          const result = await brandService.readBrand()
+          const reveal = typeof brandService.revealFolder === "function" ? brandService.revealFolder : null
+          fsBrand.icon = result.icon
+          fsBrand.logo = result.logo
+          brandBound?.sync(result.icon, result.logo, result.folder, result.errors, reveal, ++brandRev2)
+        } catch {}
+      }
+
+      let initialPath = ""
+      if (brandService && typeof brandService.brandPath === "function") {
+        try { initialPath = brandService.brandPath() } catch {}
+      }
+
       // BOTH rows are registered in a single inject call using a generator,
       // because the slot system fires each inject ONCE. Two separate inject calls
       // would mean the second (brand) never fires — measured 2026-09-14.
