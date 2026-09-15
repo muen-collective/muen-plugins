@@ -866,8 +866,12 @@ window.__ModuleLoader__.load({
       accentCurrent = accentStorage.read()
       applyAccent(ctx)
 
-      ctx.slots.inject("settings.general.item", () =>
-        ctx.slots.register({
+      // BOTH rows are registered in a single inject call using a generator,
+      // because the slot system fires each inject ONCE. Two separate inject calls
+      // would mean the second (brand) never fires — measured 2026-09-14.
+      ctx.slots.inject("settings.general.item", function* () {
+        // ── accent row (order 10.5) ──
+        yield ctx.slots.register({
           name: "settings.general.item",
           id: WL_ROW_ID,
           order: 10.5,
@@ -889,47 +893,9 @@ window.__ModuleLoader__.load({
             }
           }
         }, AccentRow)
-      )
 
-      // ── brand-from-filesystem row (order 20) ────────────────────────────
-      let brandService = null
-      try { brandService = typeof ctx.get === "function" ? ctx.get("white-label") : null } catch { brandService = null }
-
-      const fsBrandStore = store.defineStore({
-        init: () => ({
-          icon: null, logo: null,
-          folder: "", errors: [],
-          revealFolder: null, revision: 0
-        }),
-        actions: {
-          sync: (d, icon, logo, folder, errors, revealFolder, revision) => {
-            if (revision <= d.revision) return
-            d.icon = icon; d.logo = logo; d.folder = folder
-            d.errors = errors; d.revealFolder = revealFolder; d.revision = revision
-          }
-        }
-      })
-
-      let brandBound
-      let brandRev2 = 0
-      const loadBrand = async () => {
-        if (!brandService || typeof brandService.readBrand !== "function") return
-        try {
-          const result = await brandService.readBrand()
-          const reveal = typeof brandService.revealFolder === "function" ? brandService.revealFolder : null
-          fsBrand.icon = result.icon
-          fsBrand.logo = result.logo
-          brandBound?.sync(result.icon, result.logo, result.folder, result.errors, reveal, ++brandRev2)
-        } catch {}
-      }
-
-      let initialPath = ""
-      if (brandService && typeof brandService.brandPath === "function") {
-        try { initialPath = brandService.brandPath() } catch {}
-      }
-
-      ctx.slots.inject("settings.general.item", () =>
-        ctx.slots.register({
+        // ── brand-from-filesystem row (order 20) ──
+        yield ctx.slots.register({
           name: "settings.general.item",
           id: "white-label-brand",
           order: 20,
@@ -937,12 +903,14 @@ window.__ModuleLoader__.load({
           store: fsBrandStore,
           inject: (actions) => {
             brandBound = actions
-            brandBound.sync(null, null, initialPath || "<DSH_HOME>/brand/", [], null, 0)
+            try {
+              brandBound.sync(null, null, initialPath || "<DSH_HOME>/brand/", [], null, 0)
+            } catch {}
             loadBrand()
             return {}
           }
         }, BrandRow)
-      )
+      })
 
       // ── upload settings section ─────────────────────────────────────────
       try {
@@ -957,13 +925,19 @@ window.__ModuleLoader__.load({
       } catch {}
 
       // ── sidebar marks ───────────────────────────────────────────────────
-      ctx.slots.inject("sidebar.brand.mark", () =>
-        ctx.slots.inject("sidebar.brand.name", () =>
-          ctx.slots.inject("conversation.hero.brand.mark", function* () {
-            yield ctx.slots.register({ name: "sidebar.brand.mark" }, SidebarMark)
-            yield ctx.slots.register({ name: "sidebar.brand.name" }, SidebarName)
-            yield ctx.slots.register({ name: "conversation.hero.brand.mark" }, HeroMark)
-          })))
+      // Wrapped in try/catch: the stock dsh-web-app already registers an
+      // occupant for sidebar.brand.mark. If our registration fails because the
+      // slot is already taken, the brand row in Settings → General must still
+      // work — the sidebar is a separate concern.
+      try {
+        ctx.slots.inject("sidebar.brand.mark", () =>
+          ctx.slots.inject("sidebar.brand.name", () =>
+            ctx.slots.inject("conversation.hero.brand.mark", function* () {
+              yield ctx.slots.register({ name: "sidebar.brand.mark" }, SidebarMark)
+              yield ctx.slots.register({ name: "sidebar.brand.name" }, SidebarName)
+              yield ctx.slots.register({ name: "conversation.hero.brand.mark" }, HeroMark)
+            })))
+      } catch {}
 
       window[MARKER] = {
         mounted: true,

@@ -20,6 +20,18 @@
 // The brand folder path is <DSH_HOME>/brand/. "DSH_HOME" is the profile's own
 // home directory — for our app that is mitsu-dsh/, for any other profile its
 // own home. Same folder as epic 88 R3.
+//
+// HOW THE HOME IS FOUND (measured 2026-09-14, and it is not obvious): the
+// harness does NOT expose a `ctx.baseDir`. Grepping the whole shipped harness
+// tree for `baseDir` finds only a cordis HMR option of the same name — nothing
+// sets it on a plugin's context. `ctx.baseUrl` is a file:// URL set by cordis
+// at boot, pointing at the PROFILE directory — NOT DSH_HOME. The brand folder
+// is at DSH_HOME/brand/, which is one level up from the profile.
+//
+// DSH_HOME is the harness's own term for this directory, it is set for every
+// harness process (the app sets it to its state dir; a stock `dsh web` run
+// inherits it from the environment), and it is user data that no update
+// touches.
 
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, extname } from 'node:path'
@@ -177,11 +189,11 @@ async function readBrand(profileHome) {
 // ── cordis apply ───────────────────────────────────────────────────────────
 
 function apply(ctx) {
-  // The brand folder lives at <DSH_HOME>/brand/. ctx.baseUrl is a file:// URL
-  // set by cordis at boot, pointing at the profile directory.
-  const profileHome = ctx.baseUrl
-    ? fileURLToPath(ctx.baseUrl)
-    : process.cwd()
+  // The brand folder lives at <DSH_HOME>/brand/. See the header for why
+  // DSH_HOME — not ctx.baseUrl — is what actually resolves here.
+  const profileHome = process.env.DSH_HOME
+    || (ctx.baseUrl ? fileURLToPath(ctx.baseUrl) : null)
+    || process.cwd()
 
   // Provide the white-label service: the client half calls
   // ctx.get('white-label') to read brand files.
