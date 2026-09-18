@@ -51,6 +51,12 @@ window.__ModuleLoader__.load({
         tooLarge: 'That image is larger than 1 MB — please use a smaller export.',
         readError: 'Could not read that file — please try again.',
         notConfigured: 'No wordmark configured yet — upload a logo above or configure the row.',
+        taglineLabel: 'Hero tagline',
+        taglinePlaceholder: 'Into the Unknown',
+        taglineHint:
+          'Replaces the blank-session headline above the composer. Leave empty to keep the default. Needs the hero tagline seam (conversation.hero.tagline), added by 05-dsh-core/patches/patch-hero-brand-tagline.mjs.',
+        taglineNoSeam:
+          'Saved, but this harness has no hero tagline seam yet — run 05-dsh-core/patches/patch-hero-brand-tagline.mjs and restart.',
       },
       zh: {
         title: '品牌',
@@ -75,6 +81,10 @@ window.__ModuleLoader__.load({
         tooLarge: '该图片超过 1MB，请用更小尺寸的文件。',
         readError: '无法读取该文件，请重试。',
         notConfigured: '尚未配置文字标识——请在上方上传标志，或设置该插件。',
+        taglineLabel: '主标题标语',
+        taglinePlaceholder: '探索未至之境',
+        taglineHint: '替换输入框上方空白会话的主标题。留空则保持默认文案。需要主标题标语接缝（conversation.hero.tagline），由 05-dsh-core/patches/patch-hero-brand-tagline.mjs 添加。',
+        taglineNoSeam: '已保存，但当前运行环境还没有主标题标语接缝——请运行 05-dsh-core/patches/patch-hero-brand-tagline.mjs 并重启。',
       },
       ko: {
         title: '브랜드',
@@ -99,6 +109,10 @@ window.__ModuleLoader__.load({
         tooLarge: '이미지가 1MB를 초과합니다. 더 작은 파일을 사용하세요.',
         readError: '파일을 읽을 수 없습니다. 다시 시도해 주세요.',
         notConfigured: '워드마크가 아직 없습니다 — 위에서 로고를 올리거나 이 구성을 설정하세요.',
+        taglineLabel: '히어로 태그라인',
+        taglinePlaceholder: 'Into the Unknown',
+        taglineHint: '컴포저 위 빈 세션 헤드라인을 바꿉니다. 비워 두면 기본 문구가 유지됩니다. 히어로 태그라인 시접(conversation.hero.tagline)이 필요하며, 05-dsh-core/patches/patch-hero-brand-tagline.mjs 가 추가합니다.',
+        taglineNoSeam: '저장했지만 이 하네스에는 히어로 태그라인 시접이 아직 없습니다 — 05-dsh-core/patches/patch-hero-brand-tagline.mjs 실행 후 재시작하세요.',
       },
       ja: {
         title: 'ブランド',
@@ -123,22 +137,30 @@ window.__ModuleLoader__.load({
         tooLarge: '画像が1MBを超えています。より小さい書き出しを使用してください。',
         readError: 'ファイルを読み込めませんでした。もう一度お試しください。',
         notConfigured: 'ワードマーク未設定です — 上でロゴをアップロードするか、この構成を設定してください。',
+        taglineLabel: 'ヒーローのタグライン',
+        taglinePlaceholder: 'Into the Unknown',
+        taglineHint: 'コンポーザー上の空白セッションの見出しを差し替えます。空欄なら既定の文言のままです。ヒーローのタグライン接縫（conversation.hero.tagline）が必要で、05-dsh-core/patches/patch-hero-brand-tagline.mjs が追加します。',
+        taglineNoSeam: '保存しましたが、このハーネスにはヒーローのタグライン接縫がまだありません — 05-dsh-core/patches/patch-hero-brand-tagline.mjs を実行して再起動してください。',
       },
     }
 
     // ── persistence: settings doc when available, else localStorage ───────
     let SCOPE = null
-    let VALUE = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '' }
+    let VALUE = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '', brandTagline: '' }
     let REV = 0
     const listeners = new Set()
-    const STRING_KEYS = ['logoLight', 'logoDark', 'heroIcon']
+    const STRING_KEYS = ['logoLight', 'logoDark', 'heroIcon'] // image data-URLs only
 
     function readPersisted() {
-      const out = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '' }
+      const out = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '', brandTagline: '' }
+      // Whether the durable settings namespace actually carries a tagline field
+      // (it does once the host schema declares it) — see the merge note below.
+      let scopeHasTagline = false
       const applyString = (source, target) => {
         for (const key of STRING_KEYS) {
           if (typeof source[key] === 'string' && source[key]) target[key] = source[key]
         }
+        if (typeof source.brandTagline === 'string') target.brandTagline = source.brandTagline
         if (typeof source.heroShow === 'boolean') target.heroShow = source.heroShow
         else if (source.heroShow === 'true' || source.heroShow === 'false') target.heroShow = source.heroShow === 'true'
       }
@@ -147,7 +169,7 @@ window.__ModuleLoader__.load({
       // scope carried e.g. `heroShow` but the (large) SVG logo had failed to write or
       // had been truncated there, a logo that WAS in localStorage was silently dropped —
       // the brand reverted to the wordmark+dot fallback after a reload / language switch.
-      const fromScope = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '' }
+      const fromScope = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '', brandTagline: '' }
       try {
         // The settings scope snapshot carries the namespace fields flat (plus a
         // `revision`), e.g. { logoLight, logoDark, heroShow, heroIcon, revision }.
@@ -158,9 +180,12 @@ window.__ModuleLoader__.load({
           && snap.value && typeof snap.value === 'object')
           ? snap.value
           : snap
-        if (scopeValue && typeof scopeValue === 'object') applyString(scopeValue, fromScope)
+        if (scopeValue && typeof scopeValue === 'object') {
+          applyString(scopeValue, fromScope)
+          scopeHasTagline = typeof scopeValue.brandTagline === 'string'
+        }
       } catch { /* scope may be mid-adoption */ }
-      const fromLocal = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '' }
+      const fromLocal = { logoLight: '', logoDark: '', heroShow: false, heroIcon: '', brandTagline: '' }
       try {
         const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(LS_KEY)
         if (raw) {
@@ -186,6 +211,12 @@ window.__ModuleLoader__.load({
       out.logoDark = pick(clean(fromScope.logoDark), clean(fromLocal.logoDark))
       out.heroIcon = pick(clean(fromScope.heroIcon), clean(fromLocal.heroIcon))
       out.heroShow = fromScope.heroShow || fromLocal.heroShow
+      // Tagline is text, not an image: "longer wins" is the wrong rule. The durable
+      // scope is authoritative, so a deliberate clear ('') in the host doc is what
+      // renders — otherwise a stale localStorage copy would resurrect the old line
+      // after the user emptied the field. The scope snapshot always carries the
+      // namespace's declared keys, so an absent key (older doc) falls back to local.
+      out.brandTagline = scopeHasTagline ? fromScope.brandTagline : fromLocal.brandTagline
       return out
     }
 
@@ -263,6 +294,11 @@ window.__ModuleLoader__.load({
       'body[data-ds-dark-theme] .bs-logo--light{display:none}',
       'body[data-ds-dark-theme] .bs-logo--dark{display:inline-block}',
       '.bs-hero{width:34px;height:34px;object-fit:contain;display:inline-block;vertical-align:middle}',
+      // Hero tagline: rendered in the upstream headline text node's place inside
+      // the hero row, so it inherits the shipped hero typography (handed in as
+      // `headlineClassName`). These variables only let a brand tune it; a brand
+      // that sets none renders exactly like the shipped headline.
+      '.bs-tagline{color:var(--bs-tagline-color,inherit);font-size:var(--bs-tagline-font-size,inherit);font-weight:var(--bs-tagline-font-weight,inherit);letter-spacing:var(--bs-tagline-letter-spacing,inherit);text-align:center}',
       '.bs-brand-page{display:flex;flex-direction:column;gap:18px;max-width:620px}',
       '.bs-brand-card{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:14px;background:var(--dsw-alias-bg-layer-1);display:flex;flex-direction:column;gap:10px}',
       '.bs-brand-card h3{margin:0;font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}',
@@ -291,6 +327,8 @@ window.__ModuleLoader__.load({
       '.bs-switch input:checked + .bs-switch-track:after{transform:translateX(16px);background:#fff}',
       '.bs-switch input:focus-visible + .bs-switch-track{outline:2px solid var(--dsw-alias-label-tertiary);outline-offset:2px}',
       '.bs-brand-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}',
+      '.bs-tagline-input{font:inherit;font-size:13px;width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border-radius:7px;padding:7px 10px}',
+      '.bs-tagline-input:focus{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}',
       '.bs-brand-btn--primary{background:var(--dsw-alias-state-business-primary);border-color:transparent;color:#fff;font-weight:600}',
       '.bs-brand-btn--primary:hover:not(:disabled){background:var(--dsw-alias-state-business-primary);filter:brightness(1.12)}',
       '.bs-brand-btn:disabled{opacity:.45;cursor:default}',
@@ -326,6 +364,18 @@ window.__ModuleLoader__.load({
       return dict[key] || DICT.en[key] || key
     }
 
+    // ── does the running harness carry the `conversation.hero.tagline` seam? ──
+    // The seam is added by 05-dsh-core/patches/patch-hero-brand-tagline.mjs (see
+    // that script for why a plugin cannot create the slot itself). A page cannot
+    // ask the slot registry whether a name is renderable, and the bundle is served
+    // on an authenticated route, so an HTTP probe is both wrong and unreliable.
+    // The honest signal is the occupant itself: the seam is the only caller that
+    // passes `fallbackText`, so HeroTagline observing that prop IS the proof that
+    // this harness renders the seat. Before the hero has ever mounted the answer
+    // is simply unknown, and an unknown harness stays quiet instead of warning.
+    let SEAM = 'unknown' // 'unknown' | 'present'
+
+    // Accept PNG or SVG. SVG is rendered through an <img> data-URL, which is inert
     // Accept PNG or SVG. SVG is rendered through an <img> data-URL, which is inert
     // (no external loads or scripts), so it is safe to persist and re-render.
     function isAcceptedImage(file) {
@@ -385,12 +435,45 @@ window.__ModuleLoader__.load({
         return h('img', { 'data-ls-skip': '', className: 'bs-hero', src: logos.heroIcon, alt: '', draggable: false })
       }
 
+      // Hero tagline: occupies the `conversation.hero.tagline` seam that the
+      // HeroShell patch adds in place of the headline text node. The seam is
+      // additive and OPTIONAL:
+      //
+      //   - An empty `brandTagline` re-renders the upstream headline text handed
+      //     in as `fallbackText`, so the occupant can always be registered and the
+      //     words never disappear while the brand is being edited. (Registering a
+      //     component that returned null would blank the headline, because a
+      //     registered occupant replaces the slot's own fallback.)
+      //   - On a harness WITHOUT the seam this registration simply never renders;
+      //     nothing else changes, and the Settings page says so.
+      const HeroTagline = ({ fallbackText, headlineClassName }) => {
+        // Running means the patched HeroShell rendered this seat — see SEAM above.
+        // Only the scalar is kept; owner props are live data and are not retained.
+        if (SEAM !== 'present' && typeof fallbackText === 'string') {
+          SEAM = 'present'
+          for (const fn of [...listeners]) fn()
+        }
+        const logos = useSyncExternalStoreSafe(subscribe, getSnapshot)
+        const text = logos.brandTagline || fallbackText
+        if (!text) return null
+        return h('span', {
+          'data-ls-skip': '',
+          className: headlineClassName ? headlineClassName + ' bs-tagline' : 'bs-tagline',
+        }, text)
+      }
+
       ctx.slots.inject('sidebar.brand.mark', () =>
         ctx.slots.inject('sidebar.brand.name', () =>
           ctx.slots.inject('conversation.hero.brand.mark', function* () {
             yield ctx.slots.register({ name: 'sidebar.brand.mark' }, SidebarMark)
             yield ctx.slots.register({ name: 'sidebar.brand.name' }, SidebarName)
             yield ctx.slots.register({ name: 'conversation.hero.brand.mark' }, HeroMark)
+            // Try the tagline seat on its own so a harness without the seam (an
+            // unpatched build) cannot take the three seats above down with it.
+            try {
+              yield ctx.slots.inject('conversation.hero.tagline', () =>
+                ctx.slots.register({ name: 'conversation.hero.tagline' }, HeroTagline))
+            } catch { /* seam absent → tagline is a no-op on this build */ }
           })))
 
       // ── Settings → Brand page (draft → explicit Save) ─────────────────────
@@ -445,7 +528,7 @@ window.__ModuleLoader__.load({
         const [draft, setDraft] = React.useState(() => ({ ...committed }))
         const [saving, setSaving] = React.useState(false)
         const [notice, setNotice] = React.useState(null) // { kind: 'ok'|'warn', text }
-        const FIELDS = ['logoLight', 'logoDark', 'heroIcon', 'heroShow']
+        const FIELDS = ['logoLight', 'logoDark', 'heroIcon', 'heroShow', 'brandTagline']
         const setField = (field, value) => { setDraft((d) => ({ ...d, [field]: value })); setNotice(null) }
         const dirty = FIELDS.some((key) => draft[key] !== committed[key])
         const save = async () => {
@@ -458,6 +541,12 @@ window.__ModuleLoader__.load({
           setSaving(false)
           const hostOk = results.every(Boolean)
           setNotice({ kind: hostOk ? 'ok' : 'warn', text: translate(hostOk ? 'saved' : 'localOnly') })
+          // A tagline saved onto a harness without the seam persists but cannot
+          // render — say so instead of leaving a "saved" that looks broken. The
+          // hero is mounted on this page, so SEAM has already been observed.
+          if (hostOk && dirtyKeys.includes('brandTagline') && SEAM === 'unknown') {
+            setNotice((current) => current && { ...current, text: translate('taglineNoSeam') })
+          }
         }
         const revert = () => { setDraft({ ...committed }); setNotice(null) }
         return h('div', { className: 'bs-brand-page' },
@@ -476,6 +565,17 @@ window.__ModuleLoader__.load({
               h('span', { className: 'bs-switch-label' }, translate('heroShow'))),
             draft.heroShow && h(LogoCell, { field: 'heroIcon', label: translate('heroIconLabel'), value: draft.heroIcon, onChange: setField }),
             h('p', { className: 'bs-brand-hint' }, translate('heroHint'))),
+          h('div', { className: 'bs-brand-card' },
+            h('div', { className: 'bs-logo-cell-label' }, translate('taglineLabel')),
+            h('input', {
+              type: 'text',
+              className: 'bs-tagline-input',
+              maxLength: 200,
+              value: draft.brandTagline || '',
+              placeholder: translate('taglinePlaceholder'),
+              onChange: (e) => setField('brandTagline', e.target.value),
+            }),
+            h('p', { className: 'bs-brand-hint' }, translate('taglineHint'))),
           h('div', { className: 'bs-brand-actions' },
             h('button', { className: 'bs-brand-btn bs-brand-btn--primary', disabled: !dirty || saving, onClick: save },
               translate('saveBtn')),

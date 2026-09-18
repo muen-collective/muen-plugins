@@ -5,11 +5,14 @@ const inject = []
 // Storage-side bound, aligned with the client cap (1 MB source → ~1.37 MB base64
 // data-URL). Keeps the host settings doc from accepting unbounded logo strings.
 const MAX_STORED = 2 * 1024 * 1024
+// Hero tagline bound: a prose line that replaces the blank-session headline. Not
+// a layout cure (the hero row wraps), just a bound on what the settings doc holds.
+const MAX_TAGLINE = 200
 // Provide the brand config to the client half so the rendered wordmark is
 // overridable per profile (value separation). Reads this row's cordis `config`.
 // Also registers the 'brand-swap' settings namespace (logoLight / logoDark /
-// heroIcon data-URL strings + heroShow) so the Settings → Brand page persists
-// uploaded logos in the HOST settings document — the only store that survives
+// heroIcon data-URL strings + heroShow + brandTagline) so the Settings → Brand
+// page persists the brand identity in the HOST settings document — the only store that survives
 // app restarts (browser localStorage is origin-scoped and the desktop binds a
 // fresh port each launch, orphaning old origins).
 //
@@ -36,6 +39,8 @@ function apply(ctx, config) {
       fontSize: cfg.fontSize,
       fontWeight: cfg.fontWeight,
       letterSpacing: cfg.letterSpacing,
+      // Profile-level tagline default; the Settings → Brand field overrides it.
+      brandTagline: cfg.brandTagline || '',
     })
   } catch (error) { /* provide is best-effort */ }
 
@@ -49,6 +54,10 @@ function apply(ctx, config) {
           logoDark: Schema.string().max(MAX_STORED).pattern(/^(?:$|data:image\/)/).default(''),
           heroIcon: Schema.string().max(MAX_STORED).pattern(/^(?:$|data:image\/)/).default(''),
           heroShow: Schema.boolean().default(false),
+          // Blank-session hero tagline (replaces the upstream "Into the Unknown"
+          // headline when set; empty keeps the upstream copy). Plain text, so the
+          // bound is prose length, not data-URL length.
+          brandTagline: Schema.string().max(MAX_TAGLINE).default(''),
         }))
       } catch (error) { /* namespace may already be registered — keep the owner */ }
     })

@@ -1,7 +1,7 @@
 {
   "name": "@muen/dsh-brand-swap",
-  "version": "0.1.1",
-  "description": "White-label brand swap for DeepSeek Harness — replaces the DeepSeek mark in the sidebar and hero with a per-profile wordmark (row config) or uploaded transparent PNG logos for light and dark themes via a Settings → Brand page. Neutral defaults; every Brand OS configures its own identity.",
+  "version": "0.2.0",
+  "description": "White-label brand swap for DeepSeek Harness \u2014 replaces the DeepSeek mark in the sidebar and hero with a per-profile wordmark (row config) or uploaded transparent PNG logos for light and dark themes via a Settings \u2192 Brand page, and (with the hero tagline seam) the blank-session hero headline. Neutral defaults; every Brand OS configures its own identity.",
   "license": "MIT",
   "dependencies": {
     "schemastery": "^3.18.0"

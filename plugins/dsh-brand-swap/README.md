@@ -13,13 +13,38 @@ Two ways to set the identity (Settings → **Brand** page):
 2. **Wordmark config (v0.1)** — `wordmark` text + colors + font on the plugin row's `config`
    block (shown when no logo is uploaded).
 
-Registers into three DSH slots:
+Registers into four DSH slots:
 
 - `sidebar.brand.mark` — 24×24 square mark seat (kept neutral/empty by default)
 - `sidebar.brand.name` — 24 px-tall wordmark strip; a logo lockup renders here, **height-capped**
   (wide is fine, tall is not)
 - `conversation.hero.brand.mark` — 34×34 square next to the hero headline above the composer
   tagline; **hidden by default** (only a genuine 34 px square mark would fit — long lockups don't)
+- `conversation.hero.tagline` — the blank-session headline itself. **This seam is not shipped by
+  upstream DSH**: it is added by `05-dsh-core/patches/patch-hero-brand-tagline.mjs` in the Mitsu
+  fork (see "Hero tagline" below). On a harness without it, the registration is simply inert.
+
+## Hero tagline (v0.2)
+
+The blank-session hero shows one line — upstream's `hero.headline` ("Into the Unknown" /
+探索未至之境). A brand can replace it:
+
+- **Settings → Brand → Hero tagline** — free text (≤ 200 chars). **Empty keeps the upstream copy**:
+  the occupant re-renders the text the seam hands it as `fallbackText`, so the words never vanish
+  while the brand is being edited, and a stock harness still renders its own headline.
+- A profile can seed a default on the plugin row's `config` (`brandTagline`); the settings field
+  wins once edited. Persisted in the same `brand-swap` host settings namespace as the logos.
+- Render: the occupant is a `<span>` carrying the seam's `headlineClassName`, so it inherits the
+  shipped hero typography. A brand that wants a different look sets CSS variables on itself:
+  `--bs-tagline-color`, `--bs-tagline-font-size`, `--bs-tagline-font-weight`,
+  `--bs-tagline-letter-spacing`.
+- If the seam is absent, the page says so after a save (and on open) instead of silently ignoring
+  the tagline — it probes the conversation bundle for the seam marker.
+
+Why a patch and not a plugin-only seat: DSH's client Slots service exposes `inject`/`register`
+only — slot names exist in the compiled render tree, so a plugin cannot declare a new seat — and
+`ctx.locale.register('conversation', …)` throws because the UI package already owns that namespace.
+The patch script documents the one-line upstream equivalent.
 
 ## Logo upload (v0.2)
 
@@ -31,7 +56,7 @@ Registers into three DSH slots:
   theme attribute (`body[data-ds-dark-theme]`) — follows DSH's light/dark/system preference, no
   JS theme plumbing.
 - Saving: edits are staged locally and committed only by **Save brand**. Each save writes the
-  four fields to the plugin's `brand-swap` settings namespace in the **host settings doc**
+  every field to the plugin's `brand-swap` settings namespace in the **host settings doc**
   (durable across restarts). The host half registers that namespace synchronously at boot
   (`ctx.inject(['settings'])` + the schemastery **default** export). If no host settings service
   is available the page keeps a `localStorage` mirror and visibly warns that the save is
@@ -53,6 +78,7 @@ No client or Muen brand is baked in. Wordmark values come from the plugin row's 
 | `fontSize` | `18` |
 | `fontWeight` | `700` |
 | `letterSpacing` | `0.02em` |
+| `brandTagline` | `''` — empty keeps the upstream hero headline |
 
 ## Install
 
@@ -72,5 +98,5 @@ Before 2026-09-04 this package was authored as `@muen/mitsu-brand`. The app-bund
 
 > **Do not co-install.** `@muen/dsh-brand-swap` and the legacy `@muen/mitsu-brand` register the
 > **same three brand slots** (`sidebar.brand.mark`, `sidebar.brand.name`,
-> `conversation.hero.brand.mark`). Remounting the legacy copy while this plugin is installed
+> `conversation.hero.brand.mark`); the legacy copy has no hero-tagline seat. Remounting the legacy copy while this plugin is installed
 > double-mounts the sidebar brand seat. Mount **exactly one** — use `@muen/dsh-brand-swap`.
