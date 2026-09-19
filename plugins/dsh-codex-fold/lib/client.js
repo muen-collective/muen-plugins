@@ -371,7 +371,7 @@ var __dshcfBundle = (() => {
   }
 
   // src/styles.css
-  var styles_default = '/* Keep native content searchable while removing folded work from flex/grid spacing. */\n[data-dshcf-folded][hidden="until-found"] {\n  position: absolute !important;\n  content-visibility: hidden !important;\n  inline-size: 0 !important;\n  block-size: 0 !important;\n  min-inline-size: 0 !important;\n  min-block-size: 0 !important;\n  margin: 0 !important;\n  padding: 0 !important;\n  border-width: 0 !important;\n  overflow: clip !important;\n}\n.dshcf-group {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  align-self: flex-start;\n  gap: 6px;\n  box-sizing: border-box;\n  max-width: 100%;\n  min-width: 0;\n  min-height: 24px;\n  margin: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--dsw-alias-label-tertiary, #919191);\n  font: 400 var(--dsh-content-font-size, 14px)/24px system-ui, sans-serif;\n  text-align: left;\n  cursor: pointer;\n}\n.dshcf-group[hidden] { display: none; }\n.dshcf-group:hover { color: var(--dsw-alias-label-primary, #d5d5d5); }\n.dshcf-group:focus-visible { outline: 2px solid var(--dsw-alias-state-focus-ring, #4d6bfe); outline-offset: 3px; border-radius: 3px; }\n.dshcf-group-icon { display: flex; flex: none; width: 16px; height: 16px; align-items: center; justify-content: center; }\n.dshcf-group-icon svg { display: block; width: 14px; height: 14px; }\n.dshcf-group-label { flex: 0 0 auto; min-width: 0; max-width: calc(100% - 40px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }\n.dshcf-group[data-status="running"] .dshcf-group-label,\n.dshcf-group[data-status="waiting"] .dshcf-group-label { max-width: 65%; }\n.dshcf-group-detail { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--dsw-alias-label-secondary, #aaa); }\n.dshcf-group-detail:empty { display: none; }\n.dshcf-group-chevron { flex: none; width: 12px; height: 12px; opacity: .65; transform: rotate(-90deg); }\n.dshcf-group[aria-expanded="true"] .dshcf-group-chevron { transform: none; }\n.dshcf-group[data-status="running"] .dshcf-group-label { animation: dshcf-pulse 1.6s ease-in-out infinite; }\n.dshcf-group[data-status="error"] { color: var(--dsw-alias-state-error-primary, #e5484d); }\n.dshcf-group[data-status="stopped"], .dshcf-group[data-status="waiting"] { color: var(--dsw-alias-state-warning-primary, #c58a2c); }\n@keyframes dshcf-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }\n@media (prefers-reduced-motion: reduce) { .dshcf-group[data-status="running"] .dshcf-group-label { animation: none; } }\n';
+  var styles_default = '/* Keep native content searchable while removing folded work from flex/grid spacing. */\n[data-dshcf-folded][hidden="until-found"] {\n  position: absolute !important;\n  content-visibility: hidden !important;\n  inline-size: 0 !important;\n  block-size: 0 !important;\n  min-inline-size: 0 !important;\n  min-block-size: 0 !important;\n  margin: 0 !important;\n  padding: 0 !important;\n  border-width: 0 !important;\n  overflow: clip !important;\n}\n.dshcf-group {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  align-self: flex-start;\n  gap: 6px;\n  box-sizing: border-box;\n  max-width: 100%;\n  min-width: 0;\n  min-height: calc(24px + var(--dsh-content-font-delta, 0px));\n  margin: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--dsw-alias-label-tertiary, #919191);\n  font: 400 var(--dsh-content-font-size-secondary, 13px)/24px system-ui, sans-serif;\n  text-align: left;\n  cursor: pointer;\n}\n.dshcf-group[hidden] { display: none; }\n.dshcf-group:hover { color: var(--dsw-alias-label-primary, #d5d5d5); }\n.dshcf-group:focus-visible { outline: 2px solid var(--dsw-alias-state-focus-ring, #4d6bfe); outline-offset: 3px; border-radius: 3px; }\n.dshcf-group-icon { display: flex; flex: none; width: calc(16px + var(--dsh-content-font-delta, 0px)); height: calc(16px + var(--dsh-content-font-delta, 0px)); align-items: center; justify-content: center; }\n.dshcf-group-icon svg { display: block; width: calc(14px + var(--dsh-content-font-delta, 0px)); height: calc(14px + var(--dsh-content-font-delta, 0px)); }\n.dshcf-group-label { flex: 0 0 auto; min-width: 0; max-width: calc(100% - 40px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }\n.dshcf-group[data-status="running"] .dshcf-group-label,\n.dshcf-group[data-status="waiting"] .dshcf-group-label { max-width: 65%; }\n.dshcf-group-detail { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--dsw-alias-label-caption, #7a7a7a); }\n.dshcf-group-detail:empty { display: none; }\n.dshcf-group-chevron { flex: none; width: calc(12px + var(--dsh-content-font-delta, 0px)); height: calc(12px + var(--dsh-content-font-delta, 0px)); opacity: .65; transform: rotate(-90deg); }\n.dshcf-group[aria-expanded="true"] .dshcf-group-chevron { transform: none; }\n.dshcf-group[data-status="running"] .dshcf-group-label { animation: dshcf-pulse 1.6s ease-in-out infinite; }\n.dshcf-group[data-status="error"] { color: var(--dsw-alias-state-error-primary, #e5484d); }\n.dshcf-group[data-status="stopped"], .dshcf-group[data-status="waiting"] { color: var(--dsw-alias-state-warning-primary, #c58a2c); }\n@keyframes dshcf-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }\n@media (prefers-reduced-motion: reduce) { .dshcf-group[data-status="running"] .dshcf-group-label { animation: none; } }\n';
 
   // src/dom-view.ts
   var GroupView = class {
@@ -459,8 +459,8 @@ var __dshcfBundle = (() => {
       svg.setAttribute("viewBox", "0 0 16 16");
       svg.setAttribute("width", "14");
       svg.setAttribute("height", "14");
-      svg.style.width = "14px";
-      svg.style.height = "14px";
+      svg.style.width = "calc(14px + var(--dsh-content-font-delta, 0px))";
+      svg.style.height = "calc(14px + var(--dsh-content-font-delta, 0px))";
       svg.setAttribute("fill", "none");
       const path = document.createElementNS(svg.namespaceURI, "path");
       path.setAttribute("d", "M3 3.5h10M3 8h10M3 12.5h10M1 3.5h.1M1 8h.1M1 12.5h.1");
@@ -478,8 +478,8 @@ var __dshcfBundle = (() => {
       chevron.setAttribute("viewBox", "0 0 12 12");
       chevron.setAttribute("width", "12");
       chevron.setAttribute("height", "12");
-      chevron.style.width = "12px";
-      chevron.style.height = "12px";
+      chevron.style.width = "calc(12px + var(--dsh-content-font-delta, 0px))";
+      chevron.style.height = "calc(12px + var(--dsh-content-font-delta, 0px))";
       chevron.setAttribute("aria-hidden", "true");
       const arrow = document.createElementNS(svg.namespaceURI, "path");
       arrow.setAttribute("d", "m3 4.5 3 3 3-3");
@@ -495,20 +495,24 @@ var __dshcfBundle = (() => {
       button.style.boxSizing = "border-box";
       button.style.maxWidth = "100%";
       button.style.minWidth = "0";
-      button.style.minHeight = "24px";
+      button.style.minHeight = "calc(24px + var(--dsh-content-font-delta, 0px))";
       button.style.margin = "0";
       button.style.padding = "0";
       button.style.border = "0";
       button.style.background = "transparent";
       button.style.color = "var(--dsw-alias-label-tertiary, #919191)";
       button.style.font = "inherit";
-      button.style.lineHeight = "24px";
+      // Same tier as a native disclosure row (DisclosureRow.module.css: title 13,
+      // row 24 + body delta). `font: inherit` alone would take the conversation
+      // body size — one step larger than every row this chip sits among.
+      button.style.fontSize = "var(--dsh-content-font-size-secondary, 13px)";
+      button.style.lineHeight = "calc(24px + var(--dsh-content-font-delta, 0px))";
       button.style.textAlign = "left";
       button.style.cursor = "pointer";
       icon.style.display = "inline-flex";
       icon.style.flex = "none";
-      icon.style.width = "16px";
-      icon.style.height = "16px";
+      icon.style.width = "calc(16px + var(--dsh-content-font-delta, 0px))";
+      icon.style.height = "calc(16px + var(--dsh-content-font-delta, 0px))";
       icon.style.alignItems = "center";
       icon.style.justifyContent = "center";
       label.style.flex = "0 1 auto";
@@ -520,7 +524,11 @@ var __dshcfBundle = (() => {
       detail.style.overflow = "hidden";
       detail.style.whiteSpace = "nowrap";
       detail.style.textOverflow = "ellipsis";
-      detail.style.color = "var(--dsw-alias-label-secondary, #aaa)";
+      // A folded summary is a peer of the native rows, so it is told apart by
+      // colour, not size: the label keeps the tertiary tier (native titles are
+      // secondary) and the detail takes the caption tier. The theme publishes
+      // caption === tertiary today, which is the quietest step available.
+      detail.style.color = "var(--dsw-alias-label-caption, #7a7a7a)";
       chevron.style.flex = "none";
       chevron.style.opacity = "0.65";
       chevron.style.transform = "rotate(-90deg)";

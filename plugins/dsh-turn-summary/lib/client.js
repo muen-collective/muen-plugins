@@ -370,7 +370,7 @@ window.__ModuleLoader__.load({
         margin: 0,
         borderRadius: '6px',
         textAlign: 'left',
-        lineHeight: 1.5,
+        lineHeight: 'calc(24px + var(--dsh-content-font-delta, 0px))',
         cursor: 'pointer',
       };
 
