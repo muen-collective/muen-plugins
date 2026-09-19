@@ -48,6 +48,10 @@ window.__ModuleLoader__.load({
       { id: "dsh-brand-mitsumeru", name: "Mitsumeru brand", desc: "Default Mitsumeru wordmark + cyan-blue dot (the product mark)." },
       { id: "dsh-eva-theme", name: "EVA theme", desc: "EVA-themed colour scheme for dark and light modes." },
       { id: "dsh-language-switcher", name: "Language & translation", desc: "Language switch + fix-translation overrides." },
+      { id: "dsh-turn-summary", name: "Turn summary", desc: "One muted, localized line per finished turn — processed time, step count, edited files — that expands into what the turn did." },
+      { id: "dsh-changes-card", name: "Changes card", desc: "A changed-files card at the end of a turn — 'Edited 3 files +6 −1' with per-file rows — computed from the turn's own file tools." },
+      { id: "dsh-codex-fold", name: "Codex fold", desc: "Folds finished turns and collapses the thinking/tool/context runs between prose into one summary chip per run. Localized fork of dsh-auto-collapse." },
+      { id: "dsh-context-watchdog", name: "Context reminder", desc: "A full-width banner above the composer once a session passes a model-aware context threshold, offering a fresh session, a token-banded snooze, or dismissal." },
     ];
 
     const css = [
