@@ -444,10 +444,23 @@ window.__ModuleLoader__.load({
         translate = ctx.locale.bind(NS);
 
         ctx.slots.inject('conversation.chat.node', function () {
+          // The harness ships its own `turn-process` renderer at priority 0, and a
+          // keyed slot REFUSES a same-priority duplicate rather than replacing it:
+          //
+          //   keyed slot "conversation.chat.node" already has an entry for key
+          //   "turn-process" at priority 0 — register at a different priority to
+          //   shadow it (lowest renders)
+          //
+          // Without a priority this plugin mounted nothing at all, silently — the
+          // throw is one console line and the host's row renders in its place, so
+          // the surface looked merely unimproved rather than broken. Measured
+          // 2026-09-18 by a fresh-profile mount probe; the occupant list of the
+          // running app had every native key and no muen entry.
           return ctx.slots.register(
             {
               name: 'conversation.chat.node',
               key: 'turn-process',
+              priority: -1,
             },
             TurnProcessHeader,
           );

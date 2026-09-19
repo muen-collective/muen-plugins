@@ -1,6 +1,6 @@
 {
   "name": "@muen/dsh-turn-summary",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Kun-style turn summary for the DSH conversation: one muted, localized row per finished turn — 'Processed 1m 26s · 12 steps · Edited 3 files' — that expands into what the turn actually did.",
   "type": "module",
   "exports": {

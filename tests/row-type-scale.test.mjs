@@ -86,6 +86,19 @@ test("the codex-fold chip is told apart by colour, not size", () => {
   );
 });
 
+test("the turn-summary row must outrank the harness's own turn-process row", () => {
+  const source = read("dsh-turn-summary");
+
+  // A keyed slot refuses a same-priority duplicate instead of replacing it, so
+  // without an explicit lower priority this plugin registers nothing at all —
+  // silently, because the refusal is a console line and the host's own row
+  // renders in its place. dsh-client-ui-slots: "lowest renders".
+  assert.ok(
+    source.includes("key: 'turn-process',") && source.includes("priority: -1,"),
+    "the turn-process registration must shadow the host row with priority -1",
+  );
+});
+
 test("the turn-summary row sits on the same grid", () => {
   const source = read("dsh-turn-summary");
 
