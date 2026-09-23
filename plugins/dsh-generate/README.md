@@ -101,17 +101,20 @@ user authors one. So the models ship with the plugin, in `lib/krea-models.js`, e
 glossary ships in `lib/house.js`, and a profile extends that list the same way `_house.json` extends the
 glossary: **`<profile>/generate/krea/_models.json`** adds a model or replaces one by name.
 
-The models are the founder's, added one at a time on 2026-09-23, each with the SDK call that names
-it — `image/krea/krea-2/medium-turbo` (*"that last one was Krea 2 Turbo"*) and
-`image/krea/krea-2/medium` (*"this one is Krea 2 Medium"*). The cards carry **Krea's own names and
-descriptions** (*"descriptions from Krea website"*), and they are listed in Krea's own order:
+The models are the founder's, added one at a time on 2026-09-23, each with the SDK call that names it
+— `image/krea/krea-2/medium-turbo` (*"that last one was Krea 2 Turbo"*), then
+`image/krea/krea-2/medium` (*"this one is Krea 2 Medium"*), then `image/krea/krea-2/large` (*"add
+this krea model"*). The cards carry **Krea's own names and descriptions** (*"descriptions from Krea
+website"*), and they are listed in Krea's own order — Medium, Large, Turbo, the order Krea's overview
+and API-reference navigation both use, and every Krea 2 variant Krea documents:
 
 | Card | `model` / `endpoint` | Krea's own description |
 |---|---|---|
 | Krea 2 Medium | `image/krea/krea-2/medium` / `POST /generate/image/krea/krea-2/medium` | A smaller variant of Krea 2. Works best with illustrations and graphic design. |
+| Krea 2 Large | `image/krea/krea-2/large` / `POST /generate/image/krea/krea-2/large` | More powerful version of Krea 2 optimized for expressive photorealism. |
 | Krea 2 Turbo | `image/krea/krea-2/medium-turbo` / `POST /generate/image/krea/krea-2/medium-turbo` | The fastest Krea 2 model. Best for quickly iterating on expressive illustrations. |
 
-Both endpoints accept the same public request body, so both cards carry the same ten doors —
+All three endpoints accept the same public request body, so every card carries the same ten doors —
 `verify/models.mjs` asserts that sameness, so the day one endpoint diverges the difference is a
 failing check and not a silent drift:
 

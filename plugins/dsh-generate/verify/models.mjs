@@ -2,8 +2,8 @@
  * verify:models — the Krea models, asserted rather than intended.
  *
  * The claim: **a Krea model is a card and a surface like any other unit.** The shipped
- * catalogue is Krea's own documented schema (`POST /generate/image/krea/krea-2/medium` and
- * `POST /generate/image/krea/krea-2/medium-turbo`, read 2026-09-23), the profile's
+ * catalogue is Krea's own documented schema (`POST /generate/image/krea/krea-2/medium`,
+ * `.../large` and `.../medium-turbo`, read 2026-09-23), the profile's
  * `_models.json` adds or overrides one, and the Krea
  * provider serves both through the list route and the surface route the pane already
  * reads — so the pane needed no change to gain a model.
@@ -90,33 +90,44 @@ const ASPECTS = ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:
 
 const shipped = SHIPPED_KREA_MODELS
 const medium = shipped.find((model) => model.name === 'krea-2-medium')
+const large = shipped.find((model) => model.name === 'krea-2-large')
 const turbo = shipped.find((model) => model.name === 'krea-2-medium-turbo')
 
 check(
-  "the founder's two models are shipped, under the names his SDK calls use",
+  "the founder's three models are shipped, under the names his SDK calls use",
   !!medium &&
     medium.model === 'image/krea/krea-2/medium' &&
     medium.endpoint === '/generate/image/krea/krea-2/medium' &&
+    !!large &&
+    large.model === 'image/krea/krea-2/large' &&
+    large.endpoint === '/generate/image/krea/krea-2/large' &&
     !!turbo &&
     turbo.model === 'image/krea/krea-2/medium-turbo' &&
     turbo.endpoint === '/generate/image/krea/krea-2/medium-turbo',
   JSON.stringify(shipped.map((model) => ({ model: model.model, endpoint: model.endpoint }))),
 )
 check(
-  "the list reads in Krea's own order, the way Krea's own model list does",
-  shipped.map((model) => model.name).join(',') === 'krea-2-medium,krea-2-medium-turbo',
+  "the list reads in Krea's own order: Medium, Large, Turbo",
+  shipped.map((model) => model.name).join(',') === 'krea-2-medium,krea-2-large,krea-2-medium-turbo',
   JSON.stringify(shipped.map((model) => model.name)),
 )
 check(
-  'the two variants carry the same request shape, which is why one schema serves both',
-  !!medium && !!turbo && JSON.stringify(medium.doors) === JSON.stringify(turbo.doors),
-  JSON.stringify({ medium: medium && Object.keys(medium.doors).length, turbo: turbo && Object.keys(turbo.doors).length }),
+  'the three variants carry the same request shape, which is why one schema serves all of them',
+  !!medium &&
+    !!large &&
+    !!turbo &&
+    JSON.stringify(medium.doors) === JSON.stringify(large.doors) &&
+    JSON.stringify(large.doors) === JSON.stringify(turbo.doors),
+  JSON.stringify(shipped.map((model) => [model.name, Object.keys(model.doors).length])),
 )
 check(
   'the shipped card copy is Krea\'s own, name and description both',
   !!medium &&
     medium.title === 'Krea 2 Medium' &&
     medium.blurb === 'A smaller variant of Krea 2. Works best with illustrations and graphic design.' &&
+    !!large &&
+    large.title === 'Krea 2 Large' &&
+    large.blurb === 'More powerful version of Krea 2 optimized for expressive photorealism.' &&
     !!turbo &&
     turbo.title === 'Krea 2 Turbo' &&
     turbo.blurb === 'The fastest Krea 2 model. Best for quickly iterating on expressive illustrations.',
@@ -207,7 +218,7 @@ check(
   JSON.stringify(modelEntry(turbo)),
 )
 check(
-  'the second model lists as a card of its own, so the section draws two',
+  'the second model lists as a card of its own, so the section draws a card per model',
   (() => {
     const entry = modelEntry(medium)
     return (
@@ -249,16 +260,36 @@ check(
   })(),
   JSON.stringify({ order: modelSurface(medium).order, endpoint: modelSurface(medium).endpoint }),
 )
+check(
+  'every shipped model draws as a card and opens as its own runnable surface',
+  shipped.every((model) => {
+    const entry = modelEntry(model)
+    const surface = modelSurface(model)
+    return (
+      entry.name === model.name &&
+      entry.title === model.title &&
+      entry.doorCount === 10 &&
+      entry.runLabel === 'Generate' &&
+      entry.origin === 'krea' &&
+      entry.blurb.length > 0 &&
+      JSON.stringify(surface.order) === JSON.stringify(Object.keys(model.doors)) &&
+      surface.doors === model.doors &&
+      surface.model === model.model &&
+      surface.endpoint === model.endpoint &&
+      surface.runnable === true
+    )
+  }),
+  JSON.stringify(shipped.map((model) => [modelEntry(model).name, modelSurface(model).endpoint])),
+)
 
 // ── the provider: the catalogue and the provider's own adapters, one list ────
 
 const bare = mkdtempSync(join(tmpdir(), 'krea-bare-'))
 const bareList = await krea.listWorkflows({ dir: join(bare, 'adapters'), root: bare })
 check(
-  'with nothing on disk the Krea section holds both shipped models, and a missing directory is not an error',
-  bareList.entries.length === 2 &&
-    bareList.entries[0].name === 'krea-2-medium' &&
-    bareList.entries[1].name === 'krea-2-medium-turbo' &&
+  'with nothing on disk the Krea section holds every shipped model, and a missing directory is not an error',
+  bareList.entries.length === 3 &&
+    bareList.entries.map((entry) => entry.name).join(',') === 'krea-2-medium,krea-2-large,krea-2-medium-turbo' &&
     bareList.skipped.length === 0,
   JSON.stringify({ entries: bareList.entries.map((entry) => entry.name), skipped: bareList.skipped }),
 )
@@ -266,32 +297,36 @@ check(
 const withAdapter = fixture({ adapters: { 'krea2-face-swap.json': INSTALLED } })
 const mixed = await krea.listWorkflows({ dir: withAdapter.dir, root: withAdapter.root })
 check(
-  'an adapter installed under Krea is merged with the catalogue, all three drawn as cards',
-  mixed.entries.map((entry) => entry.name).sort().join(',') === 'krea-2-medium,krea-2-medium-turbo,krea2-face-swap',
+  'an adapter installed under Krea is merged with the catalogue, every shipped model drawn as a card',
+  mixed.entries.map((entry) => entry.name).sort().join(',') === 'krea-2-large,krea-2-medium,krea-2-medium-turbo,krea2-face-swap',
   JSON.stringify(mixed.entries.map((entry) => entry.name)),
 )
 check(
   'the catalogue comes first, so a documented model is not buried under a file',
-  mixed.entries[0].name === 'krea-2-medium' && mixed.entries[1].name === 'krea-2-medium-turbo',
+  mixed.entries[0].name === 'krea-2-medium' &&
+    mixed.entries[1].name === 'krea-2-large' &&
+    mixed.entries[2].name === 'krea-2-medium-turbo' &&
+    mixed.entries[3].name === 'krea2-face-swap',
   JSON.stringify(mixed.entries.map((entry) => entry.name)),
 )
 
-const readModel = await krea.readWorkflow({ dir: withAdapter.dir, root: withAdapter.root, name: 'krea-2-medium-turbo' })
+const readTurbo = await krea.readWorkflow({ dir: withAdapter.dir, root: withAdapter.root, name: 'krea-2-medium-turbo' })
 const readMedium = await krea.readWorkflow({ dir: withAdapter.dir, root: withAdapter.root, name: 'krea-2-medium' })
+const readLarge = await krea.readWorkflow({ dir: withAdapter.dir, root: withAdapter.root, name: 'krea-2-large' })
 const readInstalled = await krea.readWorkflow({ dir: withAdapter.dir, root: withAdapter.root, name: 'krea2-face-swap' })
 const readMissing = await krea.readWorkflow({ dir: withAdapter.dir, root: withAdapter.root, name: 'no-such-thing' })
 check(
-  "each model opens through the provider's read route, and carries its own doors",
-  !!readModel.adapter &&
-    readModel.adapter.name === 'krea-2-medium-turbo' &&
-    readModel.adapter.doors === doors &&
+  "each shipped model opens through the provider's read route, and carries its own doors",
+  !!readTurbo.adapter &&
+    readTurbo.adapter.name === 'krea-2-medium-turbo' &&
+    readTurbo.adapter.doors === doors &&
     !!readMedium.adapter &&
     readMedium.adapter.name === 'krea-2-medium' &&
-    readMedium.adapter.doors === medium.doors,
-  JSON.stringify({
-    turbo: readModel.adapter && Object.keys(readModel.adapter.doors || {}).length,
-    medium: readMedium.adapter && Object.keys(readMedium.adapter.doors || {}).length,
-  }),
+    readMedium.adapter.doors === medium.doors &&
+    !!readLarge.adapter &&
+    readLarge.adapter.name === 'krea-2-large' &&
+    readLarge.adapter.doors === large.doors,
+  JSON.stringify(shipped.map((model) => [model.name, Object.keys(model.doors).length])),
 )
 check(
   'a name that is a file still reads as a file, so the two kinds share one route',
@@ -310,11 +345,11 @@ const own = {
   schema: KREA_MODELS_SCHEMA,
   models: [
     {
-      name: 'krea-2-large',
-      title: 'Krea 2 Large',
-      blurb: 'The larger Krea 2.',
-      model: 'image/krea/krea-2/large',
-      endpoint: '/generate/image/krea/krea-2/large',
+      name: 'my-krea-model',
+      title: 'My Krea model',
+      blurb: 'A model this profile ships itself.',
+      model: 'image/krea/my-model',
+      endpoint: '/generate/image/krea/my-model',
       doors: {
         prompt: { type: 'text', label: 'Prompt', multiline: true, primary: true, required: true },
         aspect_ratio: { type: 'select', label: 'Aspect ratio', options: ['1:1', '16:9'], default: '1:1' },
@@ -333,8 +368,9 @@ const own = {
 const layered = fixture({ models: own })
 const layeredRead = await readKreaModels(layered.root)
 check(
-  'the profile adds a model of its own, and both shipped models are still there',
-  layeredRead.models.map((model) => model.name).sort().join(',') === 'krea-2-large,krea-2-medium,krea-2-medium-turbo' &&
+  'the profile adds a model of its own, and all three shipped models are still there',
+  layeredRead.models.map((model) => model.name).sort().join(',') ===
+    'krea-2-large,krea-2-medium,krea-2-medium-turbo,my-krea-model' &&
     layeredRead.skipped.length === 0,
   JSON.stringify({ models: layeredRead.models.map((model) => model.name), skipped: layeredRead.skipped }),
 )
@@ -346,7 +382,7 @@ check(
 const layeredList = await krea.listWorkflows({ dir: join(layered.root, 'adapters'), root: layered.root })
 check(
   'the added model reaches the pane through the same list, with its own door count',
-  layeredList.entries.some((entry) => entry.name === 'krea-2-large' && entry.doorCount === 2),
+  layeredList.entries.some((entry) => entry.name === 'my-krea-model' && entry.doorCount === 2),
   JSON.stringify(layeredList.entries.map((entry) => entry.name)),
 )
 
@@ -354,7 +390,7 @@ const wrongSchema = fixture({ models: { schema: 'something-else/v9', models: [ow
 const wrongRead = await readKreaModels(wrongSchema.root)
 check(
   'a file from another schema is refused by name, and the shipped models still draw',
-  wrongRead.models.length === 2 && wrongRead.skipped.length === 1 && String(wrongRead.skipped[0].reason).includes(KREA_MODELS_SCHEMA),
+  wrongRead.models.length === 3 && wrongRead.skipped.length === 1 && String(wrongRead.skipped[0].reason).includes(KREA_MODELS_SCHEMA),
   JSON.stringify(wrongRead.skipped),
 )
 
@@ -382,7 +418,7 @@ check(
 )
 check(
   'one broken model does not take the others down',
-  brokenRead.models.map((model) => model.name).sort().join(',') === 'fine,krea-2-medium,krea-2-medium-turbo',
+  brokenRead.models.map((model) => model.name).sort().join(',') === 'fine,krea-2-large,krea-2-medium,krea-2-medium-turbo',
   JSON.stringify(brokenRead.models.map((model) => model.name)),
 )
 
@@ -390,7 +426,7 @@ const invalid = fixture({ models: '{ not json' })
 const invalidRead = await readKreaModels(invalid.root)
 check(
   'a file that is not JSON is one skipped entry, and the shipped models still draw',
-  invalidRead.models.length === 2 && invalidRead.skipped.length === 1 && invalidRead.skipped[0].reason === 'invalid-json',
+  invalidRead.models.length === 3 && invalidRead.skipped.length === 1 && invalidRead.skipped[0].reason === 'invalid-json',
   JSON.stringify(invalidRead.skipped),
 )
 check(
@@ -401,7 +437,7 @@ check(
 const invalidList = await krea.listWorkflows({ dir: join(invalid.root, 'adapters'), root: invalid.root })
 check(
   "the provider reports the profile layer's problems on its own list route, rather than dropping them",
-  invalidList.skipped.length === 1 && invalidList.entries.length === 2,
+  invalidList.skipped.length === 1 && invalidList.entries.length === 3,
   JSON.stringify(invalidList.skipped),
 )
 
@@ -410,7 +446,7 @@ check(
 const goneRead = await readKreaModels(join(tmpdir(), 'krea-models-that-are-not-there'))
 check(
   'no data directory at all is the fresh install, not a failure',
-  goneRead.models.length === 2 && goneRead.skipped.length === 0,
+  goneRead.models.length === 3 && goneRead.skipped.length === 0,
   JSON.stringify(goneRead.skipped),
 )
 
