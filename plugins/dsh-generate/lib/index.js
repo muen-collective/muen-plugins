@@ -477,8 +477,10 @@ export function apply(ctx, config = {}) {
    * What every row says about a provider, whatever the state of its key.
    *
    * The page's own copy comes from here rather than from the browser half, because it
-   * is provider data: the label, the family the settings page orders by, the page that
-   * issues the key and what that page is called, and the sentence that installs one of
+   * is provider data: the label, the family the settings page tags it with, the page
+   * that issues the key and what that page is called, the page a person manages the
+   * account at, what using the provider costs (`funding` — the row draws the sentence
+   * from its `kind` and links its `url`), and the sentence that installs one of
    * its workflows. No key and no credential reference: a route answers a page.
    */
   const identity = (provider) => ({
@@ -488,6 +490,7 @@ export function apply(ctx, config = {}) {
     keyPageLabel: provider.keyPageLabel,
     keyUrl: provider.keyUrl,
     accountUrl: provider.accountUrl,
+    funding: provider.funding,
     addPrompt: provider.addPrompt,
   })
 

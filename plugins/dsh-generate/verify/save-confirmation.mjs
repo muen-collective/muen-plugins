@@ -347,6 +347,7 @@ const RUNNINGHUB = {
   keyPageLabel: 'API → Keys',
   keyUrl: ACCOUNT_URL,
   accountUrl: 'https://www.runninghub.ai/call-api/bill-task',
+  funding: { kind: 'coins', url: 'https://www.runninghub.ai/call-api/bill-task' },
   addPrompt: 'add this RunningHub workflow <app link>',
 }
 /**
@@ -363,6 +364,7 @@ const OTHERS = [
     keyPageLabel: 'API tokens',
     keyUrl: 'https://www.krea.ai/settings/api-tokens',
     accountUrl: 'https://www.krea.ai/app/api',
+    funding: { kind: 'balance', url: 'https://www.krea.ai/app/api' },
     addPrompt: 'add this Krea model <model name>',
   },
   {
@@ -372,6 +374,7 @@ const OTHERS = [
     keyPageLabel: 'API keys',
     keyUrl: 'https://platform.comfy.org/profile/api-keys',
     accountUrl: 'https://platform.comfy.org',
+    funding: { kind: 'plan', url: 'https://comfy.org/pricing' },
     addPrompt: 'add this Comfy Cloud workflow <workflow file>',
   },
 ]

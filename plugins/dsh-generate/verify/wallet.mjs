@@ -324,6 +324,35 @@ function mount(credentials) {
       ),
     JSON.stringify(body && body.providers && body.providers.map((provider) => [provider.id, provider.kind, provider.keyUrl])),
   )
+  // What using a provider costs travels as provider data (the row draws the sentence
+  // from `kind` and links `url`), so a provider without it shows a row with no funding
+  // line — which is how the founder's "show it on each row" ask goes quietly missing.
+  check(
+    'every row says what using the provider costs, and links the page that sells it',
+    !!body &&
+      body.providers.every(
+        (provider) =>
+          provider.funding &&
+          ['coins', 'balance', 'plan'].includes(provider.funding.kind) &&
+          /^https:\/\/[^/]+\/.+/.test(String(provider.funding.url || '')),
+      ),
+    JSON.stringify(body && body.providers && body.providers.map((provider) => [provider.id, provider.funding])),
+  )
+  check(
+    'and the funding sentence is the client\'s copy, keyed by kind — the host sends no prose',
+    !!body && body.providers.every((provider) => Object.keys(provider.funding).sort().join(',') === 'kind,url'),
+    JSON.stringify(body && body.providers && body.providers.map((provider) => Object.keys(provider.funding || {}))),
+  )
+  // Researched 2026-09-23 on each provider's own billing page: RunningHub sells coins,
+  // Krea's API draws on a prepaid USD balance and has no monthly plan, and Comfy Cloud
+  // is the one with a monthly plan (its key 429s while the subscription is inactive).
+  check(
+    'each provider carries the funding model its own billing page documents',
+    !!body &&
+      body.providers.map((provider) => provider.id + ':' + provider.funding.kind).join(' ') ===
+        'runninghub:coins krea:balance comfycloud:plan',
+    JSON.stringify(body && body.providers && body.providers.map((provider) => [provider.id, provider.funding.kind])),
+  )
   check(
     'the RunningHub row still points at the key page the founder verified',
     !!body && (body.providers.find((provider) => provider.id === PROVIDER) || {}).keyUrl === ACCOUNT_URL,

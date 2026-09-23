@@ -112,6 +112,26 @@ One card is open at a time, and with nothing linked the page opens the first unl
 `Krea API key`, `RunningHub API key`, …), the account link, Remove key, and the workflow block: what is
 installed, by title and input count, then the install sentence and a **Copy** control.
 
+### What using a provider costs, on its row
+
+**Asked for by the founder on 2026-09-23** — the founder needed a monthly plan to run Comfy Cloud and asked
+for the funding to be visible. So every row carries one line saying what it takes to run that provider, and a
+link to the page that sells it. The host sends the fact (`funding.kind` and `funding.url`, provider data like
+`keyUrl`); the sentence and the link's label are the client's copy (`funding.<kind>`, `funding.<kind>.link`),
+because they are copy:
+
+| Provider | `kind` | The row says | Link |
+|---|---|---|---|
+| RunningHub | `coins` | Runs on coins | runninghub.ai/call-api/bill-task |
+| Krea | `balance` | Needs API balance — API calls are billed in USD, not compute units | krea.ai/app/api |
+| Comfy Cloud | `plan` | Needs an active monthly plan | comfy.org/pricing |
+
+Each `kind` was read off the provider's own billing page on 2026-09-23, and the three are genuinely different
+models rather than one word for "pay": RunningHub sells coins, **Krea has no monthly plan at all** — API calls
+draw on a separate prepaid USD balance, which is why an empty one is Krea's `402` — and Comfy Cloud is the one
+with a monthly plan, which its API key needs to be active (its `429`). No price is written into the plugin:
+prices change, and the link is the page that knows.
+
 **The one thing this page cannot copy from Models:** a model list is fetched from the provider over its API, and
 a workflow is installed by the agent from a link the user gives it. So where Models has *Fetch available
 models*, this page has the sentence `add this RunningHub workflow <app link>` and a Copy button — a plugin
@@ -361,7 +381,7 @@ a recording ctx. `verify/wallet.mjs` imports `lib/index.js`, mounts the route ag
 drives it with a stubbed RunningHub and a recording credentials seam — including the rule that no response
 body ever carries a key. Its fixtures use the seam's real `source` values (`file`, `env`); they said
 `store`/`environment` until 2026-09-22, strings the seam never emits, which is how the strip came to call a
-pasted key "from your environment" while every check stayed green. `verify/save-confirmation.mjs` (**62/62**) renders the shipped components with React stood in for by a shim
+pasted key "from your environment" while every check stayed green. `verify/save-confirmation.mjs` (**64/64**) renders the shipped components with React stood in for by a shim
 with working hooks and a stubbed `fetch`, presses Save and Remove key, and reads what the surface does next: a
 confirmation dialog naming the key, the wallet read and where the balance went, nothing at all for a refused
 key, a dialog that closes on dismiss or on the next keystroke, the strip's note for each real `source` value,
@@ -372,7 +392,8 @@ user how to add a workflow, under the key directions and in that order, with the
 `DELETE` leaving the wallet linked, and a receipt in the same dialog once it is.
 `node verify/save-confirmation.mjs --show` prints the dialog's lines in order — including both pane states,
 which is how the copy above is read without restarting the app. A skip is printed as `SKIP`; a layer that ran
-and disagreed fails the run. Mutation-tested: **58/62 with the note's info glyph removed**, **59/62 with the
+and disagreed fails the run. Mutation-tested while the suite held 62 checks: **58/62 with the note's info
+glyph removed**, **59/62 with the
 add line dropped from the linked pane**, **61/62 with the two notes swapped** and **61/62 with the `zh`
 trigger translated away**.
 

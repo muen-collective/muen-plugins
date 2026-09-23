@@ -371,6 +371,7 @@ const OTHER_PROVIDERS = [
     keyPageLabel: 'API tokens',
     keyUrl: 'https://www.krea.ai/settings/api-tokens',
     accountUrl: 'https://www.krea.ai/app/api',
+    funding: { kind: 'balance', url: 'https://www.krea.ai/app/api' },
     addPrompt: 'add this Krea model <model name>',
   },
   {
@@ -380,6 +381,7 @@ const OTHER_PROVIDERS = [
     keyPageLabel: 'API keys',
     keyUrl: 'https://platform.comfy.org/profile/api-keys',
     accountUrl: 'https://platform.comfy.org',
+    funding: { kind: 'plan', url: 'https://comfy.org/pricing' },
     addPrompt: 'add this Comfy Cloud workflow <workflow file>',
   },
 ]
@@ -413,6 +415,7 @@ function stubHost({ units = [], file = null, failList = false, linked = true } =
               keyPageLabel: 'API → Keys',
               keyUrl: ACCOUNT_URL,
               accountUrl: ACCOUNT_URL,
+              funding: { kind: 'coins', url: 'https://www.runninghub.ai/call-api/bill-task' },
               addPrompt: 'add this RunningHub workflow <app link>',
               linked,
               verified: linked,
@@ -548,6 +551,29 @@ check(
         .filter((node) => node.props && node.props['data-generate-provider-summary'])
         .map((node) => textIn(node)),
     ),
+  )
+  // The funding line the founder asked for on 2026-09-23: what using a provider costs,
+  // on its row, before a run is refused for it. The sentence is the client's copy keyed
+  // by `funding.kind`, and the link is the page that sells it.
+  const fundingRows = nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-funding'])
+  check(
+    'every row says what using the provider costs, in the client\'s own words',
+    fundingRows.length === 3 &&
+      fundingRows.map((node) => node.props['data-generate-provider-funding']).join(',') ===
+        'runninghub,krea,comfycloud' &&
+      textIn(fundingRows[0]).includes(EN['funding.coins']) &&
+      textIn(fundingRows[1]).includes(EN['funding.balance']) &&
+      textIn(fundingRows[2]).includes(EN['funding.plan']),
+    JSON.stringify(fundingRows.map((node) => textIn(node))),
+  )
+  const fundingLinks = nodesOf(tree).filter(
+    (node) => node.props && node.props['data-generate-provider-funding-link'],
+  )
+  check(
+    'and each funding line links the page that sells it',
+    fundingLinks.length === 3 &&
+      fundingLinks.every((node) => /^https:\/\/[^/]+\/.+/.test(String(node.props.href || ''))),
+    JSON.stringify(fundingLinks.map((node) => node.props.href)),
   )
   check(
     'the first-run posture opens the first unlinked card by itself',
@@ -837,6 +863,14 @@ for (const key of [
   // raw id to the user — which is what a note without copy looks like.
   'note.subscription-inactive',
   'note.no-api-balance',
+  // What using a provider costs, rendered as `t('funding.' + kind)` and, on the link,
+  // `t('funding.' + kind + '.link')` — same rule: no copy means a raw id on the row.
+  'funding.coins',
+  'funding.balance',
+  'funding.plan',
+  'funding.coins.link',
+  'funding.balance.link',
+  'funding.plan.link',
 ]) {
   check('the copy has ' + key + ' in English', typeof EN[key] === 'string' && EN[key] !== '', String(EN[key]))
   check('the copy has ' + key + ' in Chinese', typeof ZH[key] === 'string' && ZH[key] !== '', String(ZH[key]))

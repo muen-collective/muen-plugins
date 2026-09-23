@@ -19,7 +19,9 @@
  * WHAT A PROVIDER OWNS: its id and label, the family it belongs to (`kind`, which is the
  * tag the settings row carries — Image or Workflows), the credential reference its key
  * lives under, the account page that issues that
- * key, the page a person manages the account at, the prompt that installs one of its
+ * key, the page a person manages the account at, what using it costs and the page that
+ * sells that (`funding.kind` selects the sentence the row draws, `funding.url` the link
+ * beside it), the prompt that installs one of its
  * workflows, how to read the account a key opens (which is how a key is validated
  * before it is stored), where its own data lives under the plugin root, and how to
  * list and read its workflows.
@@ -218,6 +220,8 @@ export const runninghub = {
   keyUrl: 'https://www.runninghub.ai/call-api/bill-task?tab=keys',
   keyPageLabel: 'API → Keys',
   accountUrl: 'https://www.runninghub.ai/call-api/bill-task',
+  /** RunningHub runs on coins, bought on the same page that shows the balance. */
+  funding: { kind: 'coins', url: 'https://www.runninghub.ai/call-api/bill-task' },
   /**
    * How one of this provider's workflows is installed: the sentence the user says to
    * the agent. A plugin cannot type into the composer and neither can a slash command
@@ -296,6 +300,9 @@ export const krea = {
   /** Where the API balance is topped up. The docs call it a separate USD balance from
    * the app's own compute units, so this is the page that matters for a run. */
   accountUrl: 'https://www.krea.ai/app/api',
+  /** Krea has NO monthly plan: the API draws on a separate prepaid USD balance, which
+   * is why an empty one is the 402 above rather than an expired subscription. */
+  funding: { kind: 'balance', url: 'https://www.krea.ai/app/api' },
   addPrompt: 'add this Krea model <model name>',
 
   async account({ base = this.base, key, timeoutMs = TIMEOUT_MS, fetchImpl = fetch } = {}) {
@@ -339,6 +346,11 @@ export const comfycloud = {
   /** Subscription and credits live in the platform console, which is where the key
    * page is and the only Comfy-owned URL the docs cite for an account. */
   accountUrl: 'https://platform.comfy.org',
+  /** The one provider here with a monthly plan. Its key is refused while the
+   * subscription is inactive (the 429 above), so the row says so and links the page
+   * that compares the plans and their monthly credits; the plan itself is bought and
+   * the credits held in the console at `accountUrl`. */
+  funding: { kind: 'plan', url: 'https://comfy.org/pricing' },
   addPrompt: 'add this Comfy Cloud workflow <workflow file>',
 
   async account({ base = this.base, key, timeoutMs = TIMEOUT_MS, fetchImpl = fetch } = {}) {
