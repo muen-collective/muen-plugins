@@ -491,6 +491,78 @@ const MODEL = {
   },
 }
 
+/** What the stubbed asset route answers: the URL an uploaded file becomes. */
+const UPLOADED_URL = 'https://assets.krea.ai/uploaded.png'
+
+/**
+ * THE ARRAY DOORS, as the catalogue ships them (founder, 2026-09-23: *"we are missing a lot
+ * of fields for upload image for style ref, etc.."*, with Krea's own playground in the
+ * screenshot). A second fixture rather than more doors on the model above: the S5 cases are
+ * about the gate and the run, and widening that model would blur what they pin.
+ */
+const ARRAYS_UNIT = {
+  name: 'krea-2-large-arrays',
+  title: 'Krea 2 Large',
+  blurb: 'More powerful version of Krea 2.',
+  group: 'Text to image',
+  variant: 'Large',
+  cover: '',
+  origin: 'krea',
+  runLabel: 'Generate',
+  doorCount: 5,
+}
+
+const ARRAYS = {
+  name: 'krea-2-large-arrays',
+  title: 'Krea 2 Large',
+  blurb: 'More powerful version of Krea 2.',
+  group: 'Text to image',
+  variant: 'Large',
+  cover: '',
+  origin: 'krea',
+  runLabel: 'Generate',
+  expect: '',
+  runnable: true,
+  order: ['prompt', 'image_url', 'styles', 'image_style_references', 'moodboards'],
+  defaults: {},
+  doors: {
+    prompt: { type: 'text', label: 'Prompt', multiline: true, primary: true, required: true },
+    image_url: { type: 'image', label: 'Source image', advanced: true },
+    styles: {
+      type: 'list',
+      label: 'Styles',
+      addLabel: 'Add style',
+      advanced: true,
+      fields: {
+        id: { type: 'text', label: 'Style', required: true },
+        strength: { type: 'number', label: 'Strength', min: -2, max: 2, step: 0.05, default: 1, required: true },
+      },
+    },
+    image_style_references: {
+      type: 'list',
+      label: 'Style references',
+      addLabel: 'Add style reference',
+      advanced: true,
+      max: 10,
+      fields: {
+        url: { type: 'image', label: 'Image', required: true },
+        strength: { type: 'number', label: 'Strength', min: 0, max: 1, step: 0.01, default: 0.5 },
+      },
+    },
+    moodboards: {
+      type: 'list',
+      label: 'Moodboards',
+      addLabel: 'Add moodboard',
+      advanced: true,
+      max: 1,
+      fields: {
+        id: { type: 'text', label: 'Moodboard', required: true },
+        strength: { type: 'number', label: 'Strength', min: 0, max: 1, step: 0.01, default: 0.23 },
+      },
+    },
+  },
+}
+
 const OTHER_PROVIDERS = [
   {
     id: 'krea',
@@ -501,6 +573,9 @@ const OTHER_PROVIDERS = [
     accountUrl: 'https://www.krea.ai/app/api',
     funding: { kind: 'balance', url: 'https://www.krea.ai/app/api' },
     addPrompt: 'add this Krea model <model name>',
+    // The capability the host reports: this provider turns a picked file into a URL, so its
+    // image doors get the pick control. RunningHub answers false until its own run lands.
+    upload: true,
   },
   {
     id: 'comfycloud',
@@ -539,16 +614,28 @@ function stubHost({
   // The runs this stub was asked to start, and how many times a job was polled: the two
   // facts the gate and the strip checks read.
   const runs = []
+  const assets = []
   let polls = 0
   const ok = (body) => ({ ok: true, status: 200, json: async () => body })
   return {
     calls,
     runs,
+    assets,
     get polls() {
       return polls
     },
     fetch: async (url, init = {}) => {
       calls.push({ url, method: (init.method || 'GET').toUpperCase() })
+      // The upload an image door calls: the file goes to this plugin's own host route, the
+      // host answers the provider's asset URL, and that URL is the value the door carries.
+      if (String(url).endsWith('/asset')) {
+        assets.push({
+          url: String(url),
+          name: (init && init.headers && init.headers['x-file-name']) || null,
+          type: (init && init.headers && init.headers['content-type']) || null,
+        })
+        return ok({ url: UPLOADED_URL })
+      }
       // The gate's preview. Built here the way the host builds it: the body is the values
       // the surface holds, and a required door with nothing in it is `missing`.
       if (String(url).endsWith('/payload')) {
@@ -1840,6 +1927,128 @@ check(
   }
 }
 
+// ── the array doors, and the upload an image door needs ──────────────────────
+//
+// Founder, 2026-09-23: *"we are missing a lot of fields for upload image for style ref,
+// etc.."*, with Krea's own playground in the screenshot. The claims: a Krea array field is a
+// LIST whose rows carry the API's own doors; the add control stops at the API's own
+// `maxItems`; a row a person typed into is what the gate shows; and a picked file becomes
+// the URL the request carries, uploaded through the host because the pane holds no key.
+{
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: ARRAYS_UNIT.name, provider: 'krea' }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [], kreaUnits: [ARRAYS_UNIT], file: ARRAYS })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let tree = await settle(paneSlot.component, props, 'pane-arrays')
+    const disclosure = byAttr(tree, 'data-generate-advanced')
+    check(
+      'the array doors sit behind the same disclosure as the other tuning doors',
+      !!disclosure && !byAttr(tree, 'data-generate-list-add', 'styles'),
+      disclosure ? textIn(disclosure) : 'no disclosure',
+    )
+    if (disclosure) disclosure.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+
+    check(
+      'a list door starts empty, offering the add control the catalogue names and no rows',
+      !!byAttr(tree, 'data-generate-list-add', 'styles') &&
+        textIn(byAttr(tree, 'data-generate-list-add', 'styles')).includes('Add style') &&
+        !byAttr(tree, 'data-generate-list-row', 'styles[0]'),
+      JSON.stringify({ add: !!byAttr(tree, 'data-generate-list-add', 'styles'), first: !!byAttr(tree, 'data-generate-list-row', 'styles[0]') }),
+    )
+
+    const addStyle = byAttr(tree, 'data-generate-list-add', 'styles')
+    if (addStyle) addStyle.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+    check(
+      "adding a row draws that row's own doors, at the API's own defaults",
+      (() => {
+        const row = byAttr(tree, 'data-generate-list-row', 'styles[0]')
+        const id = byAttr(tree, 'data-generate-door', 'styles[0].id')
+        const strength = byAttr(tree, 'data-generate-door', 'styles[0].strength')
+        return !!row && !!id && !!strength && String(strength.props.value) === '1'
+      })(),
+      JSON.stringify({
+        row: !!byAttr(tree, 'data-generate-list-row', 'styles[0]'),
+        strength: (byAttr(tree, 'data-generate-door', 'styles[0].strength') || { props: {} }).props.value,
+      }),
+    )
+
+    const idField = byAttr(tree, 'data-generate-door', 'styles[0].id')
+    if (idField) idField.props.onChange({ target: { value: 'lora-7' } })
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+    const runButton = byAttr(tree, 'data-generate-run', ARRAYS_UNIT.name)
+    check('a filled row is a value the run control can be pressed with', !!runButton, runButton ? 'the run control is there' : 'no run control')
+    if (runButton) runButton.props.onClick()
+    let gate = await settle(paneSlot.component, props, 'pane-arrays')
+    const promptDoor = byAttr(gate, 'data-generate-door', 'prompt')
+    if (promptDoor) promptDoor.props.onChange({ target: { value: 'a glass cabin' } })
+    gate = await settle(paneSlot.component, props, 'pane-arrays')
+    const showRequest = byAttr(gate, 'data-generate-gate-request')
+    if (showRequest) showRequest.props.onClick()
+    gate = await settle(paneSlot.component, props, 'pane-arrays')
+    check(
+      'the gate shows the row itself: the array a run would post is what a person reads',
+      textIn(gate).includes('lora-7'),
+      textIn(gate).slice(0, 300),
+    )
+
+    const cancel = byAttr(gate, 'data-generate-gate-cancel', 'yes')
+    if (cancel) cancel.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+
+    // The API's own `maxItems`, drawn: a second moodboard cannot be added.
+    const addBoard = byAttr(tree, 'data-generate-list-add', 'moodboards')
+    if (addBoard) addBoard.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+    check(
+      "the add control stops at the API's own `maxItems`: one moodboard is all Krea takes",
+      !!byAttr(tree, 'data-generate-list-row', 'moodboards[0]') && !byAttr(tree, 'data-generate-list-add', 'moodboards'),
+      JSON.stringify({ row: !!byAttr(tree, 'data-generate-list-row', 'moodboards[0]'), add: !!byAttr(tree, 'data-generate-list-add', 'moodboards') }),
+    )
+
+    const remove = byAttr(tree, 'data-generate-list-remove', 'styles[0]')
+    check('every row carries its own remove control', !!remove, remove ? textIn(remove) : 'no remove control')
+    if (remove) remove.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+    check(
+      'removing a row takes it off the form, and the add control comes back',
+      !byAttr(tree, 'data-generate-list-row', 'styles[0]') && !!byAttr(tree, 'data-generate-list-add', 'styles'),
+      JSON.stringify({ row: !!byAttr(tree, 'data-generate-list-row', 'styles[0]'), add: !!byAttr(tree, 'data-generate-list-add', 'styles') }),
+    )
+
+    // THE UPLOAD. An image door is a file a person picks, and what the door then carries is
+    // the URL the provider's asset API answered — never the browser's own file path.
+    const upload = byAttr(tree, 'data-generate-upload', 'image_url')
+    check(
+      'an image door offers the pick control beside the URL field, and starts empty',
+      !!upload && (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value === '',
+      JSON.stringify({ upload: !!upload, value: (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value }),
+    )
+    if (upload) upload.props.onChange({ target: { files: [{ name: 'photo.png', type: 'image/png' }], value: 'C:\\fakepath\\photo.png' } })
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+    check(
+      'the picked file is uploaded through the host, and the door carries the URL it answered',
+      stub.assets.length === 1 &&
+        stub.assets[0].url === PROVIDERS_API + '/krea/asset' &&
+        stub.assets[0].name === 'photo.png' &&
+        (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value === UPLOADED_URL,
+      JSON.stringify({ assets: stub.assets, value: (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value }),
+    )
+    check(
+      'and what the door carries is a URL the payload builder accepts, not a file path',
+      !String((byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value).includes('fakepath'),
+      String((byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
 // A surface that cannot run still says so, and offers no control that would post a request
 // this plugin cannot build. That is RunningHub's state until its own run slice lands.
 {
@@ -1864,6 +2073,14 @@ for (const key of [
   'surface.pending',
   'card.community',
   'surface.image.choose',
+  // The image door and the list doors (2026-09-23): a picked file uploads, and a Krea array
+  // field is a list of rows. A key missing here would put a raw id on a control a person
+  // uses every time they touch a style reference.
+  'surface.image.placeholder',
+  'surface.image.uploading',
+  'surface.image.failed',
+  'surface.list.add',
+  'surface.list.remove',
   // The accordion and its add control (founder, 2026-09-23). `pane.section.none` is the
   // count on an empty section's header, `pane.section.empty` is the body's own sentence,
   // and `pane.add.button` is the header glyph's tooltip and accessible name — so a

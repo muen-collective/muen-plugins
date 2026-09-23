@@ -169,6 +169,93 @@ check(
   JSON.stringify(buildRunPayload(turbo, { image_url: 'C:\\fakepath\\a.png' }).refused),
 )
 
+// ── the three array doors (founder, 2026-09-23: *"we are missing a lot of fields for
+//    upload image for style ref, etc.."*) ────────────────────────────────────────
+
+check(
+  'a list door builds the array of objects the API takes, with each row its own numbers',
+  (() => {
+    const { body, missing, refused } = buildRunPayload(turbo, {
+      prompt: 'a house',
+      aspect_ratio: '1:1',
+      resolution: '1K',
+      styles: [{ id: 'lora-1', strength: 1.5 }],
+      image_style_references: [{ url: 'https://example.com/ref.png', strength: 0.25 }],
+      moodboards: [{ id: '11111111-2222-4333-8444-555555555555', strength: 0.23 }],
+    })
+    return (
+      missing.length === 0 &&
+      refused.length === 0 &&
+      JSON.stringify(body.styles) === JSON.stringify([{ id: 'lora-1', strength: 1.5 }]) &&
+      JSON.stringify(body.image_style_references) === JSON.stringify([{ url: 'https://example.com/ref.png', strength: 0.25 }]) &&
+      body.moodboards[0].id === '11111111-2222-4333-8444-555555555555' &&
+      typeof body.styles[0].strength === 'number'
+    )
+  })(),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ id: 'lora-1', strength: 1.5 }] }).body),
+)
+check(
+  'a row with a required field still empty is missing under its own place in the list',
+  (() => {
+    const { body, missing } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ strength: 1 }], moodboards: [{ id: 'not-a-uuid' }] })
+    return missing.join(',') === 'styles[0].id' && body.styles !== undefined && body.styles[0].id === undefined
+  })(),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ strength: 1 }] })),
+)
+check(
+  'an empty row the add control created is not a row: nothing is sent for it',
+  (() => {
+    const { body, missing, refused } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{}, { id: 'lora-1', strength: 1 }], moodboards: [{}] })
+    return missing.length === 0 && refused.length === 0 && body.styles.length === 1 && body.moodboards === undefined
+  })(),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{}, { id: 'lora-1', strength: 1 }] }).body),
+)
+check(
+  "a list past the API's own maxItems is refused whole, before anything is sent",
+  (() => {
+    const rows = Array.from({ length: 11 }, (_, index) => ({ url: 'https://example.com/' + index + '.png' }))
+    const { body, refused } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: rows })
+    const ten = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: rows.slice(0, 10) })
+    return (
+      refused.length === 1 &&
+      refused[0].key === 'image_style_references' &&
+      refused[0].reason === 'too-many' &&
+      body.image_style_references === undefined &&
+      ten.refused.length === 0 &&
+      ten.body.image_style_references.length === 10
+    )
+  })(),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: Array.from({ length: 11 }, () => ({ url: 'https://e/x.png' })) }).refused),
+)
+check(
+  "a row's own bounds are the API's: a style strength past 2 is refused by its place",
+  (() => {
+    const { refused, body } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ id: 'a', strength: 3 }] })
+    const row = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ id: 'a', strength: 2 }] })
+    return (
+      refused.length === 1 &&
+      refused[0].key === 'styles[0].strength' &&
+      refused[0].reason === 'above-max' &&
+      body.styles[0].strength === undefined &&
+      row.refused.length === 0
+    )
+  })(),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ id: 'a', strength: 3 }] }).refused),
+)
+check(
+  'an image inside a row is an image door too: a reference with no URL is missing, one with a URL is sent',
+  (() => {
+    const without = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: [{ strength: 0.5 }] })
+    const with_ = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: [{ url: 'https://example.com/a.png' }] })
+    return (
+      without.missing.join(',') === 'image_style_references[0].url' &&
+      with_.missing.length === 0 &&
+      with_.body.image_style_references[0].url === 'https://example.com/a.png'
+    )
+  })(),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: [{ strength: 0.5 }] }).missing),
+)
+
 // ── the two calls Krea answers ───────────────────────────────────────────────
 
 const post = await postRun({ base: BASE, endpoint: turbo.endpoint, body: HIS_INPUT, key: SECRET, fetchImpl: fakeFetch })
@@ -291,7 +378,7 @@ calls.length = 0
 const refused = await krea.startRun({
   root: providerRoot,
   name: 'krea-2-medium-turbo',
-  values: { prompt: 'x', aspect_ratio: '7:3', resolution: '1K' },
+  values: { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', aspect_ratio: '7:3', resolution: '1K' },
   key: SECRET,
   fetchImpl: fakeFetch,
 })
@@ -516,6 +603,81 @@ check(
   resolveDataRoot().root === dataRoot && readFileSync(join(dataRoot, 'krea', 'runs', 'job-42.json'), 'utf8').length > 0,
   JSON.stringify(resolveDataRoot()),
 )
+// ── the upload an image door needs ───────────────────────────────────────────
+//
+// An image a person picks cannot be a value: a browser reports the pick as `C:\fakepath\…`,
+// and a real photograph inlined as a data URI is past the 1024 characters Krea's own fields
+// allow. So the file goes to the provider's asset API and the door carries the URL that
+// comes back. That call needs the key, so it goes through the host — the pane holds none.
+
+const ASSET_PATH = PROVIDERS_PATH + '/krea/asset'
+const FILE_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+// The section above restored the real `fetch` (its last claim is about the data root, not
+// about the wire). These cases are about the wire, so the stub goes back on.
+globalThis.fetch = fakeFetch
+
+/** A POST whose body is the file itself, with the name and type in headers. */
+async function callBytes(handler_, path, bytes, headers) {
+  const req = Readable.from([bytes])
+  req.method = 'POST'
+  req.url = path
+  req.headers = headers
+  const res = fakeRes()
+  await handler_(req, res)
+  return res
+}
+
+respond = () => ({ status: 200, body: { id: 'asset-1', image_url: 'https://assets.krea.ai/asset-1.png', mime_type: 'image/png' } })
+calls.length = 0
+const uploaded = await callBytes(handler, ASSET_PATH, FILE_BYTES, { 'content-type': 'image/png', 'x-file-name': 'my%20photo.png' })
+check(
+  'an image door uploads through the host, and the door is handed the URL the asset API answered',
+  uploaded.statusCode === 200 && json(uploaded).url === 'https://assets.krea.ai/asset-1.png',
+  JSON.stringify({ status: uploaded.statusCode, body: json(uploaded) }),
+)
+check(
+  "the upload posts the file to the provider's own asset path, with the key in one header",
+  (() => {
+    const last = calls[calls.length - 1]
+    return (
+      calls.length === 1 &&
+      last.url === BASE + '/assets' &&
+      last.method === 'POST' &&
+      last.headers.Authorization === 'Bearer ' + SECRET &&
+      typeof FormData !== 'undefined' &&
+      last.body instanceof FormData
+    )
+  })(),
+  JSON.stringify(calls.map((row) => ({ url: row.url, method: row.method, auth: row.headers.Authorization }))),
+)
+respond = () => ({ status: 401, body: { message: 'Unauthorized' } })
+const refusedUpload = await callBytes(handler, ASSET_PATH, FILE_BYTES, { 'content-type': 'image/png', 'x-file-name': 'a.png' })
+check(
+  'a key the asset API refuses is reported as a bad key, not as a failed upload',
+  refusedUpload.statusCode === 401 && json(refusedUpload).error === 'invalid-key',
+  JSON.stringify({ status: refusedUpload.statusCode, body: json(refusedUpload) }),
+)
+respond = () => ({ status: 200, body: { id: 'asset-1', image_url: 'https://assets.krea.ai/asset-1.png' } })
+const emptyUpload = await callBytes(handler, ASSET_PATH, Buffer.alloc(0), { 'content-type': 'image/png', 'x-file-name': 'a.png' })
+check(
+  'an upload with no bytes is refused before the provider is called: the body IS the file',
+  emptyUpload.statusCode === 400 && json(emptyUpload).error === 'bad-request',
+  JSON.stringify({ status: emptyUpload.statusCode, body: json(emptyUpload) }),
+)
+const noKeyUpload = await callBytes(bareHandler, ASSET_PATH, FILE_BYTES, { 'content-type': 'image/png', 'x-file-name': 'a.png' })
+check(
+  'an upload with no key linked is refused by name, and never reaches the provider',
+  noKeyUpload.statusCode === 400 && json(noKeyUpload).error === 'no-key',
+  JSON.stringify({ status: noKeyUpload.statusCode, body: json(noKeyUpload) }),
+)
+const noUploadProvider = await call(handler, 'POST', {}, PROVIDERS_PATH + '/runninghub/asset')
+check(
+  'the provider whose run is still owed has no upload path either, and says so',
+  noUploadProvider.statusCode === 501 && json(noUploadProvider).error === 'unsupported',
+  JSON.stringify({ status: noUploadProvider.statusCode, body: json(noUploadProvider) }),
+)
+
 // The route-written run, not only the provider-written one: this is the check that the
 // handler passes the PROVIDER's directory rather than the plugin root, which is where a
 // first cut of the route put every record.

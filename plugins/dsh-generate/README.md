@@ -105,16 +105,16 @@ The models are the founder's, added one at a time on 2026-09-23, each with the S
 — `image/krea/krea-2/medium-turbo` (*"that last one was Krea 2 Turbo"*), then
 `image/krea/krea-2/medium` (*"this one is Krea 2 Medium"*), then `image/krea/krea-2/large` (*"add
 this krea model"*). The cards carry **Krea's own names and descriptions** (*"descriptions from Krea
-website"*), and they are listed in Krea's own order — Medium, Large, Turbo, the order Krea's overview
-and API-reference navigation both use, and every Krea 2 variant Krea documents:
+website"*), and they are listed turbo first — Turbo, Medium, Large (founder, 2026-09-23: *"can you make
+the order turbo/medium/large"*), and every Krea 2 variant Krea documents:
 
 | Card | `model` / `endpoint` | Krea's own description |
 |---|---|---|
+| Krea 2 Turbo | `image/krea/krea-2/medium-turbo` / `POST /generate/image/krea/krea-2/medium-turbo` | The fastest Krea 2 model. Best for quickly iterating on expressive illustrations. |
 | Krea 2 Medium | `image/krea/krea-2/medium` / `POST /generate/image/krea/krea-2/medium` | A smaller variant of Krea 2. Works best with illustrations and graphic design. |
 | Krea 2 Large | `image/krea/krea-2/large` / `POST /generate/image/krea/krea-2/large` | More powerful version of Krea 2 optimized for expressive photorealism. |
-| Krea 2 Turbo | `image/krea/krea-2/medium-turbo` / `POST /generate/image/krea/krea-2/medium-turbo` | The fastest Krea 2 model. Best for quickly iterating on expressive illustrations. |
 
-All three endpoints accept the same public request body, so every card carries the same ten doors —
+All three endpoints accept the same public request body, so every card carries the same thirteen doors —
 `verify/models.mjs` asserts that sameness, so the day one endpoint diverges the difference is a
 failing check and not a silent drift:
 
@@ -127,6 +127,9 @@ failing check and not a silent drift:
 | `intensity`, `complexity`, `movement` | integer `-100`..`100`, default `0` | the generative-slider docs |
 | `image_url`, `strength` | image; `0`..`1`, default `0.99` | the img2img fields |
 | `seed` | number, optional | — |
+| `styles` | a LIST of `{ id, strength }`, both required, `-2`..`2` | the array schema |
+| `image_style_references` | a LIST of `{ url, strength }` (`url` required, `0`..`1`, default `0.5`), at most 10 | `maxItems: 10` |
+| `moodboards` | a LIST of `{ id, strength }` (`id` a uuid, `0`..`1`, default `0.23`), at most 1 | `maxItems: 1` |
 
 `creativity` is the one place Krea's own pages disagree: all three Krea 2 endpoint schemas declare
 `low`, while the overview prose calls `medium` the default for `krea-2/medium` and `krea-2/large`.
@@ -137,11 +140,22 @@ The per-generation prices on Krea's own cards (2, 9 and 20 coins) are deliberate
 provider row already names the funding — a prepaid USD API balance — and this catalogue has no
 price field.
 
-**Three fields are deliberately not doors.** `styles`, `image_style_references` and `moodboards` are arrays of
-objects (a LoRA id with a strength, a URL with a strength, a moodboard uuid), and the surface has four
-controls: text, number, select, image. They arrive when the run slice (S5) can upload an asset and address a
-LoRA — a text box posting a bare string into `additionalProperties: false` would be a control that cannot
-work.
+**The three array fields are `list` doors, and that is the surface's fifth control** (founder, 2026-09-23:
+*"we are missing a lot of fields for upload image for style ref, etc.."*, with Krea's own playground in the
+screenshot). A list door carries `fields` — the doors of ONE row — so a row is drawn with the API's own
+labels, bounds and defaults, and the run builds an array of objects exactly as Krea's schema says. They used
+to be left out while the surface had four controls, because a text box posting a bare string into
+`additionalProperties: false` cannot work; the fix was the control, not a flattened field. `max` is Krea's
+own `maxItems`, which is why the add control disappears at one moodboard and stops at ten style references.
+
+**And the image doors really upload.** Krea's `image_url` and a style reference's `url` each take *"an
+external URL, base64 data URI, or uploaded asset URL"*, but a real photograph inlined as a data URI is far
+past the 1024 characters those fields allow — so a picked file goes to `POST /assets` and the door carries
+the `image_url` that comes back. The call needs the key and the pane holds none (§12 rule 2), so it goes
+through the host: `POST /plugins/generate/providers/<id>/asset`, with the bytes as the body and the file's
+name and type in headers. The provider says whether it can do this (`upload` on its registry entry, reported
+as a capability in the provider list), so RunningHub's image doors draw the URL field and no pick control
+until its own run slice lands.
 
 Nothing here spends anything: a Krea model is a card and a surface, and the run is S5. What the model adds for
 that slice is the two facts it will need (`model` and `endpoint`), carried through the surface route so S5 does
@@ -410,14 +424,16 @@ Four rules from §12 are structure here rather than style:
   the payload go into that run's own file — `<profile>/generate/krea/runs/<jobId>.json` — which is what makes
   "what did we ship and why" answerable later. **No key is ever written to it.**
 - **A payload the API would reject is refused before the POST**: a select outside its `enum`, a number outside the
-  app's bounds, a required door still empty, an image door holding a browser file path instead of a URL. A `400`
-  from Krea is a bug in this plugin, not a way to spend a credit.
+  app's bounds, a required door still empty, an image door holding a browser file path instead of a URL, a list
+  longer than the API's own `maxItems`, and a row whose own required field is empty (named by its place —
+  `styles[0].id`). A `400` from Krea is a bug in this plugin, not a way to spend a credit.
 
 | Route | What it does |
 |---|---|
 | `POST /plugins/generate/providers/<id>/payload` | the gate's preview: `{ name, values }` → the exact body, what is still empty, what is refused. Free: no key, no network, nothing spent |
 | `POST /plugins/generate/providers/<id>/run` | `{ name, values, confirmed: true }` → `{ jobId, status }`; anything without the flag is refused by name |
 | `GET /plugins/generate/providers/<id>/run?job=<id>` | one poll → `{ state, status, urls, error }`, and the run's file gains the outcome on a terminal state |
+| `POST /plugins/generate/providers/<id>/asset` | the upload an image door calls: the body IS the file, `X-File-Name` and `Content-Type` say what it is → `{ url, asset }`. Refused with `501` for a provider that declares no `upload` |
 
 One job at a time. The host posts the body with the provider's key from the credential store and answers with a
 job id; the pane polls the host every two seconds, which asks Krea and writes the outcome back. The strip says
@@ -505,7 +521,8 @@ node verify/wallet.mjs           # the wallet routes, driven against fakes (+ li
 node verify/save-confirmation.mjs # a save that worked, and one that was refused
 node verify/adapter.mjs          # the install: doors read, adapters written and refused
 node verify/models.mjs           # the Krea models: the catalogue, the profile layer, both routes
-node verify/run.mjs              # S5: the payload builder, the gate the route enforces, the poll, the record
+node verify/run.mjs              # S5 + the upload: the payload builder (lists included), the gate the route
+                                 # enforces, the poll, the record, and the asset route an image door calls
 node verify/skill.mjs            # the skill's order, and that the plugin has no write path
 node verify/start.mjs            # the hub: the cards, the surface, one settings page, and what may be listed
 node verify/mount.mjs --static   # registration only

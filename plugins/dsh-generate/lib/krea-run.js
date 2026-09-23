@@ -14,8 +14,10 @@
  *
  * A DOOR KEY IS THE API'S OWN FIELD NAME. That is why there is no mapping table: the Krea
  * doors are named `prompt`, `aspect_ratio`, `resolution`, `creativity`, `intensity`,
- * `complexity`, `movement`, `image_url`, `strength`, `seed` because Krea's schema names
- * them that, so the surface's own keys ARE the request body's keys.
+ * `complexity`, `movement`, `image_url`, `strength`, `seed`, `styles`,
+ * `image_style_references` and `moodboards` because Krea's schema names them that, so the
+ * surface's own keys ARE the request body's keys — and a list door's row fields are Krea's
+ * field names too (`id`, `strength`, `url`).
  *
  * @module @muen/dsh-generate/lib/krea-run
  */
@@ -39,6 +41,71 @@ const STATE_BY_STATUS = {
 }
 
 /**
+ * Nothing was entered: `undefined`, `null`, an empty string, or a string of spaces.
+ *
+ * An ARRAY IS NOT EMPTY HERE, and that is deliberate: `String([{…}])` is
+ * `"[object Object]"` and `String([])` is `""`, so a list door's own contents are judged by
+ * its rows (below) rather than by stringifying the array.
+ */
+function emptyish(value) {
+  return value === undefined || value === null || (typeof value !== 'object' && String(value).trim() === '')
+}
+
+/**
+ * One value, as Krea takes it, or the reason it cannot be sent.
+ *
+ * The rules are the door's and the API's: a number that is not a number, one below its
+ * `minimum` or above its `maximum`, a select outside its `enum`, an image that is not a URL
+ * or a data URI. `key` is what the gate names the failure by, so a row's own field is named
+ * with its place in the list (`styles[0].strength`).
+ *
+ * @returns {{ sent: boolean, value?: unknown }}
+ */
+function readValue(key, door, raw, missing, refused) {
+  if (emptyish(raw)) {
+    if (door.required === true) missing.push(key)
+    return { sent: false }
+  }
+  if (door.type === 'number') {
+    const value = Number(String(raw).trim())
+    if (!Number.isFinite(value)) {
+      refused.push({ key, reason: 'not-a-number' })
+      return { sent: false }
+    }
+    if (typeof door.min === 'number' && value < door.min) {
+      refused.push({ key, reason: 'below-min' })
+      return { sent: false }
+    }
+    if (typeof door.max === 'number' && value > door.max) {
+      refused.push({ key, reason: 'above-max' })
+      return { sent: false }
+    }
+    return { sent: true, value }
+  }
+  if (door.type === 'select') {
+    const value = String(raw).trim()
+    if (Array.isArray(door.options) && !door.options.includes(value)) {
+      refused.push({ key, reason: 'not-an-option' })
+      return { sent: false }
+    }
+    return { sent: true, value }
+  }
+  if (door.type === 'image') {
+    const value = String(raw).trim()
+    // Krea takes an external URL, an uploaded asset URL or a base64 data URI. A browser
+    // file path (`C:\fakepath\…`) is none of the three — it is what the control produces
+    // before the file has been uploaded, so it is refused by name rather than posted and
+    // billed as a 400.
+    if (!/^(https?:\/\/|data:image\/)/i.test(value)) {
+      refused.push({ key, reason: 'not-a-url' })
+      return { sent: false }
+    }
+    return { sent: true, value }
+  }
+  return { sent: true, value: String(raw) }
+}
+
+/**
  * What this model would post, and what a person still has to fill in.
  *
  * Pure, and the gate's whole input: the host builds the body once and both the disclosure
@@ -48,6 +115,12 @@ const STATE_BY_STATUS = {
  * error: the person simply has not typed it yet). A value the API would refuse — a select
  * outside its `enum`, a number that is not a number, an image that is not a URL — is
  * `refused`, by name, before anything is sent.
+ *
+ * A LIST DOOR'S ROWS ARE READ THE SAME WAY, one level down. A row with a required field
+ * still empty is `missing` under that row's own name (`styles[0].id`), a row nobody filled
+ * in is not sent at all, and a list longer than the API's own `maxItems` is `refused` whole
+ * — the surface stops adding rows there, so this is the second gate on the same fact rather
+ * than the only one.
  *
  * @returns {{ body: object, missing: string[], refused: Array<{ key: string, reason: string }> }}
  */
@@ -60,52 +133,45 @@ export function buildRunPayload(model, values) {
 
   for (const [key, door] of Object.entries(doors)) {
     const raw = given[key]
-    const empty = raw === undefined || raw === null || String(raw).trim() === ''
-    if (empty) {
+    if (emptyish(raw)) {
       if (door.required === true) missing.push(key)
       // An omitted optional door is the API's own default, which is why it is not sent:
       // the request says what the person chose and nothing else.
       continue
     }
-    if (door.type === 'number') {
-      const value = Number(String(raw).trim())
-      if (!Number.isFinite(value)) {
-        refused.push({ key, reason: 'not-a-number' })
+
+    // A LIST DOOR IS AN ARRAY OF ROWS, and each row is read by the same rules one level
+    // down — which is why a row's failure is named by its place (`styles[0].id`) rather
+    // than by the list. A row nobody filled in is not a row: the add control creates an
+    // empty one, and sending that would be a body Krea refuses.
+    if (door.type === 'list') {
+      const rows = Array.isArray(raw) ? raw : []
+      const fields = door.fields && typeof door.fields === 'object' ? door.fields : {}
+      const filled = rows.filter(
+        (row) => row && typeof row === 'object' && !Array.isArray(row) && Object.values(row).some((value) => !emptyish(value)),
+      )
+      if (filled.length === 0) continue
+      // Krea's own `maxItems`: an eleventh style reference is a 400, and the surface stops
+      // adding rows where this stops sending them.
+      if (typeof door.max === 'number' && filled.length > door.max) {
+        refused.push({ key, reason: 'too-many' })
         continue
       }
-      if (typeof door.min === 'number' && value < door.min) {
-        refused.push({ key, reason: 'below-min' })
-        continue
+      const items = []
+      for (const [index, row] of filled.entries()) {
+        const item = {}
+        for (const [fieldKey, field] of Object.entries(fields)) {
+          const read = readValue(key + '[' + index + '].' + fieldKey, field, row[fieldKey], missing, refused)
+          if (read.sent) item[fieldKey] = read.value
+        }
+        items.push(item)
       }
-      if (typeof door.max === 'number' && value > door.max) {
-        refused.push({ key, reason: 'above-max' })
-        continue
-      }
-      body[key] = value
+      body[key] = items
       continue
     }
-    if (door.type === 'select') {
-      const value = String(raw).trim()
-      if (Array.isArray(door.options) && !door.options.includes(value)) {
-        refused.push({ key, reason: 'not-an-option' })
-        continue
-      }
-      body[key] = value
-      continue
-    }
-    if (door.type === 'image') {
-      const value = String(raw).trim()
-      // Krea takes a URL or a data URI. The surface's image control is a file picker
-      // until the upload slice lands, and a browser file path (`C:\fakepath\…`) is not
-      // a URL — so it is refused by name rather than posted and billed as a 400.
-      if (!/^(https?:\/\/|data:image\/)/i.test(value)) {
-        refused.push({ key, reason: 'not-a-url' })
-        continue
-      }
-      body[key] = value
-      continue
-    }
-    body[key] = String(raw)
+
+    const read = readValue(key, door, raw, missing, refused)
+    if (read.sent) body[key] = read.value
   }
 
   return { body, missing, refused }

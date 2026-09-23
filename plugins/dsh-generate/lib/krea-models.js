@@ -24,18 +24,21 @@
  * a product choice except the labels, the order, and which doors sit behind the surface's one
  * disclosure.
  *
- * THE FIELDS THAT ARE ARRAYS ARE NOT DOORS. `styles`, `image_style_references` and
- * `moodboards` are arrays of objects (a LoRA id with a strength, a URL with a strength, a
- * moodboard uuid) and the surface has four controls — text, number, select, image. They
- * arrive when the run slice (S5) can upload an asset and address a LoRA, and inventing a
- * text box that posts a bare string into `additionalProperties: false` would be a control
- * that cannot work.
+ * THE ARRAY FIELDS ARE DOORS NOW, AND THEY ARE LISTS (founder, 2026-09-23: *"we are missing
+ * a lot of fields for upload image for style ref, etc.."*, with Krea's own playground in
+ * the screenshot). `styles` (a LoRA id and a strength), `image_style_references` (an image
+ * and a strength) and `moodboards` (a uuid and a strength) are arrays of objects, and the
+ * surface grew the one control they need: a list whose rows carry their own doors. They
+ * were left out while the surface had four controls — a text box posting a bare string into
+ * `additionalProperties: false` cannot work — so the fix is the control, not a flattened
+ * field, and the row shapes below are Krea's own (`required`, `minimum`, `maximum`,
+ * `default`) rather than a shape invented here.
  *
  * @module @muen/dsh-generate/lib/krea-models
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DOOR_TYPES } from './doors.js'
+import { SURFACE_DOOR_TYPES } from './doors.js'
 
 /** The schema string a profile's own `_models.json` carries. */
 export const KREA_MODELS_SCHEMA = 'muen-krea-models/v1'
@@ -47,9 +50,12 @@ export const KREA_MODELS_FILE = '_models.json'
  * The models Krea documents, in the shape the pane's list and surface already read.
  *
  * Three today, each one named by the founder on 2026-09-23 with the SDK call for it: the
- * turbo first, then the regular variant, then the large one. They are listed in KREA'S OWN
- * ORDER — Krea's overview and its API-reference navigation both run Medium, Large, Turbo —
- * the way the door names are Krea's, and that is every Krea 2 variant Krea documents.
+ * turbo first, then the regular variant, then the large one. They are listed in that order
+ * — Turbo, Medium, Large — because the founder asked for it (2026-09-23: *"can you make the
+ * order turbo/medium/large"*), the fastest model first. Krea's own overview and its
+ * API-reference navigation run Medium, Large, Turbo instead; the order here is a product
+ * choice, the way the labels are, and the door names stay Krea's. These are every Krea 2
+ * variant Krea documents.
  *
  * THE CARD COPY IS KREA'S, TOO (founder, 2026-09-23: *"descriptions from Krea website"*,
  * pointing at Krea's own model list). The titles are the names on Krea's model cards and the
@@ -65,244 +71,6 @@ export const KREA_MODELS_FILE = '_models.json'
  * failing check rather than as a silent drift.
  */
 export const SHIPPED_KREA_MODELS = [
-  {
-    schema: KREA_MODELS_SCHEMA,
-    name: 'krea-2-medium',
-    title: 'Krea 2 Medium',
-    variant: 'Medium',
-    blurb: 'A smaller variant of Krea 2. Works best with illustrations and graphic design.',
-    group: 'Text to image',
-    /** Krea's own model, like the turbo: the card says no origin tag for this value. */
-    origin: 'krea',
-    /** The SDK's own slug, exactly as the founder's second call names it. */
-    model: 'image/krea/krea-2/medium',
-    /** Where the run slice posts it. Recorded here so it is not re-derived then. */
-    endpoint: '/generate/image/krea/krea-2/medium',
-    docs: 'https://www.krea.ai/docs/api-reference/krea/krea-2-medium',
-    doors: {
-      prompt: {
-        type: 'text',
-        label: 'Prompt',
-        multiline: true,
-        primary: true,
-        required: true,
-        hint: 'What to draw. The API requires it.',
-      },
-      aspect_ratio: {
-        type: 'select',
-        label: 'Aspect ratio',
-        options: ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:16'],
-        default: '1:1',
-        required: true,
-      },
-      resolution: {
-        type: 'select',
-        label: 'Resolution',
-        options: ['1K'],
-        default: '1K',
-        required: true,
-        hint: 'Krea 2 documents one resolution: 1K.',
-      },
-      creativity: {
-        type: 'select',
-        label: 'Creativity',
-        options: ['raw', 'low', 'medium', 'high'],
-        // This endpoint's schema declares `low`, as the turbo's and the large's do. The
-        // overview prose calls `medium` the default for krea-2/medium and krea-2/large;
-        // the schema wins, because the surface always sends the value it shows.
-        default: 'low',
-        hint: 'How far Krea expands on the prompt: raw renders only what you wrote; low fills obvious gaps; medium interprets; high takes creative liberty.',
-      },
-      // The three generative sliders, Krea's own numbers: an integer from -100 to 100,
-      // with 0 applying no slider LoRA at all.
-      intensity: {
-        type: 'number',
-        label: 'Intensity',
-        min: -100,
-        max: 100,
-        step: 1,
-        default: 0,
-        advanced: true,
-        hint: 'Stylization. Negative is muted and understated, positive is bold and heavily stylized.',
-      },
-      complexity: {
-        type: 'number',
-        label: 'Complexity',
-        min: -100,
-        max: 100,
-        step: 1,
-        default: 0,
-        advanced: true,
-        hint: 'How much the frame holds. Negative favors clean minimal compositions, positive favors dense ones.',
-      },
-      movement: {
-        type: 'number',
-        label: 'Movement',
-        min: -100,
-        max: 100,
-        step: 1,
-        default: 0,
-        advanced: true,
-        hint: 'Pose and camera energy. Negative keeps subjects static, positive adds motion.',
-      },
-      image_url: {
-        type: 'image',
-        label: 'Source image',
-        advanced: true,
-        hint: 'Optional. With one, generation starts from it instead of pure noise, and Strength decides how much changes.',
-      },
-      strength: {
-        type: 'number',
-        label: 'Strength',
-        min: 0,
-        max: 1,
-        step: 0.01,
-        default: 0.99,
-        advanced: true,
-        hint: 'Denoising when a source image is given: 0 keeps it, 1 replaces it. No effect without one.',
-      },
-      seed: {
-        type: 'number',
-        label: 'Seed',
-        advanced: true,
-        hint: 'The same seed and prompt reproduce a generation.',
-      },
-    },
-    ui: {
-      runLabel: 'Generate',
-      order: [
-        'prompt',
-        'aspect_ratio',
-        'resolution',
-        'creativity',
-        'intensity',
-        'complexity',
-        'movement',
-        'image_url',
-        'strength',
-        'seed',
-      ],
-    },
-  },
-  {
-    schema: KREA_MODELS_SCHEMA,
-    name: 'krea-2-large',
-    title: 'Krea 2 Large',
-    variant: 'Large',
-    blurb: 'More powerful version of Krea 2 optimized for expressive photorealism.',
-    group: 'Text to image',
-    /** Krea's own model, like its siblings: the card says no origin tag for this value. */
-    origin: 'krea',
-    /** The SDK's own slug, exactly as the founder's third call names it. */
-    model: 'image/krea/krea-2/large',
-    /** Where the run slice posts it. Recorded here so it is not re-derived then. */
-    endpoint: '/generate/image/krea/krea-2/large',
-    docs: 'https://www.krea.ai/docs/api-reference/krea/krea-2-large',
-    doors: {
-      prompt: {
-        type: 'text',
-        label: 'Prompt',
-        multiline: true,
-        primary: true,
-        required: true,
-        hint: 'What to draw. The API requires it.',
-      },
-      aspect_ratio: {
-        type: 'select',
-        label: 'Aspect ratio',
-        options: ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:16'],
-        default: '1:1',
-        required: true,
-      },
-      resolution: {
-        type: 'select',
-        label: 'Resolution',
-        options: ['1K'],
-        default: '1K',
-        required: true,
-        hint: 'Krea 2 documents one resolution: 1K.',
-      },
-      creativity: {
-        type: 'select',
-        label: 'Creativity',
-        options: ['raw', 'low', 'medium', 'high'],
-        // This endpoint's schema declares `low`, as the medium's and the turbo's do. The
-        // overview prose calls `medium` the default for krea-2/medium and krea-2/large;
-        // the schema wins, because the surface always sends the value it shows.
-        default: 'low',
-        hint: 'How far Krea expands on the prompt: raw renders only what you wrote; low fills obvious gaps; medium interprets; high takes creative liberty.',
-      },
-      // The three generative sliders, Krea's own numbers: an integer from -100 to 100,
-      // with 0 applying no slider LoRA at all.
-      intensity: {
-        type: 'number',
-        label: 'Intensity',
-        min: -100,
-        max: 100,
-        step: 1,
-        default: 0,
-        advanced: true,
-        hint: 'Stylization. Negative is muted and understated, positive is bold and heavily stylized.',
-      },
-      complexity: {
-        type: 'number',
-        label: 'Complexity',
-        min: -100,
-        max: 100,
-        step: 1,
-        default: 0,
-        advanced: true,
-        hint: 'How much the frame holds. Negative favors clean minimal compositions, positive favors dense ones.',
-      },
-      movement: {
-        type: 'number',
-        label: 'Movement',
-        min: -100,
-        max: 100,
-        step: 1,
-        default: 0,
-        advanced: true,
-        hint: 'Pose and camera energy. Negative keeps subjects static, positive adds motion.',
-      },
-      image_url: {
-        type: 'image',
-        label: 'Source image',
-        advanced: true,
-        hint: 'Optional. With one, generation starts from it instead of pure noise, and Strength decides how much changes.',
-      },
-      strength: {
-        type: 'number',
-        label: 'Strength',
-        min: 0,
-        max: 1,
-        step: 0.01,
-        default: 0.99,
-        advanced: true,
-        hint: 'Denoising when a source image is given: 0 keeps it, 1 replaces it. No effect without one.',
-      },
-      seed: {
-        type: 'number',
-        label: 'Seed',
-        advanced: true,
-        hint: 'The same seed and prompt reproduce a generation.',
-      },
-    },
-    ui: {
-      runLabel: 'Generate',
-      order: [
-        'prompt',
-        'aspect_ratio',
-        'resolution',
-        'creativity',
-        'intensity',
-        'complexity',
-        'movement',
-        'image_url',
-        'strength',
-        'seed',
-      ],
-    },
-  },
   {
     schema: KREA_MODELS_SCHEMA,
     name: 'krea-2-medium-turbo',
@@ -408,6 +176,87 @@ export const SHIPPED_KREA_MODELS = [
         advanced: true,
         hint: 'The same seed and prompt reproduce a generation.',
       },
+      // THE THREE ARRAY FIELDS, KREA'S OWN (its OpenAPI, read 2026-09-23). Each is a list
+      // whose rows carry their own doors, which is what the surface's fifth control draws:
+      // an add control, one row per item, and a remove on the row. The bounds, the defaults
+      // and Krea's `required` are the API's, so a row that arrives pre-filled with one of
+      // these numbers is a number Krea accepts.
+      styles: {
+        type: 'list',
+        label: 'Styles',
+        /** What the add control says, in Krea's own vocabulary for the field. */
+        addLabel: 'Add style',
+        advanced: true,
+        hint: 'Styles (typically LoRAs) to use for the generation. Krea wants an id and a strength for each.',
+        fields: {
+          id: {
+            type: 'text',
+            label: 'Style',
+            required: true,
+            hint: 'A style (LoRA) id. Krea lists the ones this workspace can use at GET /styles.',
+          },
+          /** Both fields are `required` in Krea's own schema, and `-2..2` is its range. */
+          strength: {
+            type: 'number',
+            label: 'Strength',
+            min: -2,
+            max: 2,
+            step: 0.05,
+            default: 1,
+            required: true,
+          },
+        },
+      },
+      image_style_references: {
+        type: 'list',
+        label: 'Style references',
+        addLabel: 'Add style reference',
+        advanced: true,
+        /** Krea's own `maxItems`: an eleventh reference is a body the API refuses. */
+        max: 10,
+        hint: 'Image style references. 0 = no style influence, 1 = maximum. Default 0.5.',
+        fields: {
+          url: {
+            type: 'image',
+            label: 'Image',
+            required: true,
+            hint: 'An upload, an external URL, or a Krea asset URL.',
+          },
+          strength: {
+            type: 'number',
+            label: 'Strength',
+            min: 0,
+            max: 1,
+            step: 0.01,
+            default: 0.5,
+          },
+        },
+      },
+      moodboards: {
+        type: 'list',
+        label: 'Moodboards',
+        addLabel: 'Add moodboard',
+        advanced: true,
+        /** Krea's own `maxItems`: *"Currently limited to one moodboard."* */
+        max: 1,
+        hint: 'Moodboards to use for generation. Currently limited to one moodboard.',
+        fields: {
+          id: {
+            type: 'text',
+            label: 'Moodboard',
+            required: true,
+            hint: 'A moodboard uuid.',
+          },
+          strength: {
+            type: 'number',
+            label: 'Strength',
+            min: 0,
+            max: 1,
+            step: 0.01,
+            default: 0.23,
+          },
+        },
+      },
     },
     ui: {
       runLabel: 'Generate',
@@ -422,6 +271,415 @@ export const SHIPPED_KREA_MODELS = [
         'image_url',
         'strength',
         'seed',
+        'styles',
+        'image_style_references',
+        'moodboards',
+      ],
+    },
+  },
+  {
+    schema: KREA_MODELS_SCHEMA,
+    name: 'krea-2-medium',
+    title: 'Krea 2 Medium',
+    variant: 'Medium',
+    blurb: 'A smaller variant of Krea 2. Works best with illustrations and graphic design.',
+    group: 'Text to image',
+    /** Krea's own model, like the turbo: the card says no origin tag for this value. */
+    origin: 'krea',
+    /** The SDK's own slug, exactly as the founder's second call names it. */
+    model: 'image/krea/krea-2/medium',
+    /** Where the run slice posts it. Recorded here so it is not re-derived then. */
+    endpoint: '/generate/image/krea/krea-2/medium',
+    docs: 'https://www.krea.ai/docs/api-reference/krea/krea-2-medium',
+    doors: {
+      prompt: {
+        type: 'text',
+        label: 'Prompt',
+        multiline: true,
+        primary: true,
+        required: true,
+        hint: 'What to draw. The API requires it.',
+      },
+      aspect_ratio: {
+        type: 'select',
+        label: 'Aspect ratio',
+        options: ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:16'],
+        default: '1:1',
+        required: true,
+      },
+      resolution: {
+        type: 'select',
+        label: 'Resolution',
+        options: ['1K'],
+        default: '1K',
+        required: true,
+        hint: 'Krea 2 documents one resolution: 1K.',
+      },
+      creativity: {
+        type: 'select',
+        label: 'Creativity',
+        options: ['raw', 'low', 'medium', 'high'],
+        // This endpoint's schema declares `low`, as the turbo's and the large's do. The
+        // overview prose calls `medium` the default for krea-2/medium and krea-2/large;
+        // the schema wins, because the surface always sends the value it shows.
+        default: 'low',
+        hint: 'How far Krea expands on the prompt: raw renders only what you wrote; low fills obvious gaps; medium interprets; high takes creative liberty.',
+      },
+      // The three generative sliders, Krea's own numbers: an integer from -100 to 100,
+      // with 0 applying no slider LoRA at all.
+      intensity: {
+        type: 'number',
+        label: 'Intensity',
+        min: -100,
+        max: 100,
+        step: 1,
+        default: 0,
+        advanced: true,
+        hint: 'Stylization. Negative is muted and understated, positive is bold and heavily stylized.',
+      },
+      complexity: {
+        type: 'number',
+        label: 'Complexity',
+        min: -100,
+        max: 100,
+        step: 1,
+        default: 0,
+        advanced: true,
+        hint: 'How much the frame holds. Negative favors clean minimal compositions, positive favors dense ones.',
+      },
+      movement: {
+        type: 'number',
+        label: 'Movement',
+        min: -100,
+        max: 100,
+        step: 1,
+        default: 0,
+        advanced: true,
+        hint: 'Pose and camera energy. Negative keeps subjects static, positive adds motion.',
+      },
+      image_url: {
+        type: 'image',
+        label: 'Source image',
+        advanced: true,
+        hint: 'Optional. With one, generation starts from it instead of pure noise, and Strength decides how much changes.',
+      },
+      strength: {
+        type: 'number',
+        label: 'Strength',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        default: 0.99,
+        advanced: true,
+        hint: 'Denoising when a source image is given: 0 keeps it, 1 replaces it. No effect without one.',
+      },
+      seed: {
+        type: 'number',
+        label: 'Seed',
+        advanced: true,
+        hint: 'The same seed and prompt reproduce a generation.',
+      },
+      // THE THREE ARRAY FIELDS, KREA'S OWN (its OpenAPI, read 2026-09-23). Each is a list
+      // whose rows carry their own doors, which is what the surface's fifth control draws:
+      // an add control, one row per item, and a remove on the row. The bounds, the defaults
+      // and Krea's `required` are the API's, so a row that arrives pre-filled with one of
+      // these numbers is a number Krea accepts.
+      styles: {
+        type: 'list',
+        label: 'Styles',
+        /** What the add control says, in Krea's own vocabulary for the field. */
+        addLabel: 'Add style',
+        advanced: true,
+        hint: 'Styles (typically LoRAs) to use for the generation. Krea wants an id and a strength for each.',
+        fields: {
+          id: {
+            type: 'text',
+            label: 'Style',
+            required: true,
+            hint: 'A style (LoRA) id. Krea lists the ones this workspace can use at GET /styles.',
+          },
+          /** Both fields are `required` in Krea's own schema, and `-2..2` is its range. */
+          strength: {
+            type: 'number',
+            label: 'Strength',
+            min: -2,
+            max: 2,
+            step: 0.05,
+            default: 1,
+            required: true,
+          },
+        },
+      },
+      image_style_references: {
+        type: 'list',
+        label: 'Style references',
+        addLabel: 'Add style reference',
+        advanced: true,
+        /** Krea's own `maxItems`: an eleventh reference is a body the API refuses. */
+        max: 10,
+        hint: 'Image style references. 0 = no style influence, 1 = maximum. Default 0.5.',
+        fields: {
+          url: {
+            type: 'image',
+            label: 'Image',
+            required: true,
+            hint: 'An upload, an external URL, or a Krea asset URL.',
+          },
+          strength: {
+            type: 'number',
+            label: 'Strength',
+            min: 0,
+            max: 1,
+            step: 0.01,
+            default: 0.5,
+          },
+        },
+      },
+      moodboards: {
+        type: 'list',
+        label: 'Moodboards',
+        addLabel: 'Add moodboard',
+        advanced: true,
+        /** Krea's own `maxItems`: *"Currently limited to one moodboard."* */
+        max: 1,
+        hint: 'Moodboards to use for generation. Currently limited to one moodboard.',
+        fields: {
+          id: {
+            type: 'text',
+            label: 'Moodboard',
+            required: true,
+            hint: 'A moodboard uuid.',
+          },
+          strength: {
+            type: 'number',
+            label: 'Strength',
+            min: 0,
+            max: 1,
+            step: 0.01,
+            default: 0.23,
+          },
+        },
+      },
+    },
+    ui: {
+      runLabel: 'Generate',
+      order: [
+        'prompt',
+        'aspect_ratio',
+        'resolution',
+        'creativity',
+        'intensity',
+        'complexity',
+        'movement',
+        'image_url',
+        'strength',
+        'seed',
+        'styles',
+        'image_style_references',
+        'moodboards',
+      ],
+    },
+  },
+  {
+    schema: KREA_MODELS_SCHEMA,
+    name: 'krea-2-large',
+    title: 'Krea 2 Large',
+    variant: 'Large',
+    blurb: 'More powerful version of Krea 2 optimized for expressive photorealism.',
+    group: 'Text to image',
+    /** Krea's own model, like its siblings: the card says no origin tag for this value. */
+    origin: 'krea',
+    /** The SDK's own slug, exactly as the founder's third call names it. */
+    model: 'image/krea/krea-2/large',
+    /** Where the run slice posts it. Recorded here so it is not re-derived then. */
+    endpoint: '/generate/image/krea/krea-2/large',
+    docs: 'https://www.krea.ai/docs/api-reference/krea/krea-2-large',
+    doors: {
+      prompt: {
+        type: 'text',
+        label: 'Prompt',
+        multiline: true,
+        primary: true,
+        required: true,
+        hint: 'What to draw. The API requires it.',
+      },
+      aspect_ratio: {
+        type: 'select',
+        label: 'Aspect ratio',
+        options: ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:16'],
+        default: '1:1',
+        required: true,
+      },
+      resolution: {
+        type: 'select',
+        label: 'Resolution',
+        options: ['1K'],
+        default: '1K',
+        required: true,
+        hint: 'Krea 2 documents one resolution: 1K.',
+      },
+      creativity: {
+        type: 'select',
+        label: 'Creativity',
+        options: ['raw', 'low', 'medium', 'high'],
+        // This endpoint's schema declares `low`, as the medium's and the turbo's do. The
+        // overview prose calls `medium` the default for krea-2/medium and krea-2/large;
+        // the schema wins, because the surface always sends the value it shows.
+        default: 'low',
+        hint: 'How far Krea expands on the prompt: raw renders only what you wrote; low fills obvious gaps; medium interprets; high takes creative liberty.',
+      },
+      // The three generative sliders, Krea's own numbers: an integer from -100 to 100,
+      // with 0 applying no slider LoRA at all.
+      intensity: {
+        type: 'number',
+        label: 'Intensity',
+        min: -100,
+        max: 100,
+        step: 1,
+        default: 0,
+        advanced: true,
+        hint: 'Stylization. Negative is muted and understated, positive is bold and heavily stylized.',
+      },
+      complexity: {
+        type: 'number',
+        label: 'Complexity',
+        min: -100,
+        max: 100,
+        step: 1,
+        default: 0,
+        advanced: true,
+        hint: 'How much the frame holds. Negative favors clean minimal compositions, positive favors dense ones.',
+      },
+      movement: {
+        type: 'number',
+        label: 'Movement',
+        min: -100,
+        max: 100,
+        step: 1,
+        default: 0,
+        advanced: true,
+        hint: 'Pose and camera energy. Negative keeps subjects static, positive adds motion.',
+      },
+      image_url: {
+        type: 'image',
+        label: 'Source image',
+        advanced: true,
+        hint: 'Optional. With one, generation starts from it instead of pure noise, and Strength decides how much changes.',
+      },
+      strength: {
+        type: 'number',
+        label: 'Strength',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        default: 0.99,
+        advanced: true,
+        hint: 'Denoising when a source image is given: 0 keeps it, 1 replaces it. No effect without one.',
+      },
+      seed: {
+        type: 'number',
+        label: 'Seed',
+        advanced: true,
+        hint: 'The same seed and prompt reproduce a generation.',
+      },
+      // THE THREE ARRAY FIELDS, KREA'S OWN (its OpenAPI, read 2026-09-23). Each is a list
+      // whose rows carry their own doors, which is what the surface's fifth control draws:
+      // an add control, one row per item, and a remove on the row. The bounds, the defaults
+      // and Krea's `required` are the API's, so a row that arrives pre-filled with one of
+      // these numbers is a number Krea accepts.
+      styles: {
+        type: 'list',
+        label: 'Styles',
+        /** What the add control says, in Krea's own vocabulary for the field. */
+        addLabel: 'Add style',
+        advanced: true,
+        hint: 'Styles (typically LoRAs) to use for the generation. Krea wants an id and a strength for each.',
+        fields: {
+          id: {
+            type: 'text',
+            label: 'Style',
+            required: true,
+            hint: 'A style (LoRA) id. Krea lists the ones this workspace can use at GET /styles.',
+          },
+          /** Both fields are `required` in Krea's own schema, and `-2..2` is its range. */
+          strength: {
+            type: 'number',
+            label: 'Strength',
+            min: -2,
+            max: 2,
+            step: 0.05,
+            default: 1,
+            required: true,
+          },
+        },
+      },
+      image_style_references: {
+        type: 'list',
+        label: 'Style references',
+        addLabel: 'Add style reference',
+        advanced: true,
+        /** Krea's own `maxItems`: an eleventh reference is a body the API refuses. */
+        max: 10,
+        hint: 'Image style references. 0 = no style influence, 1 = maximum. Default 0.5.',
+        fields: {
+          url: {
+            type: 'image',
+            label: 'Image',
+            required: true,
+            hint: 'An upload, an external URL, or a Krea asset URL.',
+          },
+          strength: {
+            type: 'number',
+            label: 'Strength',
+            min: 0,
+            max: 1,
+            step: 0.01,
+            default: 0.5,
+          },
+        },
+      },
+      moodboards: {
+        type: 'list',
+        label: 'Moodboards',
+        addLabel: 'Add moodboard',
+        advanced: true,
+        /** Krea's own `maxItems`: *"Currently limited to one moodboard."* */
+        max: 1,
+        hint: 'Moodboards to use for generation. Currently limited to one moodboard.',
+        fields: {
+          id: {
+            type: 'text',
+            label: 'Moodboard',
+            required: true,
+            hint: 'A moodboard uuid.',
+          },
+          strength: {
+            type: 'number',
+            label: 'Strength',
+            min: 0,
+            max: 1,
+            step: 0.01,
+            default: 0.23,
+          },
+        },
+      },
+    },
+    ui: {
+      runLabel: 'Generate',
+      order: [
+        'prompt',
+        'aspect_ratio',
+        'resolution',
+        'creativity',
+        'intensity',
+        'complexity',
+        'movement',
+        'image_url',
+        'strength',
+        'seed',
+        'styles',
+        'image_style_references',
+        'moodboards',
       ],
     },
   },
@@ -441,15 +699,35 @@ function fin(value) {
 /**
  * Why one door cannot be rendered, or `null` when it can.
  *
- * The surface has four controls and each has one requirement: a select needs options to
- * select between, a number needs finite bounds when it declares any, and a starting value
- * must be one the control can actually show. A door that fails this is refused by name,
- * because a control the API would reject is worse than a missing one.
+ * The surface has five controls and each has one requirement: a select needs options to
+ * select between, a number needs finite bounds when it declares any, an image needs to be
+ * addressable at all, and a starting value must be one the control can actually show. A
+ * door that fails this is refused by name, because a control the API would reject is worse
+ * than a missing one.
+ *
+ * A LIST DOOR IS CHECKED THROUGH ITS ROWS. It carries `fields` — the doors of one row — so
+ * the same rules apply one level down, by the row's own name (`styles[].id`), and a list
+ * inside a list is refused: the surface draws one level of rows, and a second level would be
+ * a control nobody designed. `max` is Krea's own `maxItems` when it has one.
  */
-function doorProblem(key, door) {
+function doorProblem(key, door, depth = 0) {
   if (!door || typeof door !== 'object' || Array.isArray(door)) return `${key} is not an object`
-  if (!DOOR_TYPES.includes(door.type)) return `${key}.type ${JSON.stringify(door.type ?? null)} is not one of ${DOOR_TYPES.join(' | ')}`
+  if (!SURFACE_DOOR_TYPES.includes(door.type)) return `${key}.type ${JSON.stringify(door.type ?? null)} is not one of ${SURFACE_DOOR_TYPES.join(' | ')}`
   if (str(door.label) === null) return `${key}.label is required: it is what the control is called`
+  if (door.type === 'list') {
+    if (depth > 0) return `${key} is a list inside a list, which the surface cannot draw`
+    if (door.max !== undefined && (fin(door.max) === null || door.max < 1 || !Number.isInteger(door.max))) {
+      return `${key}.max must be a whole number of rows, at least 1`
+    }
+    const fields = door.fields
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields) || Object.keys(fields).length === 0) {
+      return `${key} is a list with no fields: a row would draw nothing`
+    }
+    for (const [fieldKey, field] of Object.entries(fields)) {
+      const problem = doorProblem(`${key}[].${fieldKey}`, field, depth + 1)
+      if (problem !== null) return problem
+    }
+  }
   if (door.type === 'select') {
     const options = Array.isArray(door.options) ? door.options.filter((option) => typeof option === 'string') : []
     if (options.length === 0) return `${key} is a select with no options`

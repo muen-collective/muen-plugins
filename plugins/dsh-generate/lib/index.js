@@ -74,7 +74,7 @@ import { dirname } from 'node:path'
 import { parseAppRef, readAppDoors } from './doors.js'
 import { loadHouse } from './house.js'
 import { ADAPTER_SCHEMA, adapterFromDoors, validateAdapter } from './adapter.js'
-import { PROVIDERS, normalizeKey, providerById, runninghub } from './providers.js'
+import { PROVIDERS, normalizeKey, providerById, runninghub, uploadFile } from './providers.js'
 import { readHidden, withHidden, writeHidden } from './hidden.js'
 import { resolveDataRoot } from './paths.js'
 
@@ -105,6 +105,13 @@ const TIMEOUT_MS = 15000
 /** Refuse a body past this — a key is tens of bytes, and the route is reachable. */
 const MAX_BODY_BYTES = 4096
 
+/**
+ * The floor a provider's upload route is allowed even without a documented limit, and the
+ * only thing this plugin enforces when a provider declares none. Krea declares its own (75
+ * MB, its docs' number), so this is the rule for a provider that has not said.
+ */
+const MAX_UPLOAD_BYTES = 32 * 1024 * 1024
+
 /** S3's two hands (§7): what the agent reads with, and what proves the file. */
 const TOOL_GRAPH = 'rh_workflow_graph'
 const TOOL_VALIDATE = 'rh_adapter_validate'
@@ -119,6 +126,15 @@ const SKILL_FILE = fileURLToPath(new URL('../skills/add-rh-workflow/SKILL.md', i
 
 function str(value) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
+}
+
+/** A percent-encoded header, decoded — or left alone when it is not one. */
+function safeDecode(value) {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
 }
 
 /**
@@ -179,6 +195,37 @@ function readJsonBody(req) {
       } catch {
         resolve(undefined)
       }
+    })
+    req.on('error', () => resolve(undefined))
+  })
+}
+
+/**
+ * The request body as bytes, bounded. Resolves undefined when it is past the limit or the
+ * request fails — the two are told apart by the caller, which knows the limit it passed.
+ *
+ * This is the upload's reader, not the JSON one: an image is megabytes of binary, so it is
+ * not base64'd through a JSON field and parsed back. The bytes the page sends are the bytes
+ * the provider gets.
+ */
+function readRawBody(req, maxBytes) {
+  return new Promise((resolve) => {
+    let size = 0
+    let over = false
+    const chunks = []
+    req.on('data', (chunk) => {
+      size += chunk.length
+      if (size > maxBytes) {
+        over = true
+        resolve(undefined)
+        req.destroy()
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => {
+      if (over) return
+      resolve(Buffer.concat(chunks))
     })
     req.on('error', () => resolve(undefined))
   })
@@ -559,7 +606,10 @@ export function apply(ctx, config = {}) {
         // state is what this route is for, and the workflow count is a courtesy.
         workflows = null
       }
-      rows.push({ ...status, workflows, hidden: hidden.includes(provider.id) })
+      // `upload` is a capability, not a status: a provider that can turn a picked file into
+      // a URL says so, and the pane draws the pick control only where it is true. RunningHub
+      // uploads per image door as part of its own run slice, so it answers false until then.
+      rows.push({ ...status, workflows, hidden: hidden.includes(provider.id), upload: !!provider.upload })
     }
     return { providers: rows }
   }
@@ -740,6 +790,54 @@ export function apply(ctx, config = {}) {
   }
 
   /**
+   * The upload: one file a person picked, turned into the URL a door carries.
+   *
+   * The pane holds no key (§12 rule 2), so the file comes here and this goes to the
+   * provider. The bytes ARE the request body and the file's name and type ride in headers,
+   * because an image is megabytes of binary and a JSON envelope would only inflate it. The
+   * name is percent-encoded by the caller — a header is no place for a space or a quote.
+   *
+   * Nothing here is a generation, so nothing here is billed: Krea's assets are free to
+   * upload, and a run is still the only thing the gate guards.
+   */
+  const providerAsset = async (provider, req, res) => {
+    if ((req.method || 'GET').toUpperCase() !== 'POST') {
+      methodNotAllowed(res, 'POST')
+      return
+    }
+    if (!provider.upload || typeof provider.upload !== 'object') {
+      send(res, 501, { error: 'unsupported', detail: 'this provider has no upload path yet' })
+      return
+    }
+    const limit = Number.isFinite(provider.upload.limitBytes) ? provider.upload.limitBytes : MAX_UPLOAD_BYTES
+    const bytes = await readRawBody(req, limit)
+    if (bytes === undefined) {
+      send(res, 413, { error: 'too-large', detail: 'the file is past this provider\'s own limit of ' + limit + ' bytes' })
+      return
+    }
+    if (bytes.length === 0) {
+      send(res, 400, { error: 'bad-request', detail: 'the request body is the file itself' })
+      return
+    }
+    const type = str(req.headers['content-type']) || 'application/octet-stream'
+    const rawName = str(req.headers['x-file-name'])
+    const name = rawName === null ? 'upload' : safeDecode(rawName)
+    const key = await providerKeyValue(provider)
+    if (key.error) {
+      send(res, key.error === 'no-key' ? 400 : 500, { error: key.error })
+      return
+    }
+    const uploaded = await uploadFile(provider, { key: key.key, name, type, bytes })
+    if (uploaded.error) {
+      const status =
+        uploaded.error === 'invalid-key' ? 401 : uploaded.error === 'no-api-balance' ? 402 : uploaded.error === 'too-large' ? 413 : 502
+      send(res, status, uploaded)
+      return
+    }
+    send(res, 200, uploaded)
+  }
+
+  /**
    * The provider's own key, resolved for a run.
    *
    * The pane never holds a key (§12 rule 2), so the host reads it here and puts it in one
@@ -895,6 +993,12 @@ export function apply(ctx, config = {}) {
 
     if (action === 'hidden') {
       await providerHidden(provider, req, res)
+      return
+    }
+
+    // The upload a door's image control calls before a run: a file in, a URL out.
+    if (action === 'asset') {
+      await providerAsset(provider, req, res)
       return
     }
 

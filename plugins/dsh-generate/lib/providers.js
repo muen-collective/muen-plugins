@@ -122,6 +122,81 @@ export function normalizeKey(raw) {
 }
 
 /**
+ * One multipart POST of a file, judged the same way for every provider that takes a file.
+ *
+ * WHY THE UPLOAD GOES THROUGH THE HOST AND NOT THE PAGE. Krea's generation fields take an
+ * external URL, a Krea asset URL or a base64 data URI — but a data URI of a real photograph
+ * runs to megabytes, and `image_url` and `image_style_references[].url` cap the string at
+ * 1024 characters. So a person's own file has to become a URL first, and the call that does
+ * that needs the key: the pane never holds one (§12 rule 2).
+ *
+ * Krea's own upload, read 2026-09-23: `POST /assets`, multipart/form-data, one `file` part,
+ * 75 MB maximum, answering `{ id, image_url, uploaded_at, width, height, … }`.
+ *
+ * @returns {{ payload: unknown } | { error: string, detail?: string }}
+ */
+async function postFile({ url, headers, field, name, type, bytes, timeoutMs = TIMEOUT_MS, fetchImpl = fetch }) {
+  const form = new FormData()
+  form.append(field, new Blob([bytes], { type }), name)
+  let response
+  try {
+    response = await fetchImpl(url, {
+      method: 'POST',
+      headers: { Accept: 'application/json', ...headers },
+      body: form,
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch (error) {
+    const kind = error && error.name
+    return { error: kind === 'TimeoutError' || kind === 'AbortError' ? 'timeout' : 'unreachable' }
+  }
+  let payload = null
+  try {
+    payload = JSON.parse(await response.text())
+  } catch {
+    payload = null
+  }
+  if (!response.ok) {
+    // The same three answers a run gets, plus the one an upload can get: a file past the
+    // provider's own limit. Krea's limit is documented (75 MB) and enforced here too.
+    if (response.status === 401) return { error: 'invalid-key' }
+    if (response.status === 402) return { error: 'no-api-balance' }
+    if (response.status === 413) return { error: 'too-large' }
+    return { error: 'http-' + response.status }
+  }
+  return { payload }
+}
+
+/**
+ * Upload one file for a provider that declares an `upload` descriptor, and answer the URL
+ * the surface puts in the door.
+ *
+ * A provider without the descriptor is not an error here: the route refuses it by name
+ * before this is reached, and RunningHub's run — which would upload per image door — is
+ * still owed, so its descriptor arrives with that slice rather than before it.
+ *
+ * @returns {{ url: string } | { error: string, detail?: string }}
+ */
+export async function uploadFile(provider, { key, name, type, bytes, timeoutMs, fetchImpl } = {}) {
+  const upload = provider && provider.upload
+  if (!upload || typeof upload !== 'object') return { error: 'unsupported' }
+  const posted = await postFile({
+    url: provider.base + upload.path,
+    headers: upload.headers ? upload.headers(key) : { Authorization: `Bearer ${key}` },
+    field: upload.field,
+    name,
+    type,
+    bytes,
+    timeoutMs,
+    fetchImpl,
+  })
+  if (posted.error) return posted
+  const url = upload.url(posted.payload)
+  if (str(url) === null) return { error: 'unexpected-response' }
+  return { url, asset: upload.asset ? upload.asset(posted.payload) : null }
+}
+
+/**
  * One authenticated GET, judged the same way for every provider.
  *
  * The two failures are kept apart on purpose: a network failure never masquerades as
@@ -318,6 +393,27 @@ export const krea = {
    * is why an empty one is the 402 above rather than an expired subscription. */
   funding: { kind: 'balance', url: 'https://www.krea.ai/app/api' },
   addPrompt: 'add this Krea model <model name>',
+
+  /**
+   * THE UPLOAD: how a file a person picked becomes the URL a door carries.
+   *
+   * Krea's own asset API, read 2026-09-23: `POST /assets` takes multipart/form-data with one
+   * `file` part (JPEG, PNG, WebP, HEIC, MP4, MOV, WebM, GLB, WAV, MP3; 75 MB maximum) and
+   * answers `{ id, image_url, uploaded_at, width, height, size_bytes, mime_type,
+   * description }`. `image_url` is the string Krea's generation fields then accept, and the
+   * only field this plugin reads.
+   *
+   * It is here rather than in the pane because the call needs the key, and the pane never
+   * holds one (§12 rule 2).
+   */
+  upload: {
+    path: '/assets',
+    field: 'file',
+    /** Krea's own documented maximum, so the file is refused here rather than at the wire. */
+    limitBytes: 75 * 1024 * 1024,
+    url: (payload) => (payload && typeof payload.image_url === 'string' ? payload.image_url : null),
+    asset: (payload) => (payload && typeof payload.id === 'string' ? payload.id : null),
+  },
 
   async account({ base = this.base, key, timeoutMs = TIMEOUT_MS, fetchImpl = fetch } = {}) {
     const read = await getJson(base + '/jobs', { Authorization: `Bearer ${key}` }, { timeoutMs, fetchImpl })

@@ -164,6 +164,13 @@ window.__ModuleLoader__.load({
       'error.jobGone': 'That run is no longer on the provider.',
       'card.community': 'someone else\'s app',
       'surface.image.choose': 'Choose an image',
+      'surface.image.placeholder': 'Paste an image URL, or add one',
+      'surface.image.uploading': 'Uploading…',
+      'surface.image.failed': 'That image could not be uploaded.',
+      // A list door's two controls. The add control says the door's own `addLabel` when the
+      // catalogue has one (Krea's vocabulary: "Add style"), so these are the fallbacks.
+      'surface.list.add': 'Add',
+      'surface.list.remove': 'Remove',
       'pane.loading': 'Checking your wallet…',
       'pane.first.title': 'Link your RunningHub account',
       // Every provider switched off in Settings. The pane says so rather than looking
@@ -372,6 +379,11 @@ window.__ModuleLoader__.load({
       'error.jobGone': '服务商上已经没有这次运行。',
       'card.community': '他人的应用',
       'surface.image.choose': '选择图片',
+      'surface.image.placeholder': '粘贴图片链接，或添加一张图片',
+      'surface.image.uploading': '正在上传…',
+      'surface.image.failed': '该图片上传失败。',
+      'surface.list.add': '添加',
+      'surface.list.remove': '移除',
       'pane.loading': '正在检查密钥…',
       'pane.first.title': '连接服务商账户',
       'pane.hidden.title': '所有提供方都已隐藏',
@@ -1243,7 +1255,7 @@ window.__ModuleLoader__.load({
         resize: 'vertical',
         lineHeight: 1.5,
       },
-      /** A door the app exposes as an image slot. Uploading lands with the run path. */
+      /** A door the app exposes as an image slot: pick a file, or paste a URL. */
       imageBox: {
         display: 'flex',
         alignItems: 'center',
@@ -1256,6 +1268,46 @@ window.__ModuleLoader__.load({
         border: '1px dashed var(--dsw-alias-border-l2)',
         borderRadius: 6,
         cursor: 'pointer',
+      },
+      /** The image door: the pick control and the URL field side by side. */
+      imageRow: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 8,
+        flexWrap: 'wrap',
+      },
+      /** A file that could not be uploaded. The provider's own reason is in the attribute. */
+      imageProblem: {
+        flexBasis: '100%',
+        marginTop: 4,
+        fontSize: 11,
+        color: 'var(--dsw-alias-state-error-primary)',
+      },
+      /**
+       * A LIST DOOR: the rows, then the add control. One row is one object in the array the
+       * API takes, so the row is drawn as its own bordered block rather than as a line of
+       * fields that could be read as part of the row above.
+       */
+      list: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        marginTop: 6,
+      },
+      listRow: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'flex-end',
+        gap: 8,
+        padding: '8px 10px',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '1px solid var(--dsw-alias-border-l1)',
+        borderRadius: 6,
+      },
+      /** One field inside a row: it grows, so two fields share the row's width. */
+      listField: {
+        flex: '1 1 120px',
+        minWidth: 100,
       },
       /**
        * S5: the run. One column under the form — the Run control, then the strip that
@@ -1942,6 +1994,45 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Upload one file an image door was given, and answer the URL the door carries.
+     *
+     * WHY THIS IS NOT A DATA URI. Krea's fields do accept a base64 data URI, but `image_url`
+     * and a style reference's `url` cap the string at 1024 characters — a photograph inlined
+     * is far past that. So the file goes to the provider's asset API and the door carries the
+     * URL that comes back. The key stays on the host, which is why this calls this plugin's
+     * own route rather than Krea (founder, 2026-09-23: the pane must hold no key).
+     *
+     * The bytes ARE the body — an image is megabytes, and a JSON envelope would inflate it by
+     * a third. The file's name rides in a header, percent-encoded because a header is no place
+     * for a space or a quote.
+     */
+    async function uploadImage(provider, file) {
+      let response
+      try {
+        response = await fetch(providerUrl(provider, 'asset'), {
+          method: 'POST',
+          headers: {
+            'content-type': file.type || 'application/octet-stream',
+            'x-file-name': encodeURIComponent(file.name || 'upload'),
+          },
+          body: file,
+        })
+      } catch {
+        return { ok: false, error: 'unreachable' }
+      }
+      let body = null
+      try {
+        body = await response.json()
+      } catch {
+        body = null
+      }
+      if (!response.ok || !body || typeof body.url !== 'string') {
+        return { ok: false, error: (body && body.error) || 'host-error', detail: body && body.detail }
+      }
+      return { ok: true, url: body.url }
+    }
+
+    /**
      * The doors in the order the surface draws them.
      *
      * `ui.order` is the author's order; the primary door leads, because that is the
@@ -1961,10 +2052,21 @@ window.__ModuleLoader__.load({
 
     /** What a door starts at: the app's default, or the first option, or nothing. */
     function defaultFor(door) {
+      // A list starts empty: no row exists until a person adds one, which is why the add
+      // control is the first thing the list draws and a `max` of one is respected from the
+      // start rather than after a failed run.
+      if (door.type === 'list') return []
       if (door.default !== undefined) return door.default
       if (door.type === 'select') return Array.isArray(door.options) && door.options.length > 0 ? door.options[0] : ''
       if (door.type === 'number') return door.min !== undefined ? door.min : ''
       return ''
+    }
+
+    /** One row of a list door, at the values the row's own doors declare. */
+    function rowFor(door) {
+      const row = {}
+      for (const [key, field] of Object.entries(door.fields || {})) row[key] = defaultFor(field)
+      return row
     }
 
     /**
@@ -2175,6 +2277,75 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * AN IMAGE DOOR: a file a person picks, or a URL they paste.
+     *
+     * Both halves are the API's own vocabulary. Krea's `image_url` and a style reference's
+     * `url` each take *"an external URL, base64 data URI, or uploaded asset URL"*
+     * (its OpenAPI, read 2026-09-23), so a paste is a first-class way to fill the field, and
+     * a file — which cannot be pasted — goes to the provider's upload route and comes back as
+     * the URL the field carries. The one thing that is NOT a value is what a file input
+     * reports on its own (`C:\fakepath\…`), which is why this control never reads it: the
+     * nothing-uploaded-yet state is the button itself, and the field stays empty until the
+     * upload answers.
+     *
+     * The value is the URL string, so a surface that only ever pastes one still works, and
+     * the gate shows the same string a run would send.
+     */
+    function ImageField({ t, provider, id, doorKey, value, onChange, canUpload }) {
+      const [phase, setPhase] = React.useState('idle')
+      const [problem, setProblem] = React.useState(null)
+
+      const pick = async (event) => {
+        const file = event.target.files && event.target.files[0]
+        // Clearing the input is what lets the same file be picked twice: a file input fires
+        // no change event for a value it already had.
+        event.target.value = ''
+        if (!file) return
+        setPhase('uploading')
+        setProblem(null)
+        const uploaded = await uploadImage(provider, file)
+        if (uploaded.ok) {
+          setPhase('idle')
+          onChange(uploaded.url)
+          return
+        }
+        setPhase('failed')
+        setProblem(uploaded.error)
+      }
+
+      return h(
+        'div',
+        { style: S.imageRow, 'data-generate-image': doorKey },
+        canUpload
+          ? h(
+              'label',
+              { style: S.imageBox, htmlFor: id + '-file' },
+              h(IconSparkle16, { size: 12 }),
+              h('span', null, phase === 'uploading' ? t('surface.image.uploading') : t('surface.image.choose')),
+              h('input', {
+                id: id + '-file',
+                'data-generate-upload': doorKey,
+                type: 'file',
+                accept: 'image/*',
+                style: { display: 'none' },
+                onChange: pick,
+              }),
+            )
+          : null,
+        h('input', {
+          style: S.input,
+          id,
+          'data-generate-door': doorKey,
+          type: 'text',
+          value: value === undefined || value === null ? '' : value,
+          placeholder: t('surface.image.placeholder'),
+          onChange: (event) => onChange(event.target.value),
+        }),
+        phase === 'failed' ? h('div', { style: S.imageProblem, 'data-generate-upload-failed': problem || 'yes' }, t('surface.image.failed')) : null,
+      )
+    }
+
+    /**
      * One workflow's surface, inside the pane.
      *
      * §10's "doors as controls in `ui.order`, `primary` first": `label` is the
@@ -2182,12 +2353,11 @@ window.__ModuleLoader__.load({
      * sit behind one disclosure, and NO node id and no field name is ever drawn —
      * those belong to the payload gate, as JSON to read.
      *
-     * THE FORM IS REAL AND NOTHING SUBMITS. Every control carries the app's own
-     * bounds, options and default, and holds what the user types; the payload gate,
-     * the run strip and the result are the next slice (§10, S5), and the line at the
-     * foot says so rather than leaving a button that lies.
+     * A LIST DOOR IS THE FIFTH CONTROL, and it is the only one that draws its own rows: a
+     * Krea array field is an array of objects, so a row carries the object's own doors and
+     * `advanced` decides whether the whole list sits behind the disclosure.
      */
-    function WorkflowSurface({ t, provider, name, onBack }) {
+    function WorkflowSurface({ t, provider, name, onBack, canUpload = false }) {
       const { phase, adapter } = useWorkflow(provider, name)
       const [values, setValues] = React.useState({})
       const [showAdvanced, setShowAdvanced] = React.useState(false)
@@ -2200,8 +2370,12 @@ window.__ModuleLoader__.load({
         setValues(start)
       }, [phase])
 
-      const set = (key) => (event) => {
-        const next = event.target.value
+      /**
+       * One top-level door's value, set. The control layer passes VALUES, not events: an
+       * image door hands back a URL an upload answered, and the four native controls hand
+       * back what a person typed, so the two cannot share an event-shaped callback.
+       */
+      const set = (key) => (next) => {
         setValues((current) => ({ ...current, [key]: next }))
       }
 
@@ -2224,10 +2398,41 @@ window.__ModuleLoader__.load({
       const main = keys.filter((key) => adapter.doors[key].advanced !== true)
       const advanced = keys.filter((key) => adapter.doors[key].advanced === true)
 
-      const control = (key) => {
-        const door = adapter.doors[key]
-        const value = values[key] === undefined ? startFor(key, door, adapter.defaults) : values[key]
-        const shared = { style: S.input, id: 'generate-door-' + key, 'data-generate-door': key, onChange: set(key) }
+      /** One row of a list door, at the values the row's own doors declare. */
+      const addRow = (key, door) => () =>
+        setValues((current) => {
+          const rows = Array.isArray(current[key]) ? current[key].slice() : []
+          if (typeof door.max === 'number' && rows.length >= door.max) return current
+          rows.push(rowFor(door))
+          return { ...current, [key]: rows }
+        })
+
+      const removeRow = (key, index) => () =>
+        setValues((current) => {
+          const rows = Array.isArray(current[key]) ? current[key].slice() : []
+          rows.splice(index, 1)
+          return { ...current, [key]: rows }
+        })
+
+      /** One field inside one row: a copy of `values`, one level down. */
+      const setRowField = (key, index, fieldKey) => (next) =>
+        setValues((current) => {
+          const rows = Array.isArray(current[key]) ? current[key].slice() : []
+          rows[index] = { ...(rows[index] || {}), [fieldKey]: next }
+          return { ...current, [key]: rows }
+        })
+
+      /**
+       * ONE FIELD'S CONTROL, wherever it is drawn: at the top of the form, or inside a row of
+       * a list door.
+       *
+       * `doorKey` is always the API's own field name (`prompt`, `style_references[0].url`),
+       * which is the name a value is carried under and the name the gate reports a failure
+       * by — so the attribute a page is read through and the key the host builds the body
+       * from are the same string.
+       */
+      const fieldControl = (id, doorKey, door, value, onValue, canUpload) => {
+        const shared = { style: S.input, id, 'data-generate-door': doorKey, onChange: (event) => onValue(event.target.value) }
         if (door.type === 'select') {
           return h(
             'select',
@@ -2239,20 +2444,73 @@ window.__ModuleLoader__.load({
           return h('input', { ...shared, type: 'number', value, min: door.min, max: door.max, step: door.step })
         }
         if (door.type === 'image') {
-          // Closing an image door is local state until the run path uploads it:
-          // `POST /task/openapi/upload` is part of that slice, and a picker that
-          // pretended to have sent something would be worse than one that does not.
-          return h(
-            'label',
-            { style: S.imageBox, htmlFor: 'generate-door-' + key },
-            h(IconSparkle16, { size: 12 }),
-            h('span', null, t('surface.image.choose')),
-            h('input', { id: 'generate-door-' + key, 'data-generate-door': key, type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: set(key) }),
-          )
+          return h(ImageField, { id, doorKey, value, onChange: onValue, t, provider, canUpload })
         }
         return door.multiline === true
           ? h('textarea', { ...shared, style: { ...S.input, ...S.multiline }, rows: 4, value })
           : h('input', { ...shared, type: 'text', value })
+      }
+
+      /**
+       * A LIST DOOR: the add control, one row per item, and a remove on each row.
+       *
+       * This is the fifth control, and it exists because three of Krea's own fields are
+       * arrays of objects — a style is an id and a strength, a style reference is an image
+       * and a strength (founder, 2026-09-23: *"we are missing a lot of fields for upload
+       * image for style ref, etc.."*). A row is the only shape that can carry them: a single
+       * text box would post a bare string where the API requires an object.
+       *
+       * `max` is the API's own `maxItems` when it declares one, so the add control is gone at
+       * the limit rather than offering a row the API would refuse.
+       */
+      const listControl = (key, door) => {
+        const rows = Array.isArray(values[key]) ? values[key] : []
+        const atMax = typeof door.max === 'number' && rows.length >= door.max
+        return h(
+          'div',
+          { style: S.list, 'data-generate-list': key },
+          rows.map((row, index) =>
+            h(
+              'div',
+              { key: index, style: S.listRow, 'data-generate-list-row': key + '[' + index + ']' },
+              ...Object.entries(door.fields || {}).map(([fieldKey, field]) => {
+                const path = key + '[' + index + '].' + fieldKey
+                const id = 'generate-door-' + key + '-' + index + '-' + fieldKey
+                return h(
+                  'div',
+                  { key: fieldKey, style: S.listField },
+                  h('label', { style: S.label, htmlFor: id }, field.label),
+                  fieldControl(id, path, field, row[fieldKey], setRowField(key, index, fieldKey), canUpload),
+                )
+              }),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  style: S.ghost,
+                  'data-generate-list-remove': key + '[' + index + ']',
+                  onClick: removeRow(key, index),
+                },
+                t('surface.list.remove'),
+              ),
+            ),
+          ),
+          atMax
+            ? null
+            : h(
+                'button',
+                { type: 'button', style: S.imageBox, 'data-generate-list-add': key, onClick: addRow(key, door) },
+                h(IconSparkle16, { size: 12 }),
+                h('span', null, door.addLabel || t('surface.list.add')),
+              ),
+        )
+      }
+
+      const control = (key) => {
+        const door = adapter.doors[key]
+        if (door.type === 'list') return listControl(key, door)
+        const value = values[key] === undefined ? startFor(key, door, adapter.defaults) : values[key]
+        return fieldControl('generate-door-' + key, key, door, value, set(key), canUpload)
       }
 
       const doorRow = (key) =>
@@ -2984,6 +3242,9 @@ window.__ModuleLoader__.load({
               t,
               provider: active.provider,
               name: active.name,
+              // Whether this provider can turn a picked file into a URL. The pane knows the
+              // rows it drew, so it says; the surface does not guess from the id.
+              canUpload: !!((providers.providers || []).find((row) => row.id === active.provider) || {}).upload,
               onBack: () => setChosen(''),
             }),
         active === null

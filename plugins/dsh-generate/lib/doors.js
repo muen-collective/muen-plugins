@@ -40,6 +40,18 @@ const APP_ID = /^\d{6,}$/
 /** The adapter's door vocabulary. Anything else is hidden, not guessed (§8 rule 11). */
 export const DOOR_TYPES = ['image', 'text', 'number', 'select']
 
+/**
+ * What a SURFACE can draw: the four above, plus `list`.
+ *
+ * TWO VOCABULARIES ON PURPOSE. A RunningHub door is one of the app's own inputs, and an
+ * app's `fieldType` is never a list, so an adapter stays on `DOOR_TYPES`. A Krea model's
+ * doors are Krea's request schema, and three of its fields are arrays of objects —
+ * `styles`, `image_style_references`, `moodboards` (Krea's OpenAPI, read 2026-09-23). The
+ * surface can draw those as rows, each row carrying its own doors, which is why the
+ * vocabulary the catalogue is checked against is this one.
+ */
+export const SURFACE_DOOR_TYPES = [...DOOR_TYPES, 'list']
+
 /** `fieldName` → the semantic key a mechanical install proposes. */
 const KEY_BY_FIELD = {
   image: 'image',

@@ -107,8 +107,8 @@ check(
   JSON.stringify(shipped.map((model) => ({ model: model.model, endpoint: model.endpoint }))),
 )
 check(
-  "the list reads in Krea's own order: Medium, Large, Turbo",
-  shipped.map((model) => model.name).join(',') === 'krea-2-medium,krea-2-large,krea-2-medium-turbo',
+  "the list reads in the founder's order: Turbo, Medium, Large",
+  shipped.map((model) => model.name).join(',') === 'krea-2-medium-turbo,krea-2-medium,krea-2-large',
   JSON.stringify(shipped.map((model) => model.name)),
 )
 check(
@@ -186,9 +186,32 @@ check(
   JSON.stringify({ image_url: doors.image_url && doors.image_url.type, strength: doors.strength && doors.strength.default }),
 )
 check(
-  'the fields the surface cannot render are NOT doors: an array of objects is not a control',
-  !['styles', 'image_style_references', 'moodboards'].some((key) => key in doors),
-  JSON.stringify(Object.keys(doors)),
+  'the three array fields are lists now, each row carrying the doors Krea requires of it',
+  (() => {
+    const styles = doors.styles
+    const srefs = doors.image_style_references
+    const boards = doors.moodboards
+    return (
+      styles?.type === 'list' &&
+      styles.fields?.id?.type === 'text' &&
+      styles.fields.id.required === true &&
+      styles.fields?.strength?.type === 'number' &&
+      styles.fields.strength.required === true &&
+      styles.fields.strength.min === -2 &&
+      styles.fields.strength.max === 2 &&
+      // Krea's own maxItems, so the surface stops adding rows where the API stops taking them.
+      srefs?.type === 'list' &&
+      srefs.max === 10 &&
+      srefs.fields?.url?.type === 'image' &&
+      srefs.fields.url.required === true &&
+      srefs.fields?.strength?.default === 0.5 &&
+      boards?.type === 'list' &&
+      boards.max === 1 &&
+      boards.fields?.id?.required === true &&
+      boards.fields?.strength?.default === 0.23
+    )
+  })(),
+  JSON.stringify(['styles', 'image_style_references', 'moodboards'].map((key) => doors[key] && [doors[key].type, doors[key].max, Object.keys(doors[key].fields || {})])),
 )
 check(
   'every door is labelled, because a raw field name is not a label',
@@ -197,7 +220,7 @@ check(
 )
 check(
   'the door list is longer than the four a surface opens on, and the tuning doors sit behind the disclosure',
-  Object.keys(doors).length === 10 && Object.values(doors).filter((door) => door.advanced === true).length === 6,
+  Object.keys(doors).length === 13 && Object.values(doors).filter((door) => door.advanced === true).length === 9,
   JSON.stringify({ doors: Object.keys(doors).length, advanced: Object.values(doors).filter((door) => door.advanced).length }),
 )
 
@@ -210,7 +233,7 @@ check(
     return (
       entry.name === 'krea-2-medium-turbo' &&
       entry.title === 'Krea 2 Turbo' &&
-      entry.doorCount === 10 &&
+      entry.doorCount === 13 &&
       entry.runLabel === 'Generate' &&
       entry.blurb.length > 0
     )
@@ -225,7 +248,7 @@ check(
       entry.name === 'krea-2-medium' &&
       entry.title === 'Krea 2 Medium' &&
       entry.variant === 'Medium' &&
-      entry.doorCount === 10 &&
+      entry.doorCount === 13 &&
       entry.runLabel === 'Generate' &&
       entry.origin === 'krea' &&
       entry.blurb.length > 0
@@ -268,7 +291,7 @@ check(
     return (
       entry.name === model.name &&
       entry.title === model.title &&
-      entry.doorCount === 10 &&
+      entry.doorCount === 13 &&
       entry.runLabel === 'Generate' &&
       entry.origin === 'krea' &&
       entry.blurb.length > 0 &&
@@ -289,7 +312,7 @@ const bareList = await krea.listWorkflows({ dir: join(bare, 'adapters'), root: b
 check(
   'with nothing on disk the Krea section holds every shipped model, and a missing directory is not an error',
   bareList.entries.length === 3 &&
-    bareList.entries.map((entry) => entry.name).join(',') === 'krea-2-medium,krea-2-large,krea-2-medium-turbo' &&
+    bareList.entries.map((entry) => entry.name).join(',') === 'krea-2-medium-turbo,krea-2-medium,krea-2-large' &&
     bareList.skipped.length === 0,
   JSON.stringify({ entries: bareList.entries.map((entry) => entry.name), skipped: bareList.skipped }),
 )
@@ -303,9 +326,9 @@ check(
 )
 check(
   'the catalogue comes first, so a documented model is not buried under a file',
-  mixed.entries[0].name === 'krea-2-medium' &&
-    mixed.entries[1].name === 'krea-2-large' &&
-    mixed.entries[2].name === 'krea-2-medium-turbo' &&
+  mixed.entries[0].name === 'krea-2-medium-turbo' &&
+    mixed.entries[1].name === 'krea-2-medium' &&
+    mixed.entries[2].name === 'krea-2-large' &&
     mixed.entries[3].name === 'krea2-face-swap',
   JSON.stringify(mixed.entries.map((entry) => entry.name)),
 )
