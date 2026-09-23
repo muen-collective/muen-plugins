@@ -79,7 +79,7 @@ import { loadHouse } from './house.js'
 import { ADAPTER_SCHEMA, adapterFromDoors, validateAdapter } from './adapter.js'
 import { PROVIDERS, normalizeKey, providerById, runOptions, runninghub, uploadFile } from './providers.js'
 import { readHidden, withHidden, writeHidden } from './hidden.js'
-import { resolveDataRoot } from './paths.js'
+import { libraryRoot, resolveDataRoot } from './paths.js'
 
 /** Matches the row id in cordis.patch.yml. */
 export const name = 'generate'
@@ -955,7 +955,14 @@ export function apply(ctx, config = {}) {
         send(res, key.error === 'no-key' ? 400 : 500, { error: key.error })
         return
       }
-      const read = await provider.readRun({ root: provider.data(root.root).root, jobId, key: key.key })
+      const read = await provider.readRun({
+        root: provider.data(root.root).root,
+        // Where a finished run's bytes go: one library for the install, beside the provider
+        // directories rather than inside one (lib/library.js).
+        libraryRoot: libraryRoot(root.root),
+        jobId,
+        key: key.key,
+      })
       if (read.error === 'job-not-found') {
         send(res, 404, read)
         return

@@ -460,6 +460,25 @@ by the payload builder: no node can load a file on the person's disk.
 provider that can spend and one that cannot. Comfy Cloud and Magnific still answer `501` on both run routes and
 their surfaces still say running comes next.
 
+**A FINISHED RUN SAVES ITS BYTES, because a link is not a result** (founder, 2026-09-23: *"also for saving to
+local. we should think about folder organization"*). RunningHub's upload links are documented as lasting a day
+and its output host's lifetime is undocumented, so on the terminal read the host downloads what the provider
+answered and writes it into **one library for the install**:
+
+```
+<profile>/generate/library/<provider>/<workflow>/<yyyymmdd>-<jobId>.<ext>
+```
+
+Provider, then workflow, then the day as a filename prefix (the founder's call): the first two are how a person
+looks for a thing again — "the outfit swaps from last week" — and a tree of mostly-empty day folders would be
+worse than a date you can read. The extension comes from the provider's own `fileType` when it has one, then the
+URL's tail, then the response's content type. Every segment is sanitised, so a hostile job id cannot climb out
+of the library, and a path that is already there is left alone — a poll may read the same terminal state twice.
+**A save that fails never fails a run**: the download's error is recorded beside the outcome
+(`saveErrors`), the run still reports what the provider said, and the pane draws the saved path the host
+answered with. Cloudinary is the next destination — the seam is a second write the record names, never a
+dependency of the run.
+
 **A run's record is provider-neutral.** `lib/run-record.js` owns where a record lives
 (`<profile>/generate/<provider>/runs/<jobId>.json`), how it is written and how it is read; each runner writes its
 own `schema` (`muen-krea-run/v1`, `muen-rh-run/v1`). No key is ever in one.
@@ -643,15 +662,20 @@ trigger translated away**. Those four mutations were not re-run against the acco
 linked pane" one targets a note that no longer exists there — so treat them as the record of the earlier
 suite, not as a score for this one.
 
-`verify/run.mjs` (**74/74**) drives both runners against a temp profile and stubbed APIs: Krea's payload
+`verify/run.mjs` (**79/79**) drives both runners against a temp profile and stubbed APIs: Krea's payload
 builder (lists included), the gate the route enforces, the poll and the record; and RunningHub's node list in
 `ui.order`, the fields it refuses (a browser file path), the run posted with its key, app id and machine, the
 status call that answers in flight without asking for outputs, the outputs call that answers the files, the
 failure that carries the failing node's own message, and the upload that turns a picked file into the `fileName`
-an image door carries. It also drives the routes: `runOptions` refuses an undeclared option and an out-of-list
-value, the workflow route serves `runnable` from the registry, and an adapter's `source` never reaches the page.
+an image door carries. The library is checked the same way: a finished run writes its bytes under
+`library/<provider>/<workflow>/<yyyymmdd>-<jobId>.<ext>`, the record names the file, a second read of the same
+terminal state neither downloads nor rewrites it, a failed download leaves the run `done` with the failure
+recorded, and a hostile workflow name or job id cannot climb out of the library (mutation-tested: 78/79 with the
+segment sanitiser removed, 77/79 with the save given nothing to fetch). It also drives the routes: `runOptions`
+refuses an undeclared option and an out-of-list value, the workflow route serves `runnable` from the registry,
+and an adapter's `source` never reaches the page.
 
-`verify/start.mjs` (**235/235**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/start.mjs` (**236/236**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
 the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
 **one accordion section per provider in registry order, all four whether linked or not**, each header holding

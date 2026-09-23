@@ -75,6 +75,7 @@ import { modelEntry, modelSurface, readKreaModels } from './krea-models.js'
 import { buildRunPayload, getRun, postRun } from './krea-run.js'
 import { buildRhPayload, readRhRun, postRhRun, RH_RUN_PATH, RH_UPLOAD_PATH } from './runninghub-run.js'
 import { readRunRecord, writeRunRecord } from './run-record.js'
+import { saveAssets } from './library.js'
 import { dataPaths } from './paths.js'
 import { join } from 'node:path'
 
@@ -526,11 +527,30 @@ export const runninghub = {
   /**
    * Read one task, and write its outcome into the same record on a terminal state.
    */
-  async readRun({ root, jobId, key, timeoutMs, fetchImpl }) {
+  async readRun({ root, jobId, key, libraryRoot, timeoutMs, fetchImpl }) {
     const read = await readRhRun({ base: this.base, jobId, key, timeoutMs, fetchImpl })
     if (read.error) return read
     if (read.state === 'done' || read.state === 'failed') {
       const record = await readRunRecord(root, jobId)
+      // Saving is the same rule as Krea's: the terminal read is when the bytes exist, and a
+      // failed save is recorded rather than allowed to fail the run.
+      const library =
+        read.state === 'done' && typeof libraryRoot === 'string'
+          ? await saveAssets({
+              root: libraryRoot,
+              provider: this.id,
+              workflow: (record && record.adapter) || (record && record.title) || jobId,
+              jobId,
+              at: record ? record.at : new Date().toISOString(),
+              urls: read.urls,
+              // RunningHub says what each output is (`fileType: 'png'`), which beats the
+              // URL's own tail as an extension.
+              types: Array.isArray(read.types) ? read.types : [],
+              fetchImpl,
+            })
+          : { saved: [], errors: [] }
+      read.saved = library.saved
+      read.saveErrors = library.errors
       if (record !== null) {
         await writeRunRecord(root, {
           ...record,
@@ -539,6 +559,8 @@ export const runninghub = {
             status: read.status,
             urls: read.urls,
             error: read.error ? { code: read.error.code, message: read.error.message, node: read.error.node } : null,
+            saved: library.saved,
+            saveErrors: library.errors,
             at: new Date().toISOString(),
           },
         })
@@ -703,6 +725,9 @@ export const krea = {
       schema: 'muen-krea-run/v1',
       jobId: posted.jobId,
       at,
+      // The unit's own name, beside the model it points at: the library folder is a workflow
+      // a person recognises, and `model` is an endpoint path with slashes in it.
+      name: preview.name,
       model: preview.model,
       title: preview.title,
       endpoint: preview.endpoint,
@@ -724,17 +749,37 @@ export const krea = {
    * One poll of a running job. The outcome is written back to that job's record, so the
    * file on disk ends as the answer rather than as the request.
    */
-  async readRun({ root, jobId, key, timeoutMs, fetchImpl }) {
+  async readRun({ root, jobId, key, libraryRoot, timeoutMs, fetchImpl }) {
     const read = await getRun({ base: this.base, jobId, key, timeoutMs, fetchImpl })
     if (read.error) return read
     if (read.state === 'done' || read.state === 'failed') {
       const record = await readRunRecord(root, jobId)
+      // THE BYTES ARE SAVED HERE, on the terminal read: this is when the provider's own
+      // links exist, and a link is not a result (see lib/library.js). A save that fails is
+      // recorded and never turns a finished run into a failed one.
+      const library =
+        read.state === 'done' && typeof libraryRoot === 'string'
+          ? await saveAssets({
+              root: libraryRoot,
+              provider: this.id,
+              workflow: (record && record.name) || (record && record.title) || jobId,
+              jobId,
+              at: record ? record.at : new Date().toISOString(),
+              urls: read.urls,
+              fetchImpl,
+            })
+          : { saved: [], errors: [] }
+      read.saved = library.saved
+      read.saveErrors = library.errors
       if (record !== null) {
         await writeRunRecord(root, {
           ...record,
           status: read.status,
           urls: read.urls,
           error: read.error,
+          // Where the bytes went, so the record joins to the library without a second log.
+          saved: library.saved,
+          saveErrors: library.errors,
           finishedAt: new Date().toISOString(),
         })
       }

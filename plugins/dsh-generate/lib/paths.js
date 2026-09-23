@@ -91,6 +91,17 @@ export function resolveDataRoot({ argv = process.argv, env = process.env } = {})
  * @param {string} root - the plugin's own root (`<profile>/generate`)
  * @param {string} providerId - the provider's id, which is also its directory name
  */
+/**
+ * The library: one root for every provider's saved results.
+ *
+ * It sits beside the provider directories rather than inside one, because a saved image is
+ * the install's asset and not the provider's property — a workflow re-pointed at another
+ * backend keeps its results.
+ */
+export function libraryRoot(root) {
+  return join(root, 'library')
+}
+
 export function dataPaths(root, providerId) {
   const own = join(root, providerId)
   return {

@@ -700,7 +700,17 @@ function stubHost({
         polls += 1
         const state = jobStates[Math.min(polls - 1, jobStates.length - 1)]
         if (state === 'failed') return ok({ state: 'failed', status: 'failed', urls: [], error: jobError || { code: 'x', message: 'the model refused this prompt' } })
-        if (state === 'done') return ok({ state: 'done', status: 'completed', urls: ['https://gen.krea.ai/out.png'], error: null })
+        if (state === 'done') {
+          // The host saves the bytes on the terminal read and says where; the pane draws that
+          // answer, so the stub answers the same shape.
+          return ok({
+            state: 'done',
+            status: 'completed',
+            urls: ['https://gen.krea.ai/out.png'],
+            error: null,
+            saved: [{ file: '/tmp/generate/library/krea/krea-2-medium-turbo/20260923-job-1.png', bytes: 24, type: 'png', url: 'https://gen.krea.ai/out.png' }],
+          })
+        }
         return ok({ state, status: state === 'queued' ? 'queued' : 'processing', urls: [], error: null })
       }
       // The settings toggle: the host records what the page asked for, so a check can
@@ -2215,6 +2225,14 @@ check(
         return !!result && !!image && image.props.src === 'https://gen.krea.ai/out.png' && !!byAttr(done, 'data-generate-result-url', 'https://gen.krea.ai/out.png')
       })(),
       JSON.stringify(nodesOf(done).filter((node) => node.props && node.props['data-generate-result']).map((node) => node.props['data-generate-result'])),
+    )
+    check(
+      'the pane says where the bytes were saved, from the host\'s own answer',
+      (() => {
+        const line = byAttr(done, 'data-generate-saved', '/tmp/generate/library/krea/krea-2-medium-turbo/20260923-job-1.png')
+        return !!line && textIn(line).includes(EN['run.saved']) && textIn(line).includes('20260923-job-1.png')
+      })(),
+      JSON.stringify(nodesOf(done).filter((node) => node.props && node.props['data-generate-saved']).map((node) => textIn(node))),
     )
   } finally {
     globalThis.fetch = real

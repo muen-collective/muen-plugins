@@ -137,6 +137,9 @@ window.__ModuleLoader__.load({
       // The split run control's smaller half: its accessible name and its hover tooltip.
       // The modes themselves are provider data, so nothing here names one of them.
       'run.mode': 'Run mode',
+      // Where a finished run's bytes were saved, on this machine. The host does the saving,
+      // so this only says what the host reported — never a path the browser guessed.
+      'run.saved': 'Saved to',
       'surface.loading': 'Reading the workflow…',
       'surface.failed': 'That workflow could not be read.',
       'surface.advanced': 'Advanced',
@@ -369,6 +372,7 @@ window.__ModuleLoader__.load({
       'surface.step.down': '减少',
       'surface.step.up': '增加',
       'run.mode': '运行模式',
+      'run.saved': '已保存到',
       'surface.loading': '正在读取工作流…',
       'surface.failed': '无法读取该工作流。',
       'surface.advanced': '高级',
@@ -1399,6 +1403,26 @@ window.__ModuleLoader__.load({
         borderRadius: 8,
         overflow: 'hidden',
       },
+      /** Where a finished run's bytes were saved: a label, then the path, clipped rather than wrapped. */
+      savedLine: {
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 6,
+        minWidth: 0,
+        fontSize: 11,
+        lineHeight: '16px',
+        color: 'var(--dsw-alias-label-caption)',
+      },
+      savedLabel: {
+        flex: 'none',
+      },
+      savedPath: {
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        color: 'var(--dsw-alias-label-tertiary)',
+      },
       /** The result inside the canvas: contained, so no aspect is ever cropped. */
       previewImage: {
         display: 'block',
@@ -2217,7 +2241,9 @@ window.__ModuleLoader__.load({
           body = null
         }
         if (!response.ok || !body) return { ok: false, error: (body && body.error) || 'host-error' }
-        return { ok: true, ...body }
+        // `saved` is the host's own answer about the library: where a finished run's bytes
+        // were written. It travels with the poll because that is when they are written.
+        return { ok: true, ...body, saved: Array.isArray(body.saved) ? body.saved : [] }
       } catch {
         return { ok: false, error: 'unreachable' }
       }
@@ -3105,7 +3131,9 @@ window.__ModuleLoader__.load({
           }
           if (read.state === 'done') {
             settled = true
-            setRun((current) => (current.jobId === jobId ? { ...current, phase: 'done', finishedAt: Date.now(), urls: read.urls } : current))
+            setRun((current) =>
+              current.jobId === jobId ? { ...current, phase: 'done', finishedAt: Date.now(), urls: read.urls, saved: read.saved } : current,
+            )
             return
           }
           if (read.state === 'failed') {
@@ -3320,6 +3348,16 @@ window.__ModuleLoader__.load({
               ),
               run.jobId ? h('span', { style: S.runMeta, 'data-generate-run-job': run.jobId }, t('run.job') + ' ' + run.jobId) : null,
               h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: run.back }, t('run.again')),
+            )
+          : null,
+        // WHERE IT LANDED. The host downloads the bytes on the terminal read (a provider's
+        // link is not a result — it expires), so the pane says the path it answered with.
+        run.phase === 'done' && Array.isArray(run.saved) && run.saved.length > 0
+          ? h(
+              'div',
+              { style: S.savedLine, 'data-generate-saved': run.saved[0].file },
+              h('span', { style: S.savedLabel }, t('run.saved')),
+              h('span', { style: S.savedPath }, run.saved[0].file),
             )
           : null,
         run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0

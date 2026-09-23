@@ -23,7 +23,7 @@
  *
  *   node verify/run.mjs
  */
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { Readable } from 'node:stream'
 import { dirname, join } from 'node:path'
@@ -40,6 +40,7 @@ const { buildRunPayload, getRun, postRun } = await import(pathToFileURL(join(ROO
 const providers = await import(pathToFileURL(join(ROOT, 'lib/providers.js')).href)
 const { krea, runninghub, runOptions } = providers
 const { buildRhPayload } = await import(pathToFileURL(join(ROOT, 'lib/runninghub-run.js')).href)
+const { libraryPath } = await import(pathToFileURL(join(ROOT, 'lib/library.js')).href)
 const { dataPaths, resolveDataRoot } = await import(pathToFileURL(join(ROOT, 'lib/paths.js')).href)
 const { SHIPPED_KREA_MODELS } = await import(pathToFileURL(join(ROOT, 'lib/krea-models.js')).href)
 
@@ -415,7 +416,23 @@ check(
 )
 
 respond = () => ({ status: 200, body: { status: 'completed', result: { urls: ['https://gen.krea.ai/out.png'] } } })
-const polled = await krea.readRun({ root: providerRoot, jobId: 'job-42', key: SECRET, fetchImpl: fakeFetch })
+// THE BYTES ARE DOWNLOADED ON THE TERMINAL READ (founder, 2026-09-23: *"also for saving to
+// local"*). The provider's API answer is JSON; its output link is the picture, and the two
+// arrive through the same injected fetch, so this one answers both.
+const PNG_BYTES = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex')
+const apiAndImage = async (url, init = {}) => {
+  if (String(url).startsWith('https://gen.krea.ai/')) {
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'image/png' },
+      arrayBuffer: async () => PNG_BYTES.buffer.slice(PNG_BYTES.byteOffset, PNG_BYTES.byteOffset + PNG_BYTES.byteLength),
+    }
+  }
+  return fakeFetch(url, init)
+}
+const libraryDir = join(dataRoot, 'library')
+const polled = await krea.readRun({ root: providerRoot, jobId: 'job-42', key: SECRET, libraryRoot: libraryDir, fetchImpl: apiAndImage })
 const settled = JSON.parse(readFileSync(recordAt, 'utf8'))
 check(
   'the poll that finishes a run writes the outcome back to the same file',
@@ -424,6 +441,80 @@ check(
     settled.urls[0] === 'https://gen.krea.ai/out.png' &&
     typeof settled.finishedAt === 'string',
   JSON.stringify(settled),
+)
+// WHERE THE BYTES LAND: <library>/<provider>/<workflow>/<yyyymmdd>-<jobId>.<ext>, chosen by
+// the founder on 2026-09-23. The extension comes from the response's own content type, the
+// day from the record, and the workflow from the unit's name rather than from an endpoint.
+const savedFile = join(libraryDir, 'krea', 'krea-2-medium-turbo', new Date(record.at).toISOString().slice(0, 10).replace(/-/g, '') + '-job-42.png')
+check(
+  'a finished run saves its bytes into the library, and the record says where',
+  (() => {
+    try {
+      const bytes = readFileSync(savedFile)
+      const first = polled.saved[0] || {}
+      const recorded = settled.saved[0] || {}
+      return (
+        bytes.length === PNG_BYTES.length &&
+        polled.saved.length === 1 &&
+        first.file === savedFile &&
+        settled.saved.length === 1 &&
+        recorded.type === 'png' &&
+        recorded.bytes === PNG_BYTES.length
+      )
+    } catch {
+      return false
+    }
+  })(),
+  savedFile,
+)
+check(
+  'reading the same terminal state again does not download or rewrite it',
+  (async () => {
+    let reads = 0
+    const counting = async (url, init = {}) => {
+      if (String(url).startsWith('https://gen.krea.ai/')) reads += 1
+      return apiAndImage(url, init)
+    }
+    const again = await krea.readRun({ root: providerRoot, jobId: 'job-42', key: SECRET, libraryRoot: libraryDir, fetchImpl: counting })
+    return reads === 1 && again.saved.length === 1 && again.saved[0].already === true
+  })(),
+  'a poll may read the same terminal state more than once',
+)
+// A SAVE THAT FAILS NEVER FAILS THE RUN: the provider's answer is still the answer, and the
+// record says plainly that the bytes are missing.
+{
+  const dead = async (url, init = {}) => {
+    if (String(url).startsWith('https://gen.krea.ai/')) return { ok: false, status: 502, headers: { get: () => null } }
+    return fakeFetch(url, init)
+  }
+  const lossy = await krea.readRun({ root: providerRoot, jobId: 'job-42', key: SECRET, libraryRoot: join(dataRoot, 'library-2'), fetchImpl: dead })
+  check(
+    'a download that fails leaves the run done and records the failure',
+    lossy.state === 'done' && lossy.urls.length === 1 && lossy.saved.length === 0 && (lossy.saveErrors[0] || {}).error === 'http-502',
+    JSON.stringify({ state: lossy.state, saved: lossy.saved, errors: lossy.saveErrors }),
+  )
+}
+check(
+  'a workflow name and a job id cannot climb out of the library',
+  (() => {
+    // Deep enough that an unsanitised segment would climb ABOVE the library root, which is
+    // the escape `path.join` still shows after it normalises the `..` away.
+    const escaped = libraryPath(join(dataRoot, 'library'), {
+      provider: '../../../../etc',
+      workflow: '../../../../etc',
+      jobId: '../../../../tmp/x',
+      at: '2026-09-23T00:00:00Z',
+      ext: 'png',
+    })
+    return escaped.startsWith(join(dataRoot, 'library')) && !escaped.includes('..')
+  })(),
+  libraryPath(join(dataRoot, 'library'), {
+    provider: '../../../../etc',
+    workflow: '../../../../etc',
+    jobId: '../../../../tmp/x',
+    at: '2026-09-23T00:00:00Z',
+    ext: 'png',
+  }),
 )
 
 // ── the routes ───────────────────────────────────────────────────────────────
@@ -654,9 +745,21 @@ check(
 
   // The run itself, with the API's own answers: start, status, outputs.
   const rhCalls = []
+  const RH_IMAGE_BYTES = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex')
   const rhFetch = async (url, init = {}) => {
-    rhCalls.push({ url: String(url), body: JSON.parse((init && init.body) || '{}') })
-    const path = String(url).replace(/^https:\/\/www\.runninghub\.ai/, '')
+    const target = String(url)
+    // The result link is the picture, not the API: RunningHub hands out a plain https URL,
+    // and this one answers it with bytes so the library has something to save.
+    if (target.startsWith('https://rh-images.example/')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'image/png' },
+        arrayBuffer: async () => RH_IMAGE_BYTES.buffer.slice(RH_IMAGE_BYTES.byteOffset, RH_IMAGE_BYTES.byteOffset + RH_IMAGE_BYTES.byteLength),
+      }
+    }
+    rhCalls.push({ url: target, body: JSON.parse((init && init.body) || '{}') })
+    const path = target.replace(/^https:\/\/www\.runninghub\.ai/, '')
     const answer = (body) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) })
     if (path === '/task/openapi/ai-app/run') return answer({ code: 0, msg: 'success', data: { taskId: '1907035719658053634', taskStatus: 'RUNNING' } })
     if (path === '/task/openapi/status') return answer({ code: 0, msg: '', data: rhStatus })
@@ -710,7 +813,8 @@ check(
     msg: 'success',
     data: [{ fileUrl: 'https://rh-images.example/output/swap_00001.png', fileType: 'png', taskCostTime: '83', nodeId: '12', consumeCoins: '17' }],
   }
-  const done = await runninghub.readRun({ root: rhRoot, jobId: started.jobId, key: SECRET, fetchImpl: rhFetch })
+  const rhLibrary = join(dataRoot, 'library')
+  const done = await runninghub.readRun({ root: rhRoot, jobId: started.jobId, key: SECRET, libraryRoot: rhLibrary, fetchImpl: rhFetch })
   check(
     'a finished task answers its files, and the record gains the outcome',
     done.state === 'done' &&
@@ -720,6 +824,27 @@ check(
         return record.outcome && record.outcome.state === 'done' && record.outcome.urls.length === 1
       })(),
     JSON.stringify(done),
+  )
+  check(
+    "RunningHub's result is saved under its own workflow folder, typed by the API's own fileType",
+    (() => {
+      const guess = join(rhLibrary, 'runninghub', 'outfit-swap')
+      let names = []
+      try {
+        names = readdirSync(guess)
+      } catch {
+        return false
+      }
+      const file = names.find((name) => name.endsWith('.png'))
+      if (!file) return false
+      return (
+        done.saved.length === 1 &&
+        done.saved[0].type === 'png' &&
+        readFileSync(join(guess, file)).length === RH_IMAGE_BYTES.length &&
+        /^\d{8}-1907035719658053634\.png$/.test(file)
+      )
+    })(),
+    JSON.stringify(done.saved),
   )
 
   rhStatus = 'FAILED'
