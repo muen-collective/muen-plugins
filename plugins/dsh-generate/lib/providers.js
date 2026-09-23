@@ -252,15 +252,24 @@ export const runninghub = {
 /**
  * Krea: the image provider, and the first one whose key proves itself by listing.
  *
- * THE CHECK IS `GET /jobs` (docs: *"Returns jobs belonging to the authenticated
- * user"*), the cheapest authenticated read the API has. It is also the ONLY thing
- * that can be checked: researched 2026-09-23, the 117-path spec has no `/me`,
- * `/account`, `/credits`, `/balance` or `/keys` route — all five answer 404 — the
- * official SDK exposes no account call, and the docs say outright that balance
- * *"cannot be read programmatically"*. So `account` carries what the read proves and
- * nothing is invented.
+ * THE CHECK IS `GET /jobs`, read from Krea's own OpenAPI on 2026-09-23
+ * (`docs/api-reference/general/list-jobs.md`): `security: bearerAuth`, 200 is
+ * `{ items: [...], next_cursor }` with `items` required, 401 is Unauthorized. It is the
+ * cheapest authenticated read the API has, and it is also the only thing a key can be
+ * checked against: the 117-path spec has no `/me`, `/account`, `/credits`, `/balance` or
+ * `/keys` route — all five answer 404 — the official SDK exposes no account call, and
+ * the key page says outright that balance *"cannot be read programmatically — monitor it
+ * in-app"*. So `account` carries what the read proves and nothing is invented.
  *
- * Reading jobs is not billed: the docs bill completed generations, not reads.
+ * 402 IS "NO API BALANCE", NOT A BAD KEY. Same page, same date: API calls draw on a
+ * separate USD balance, and when it runs out *"new API requests are rejected with HTTP
+ * 402 Payment Required"*, with the top-up page as the way back. Calling that key invalid
+ * would be a guess, and throwing it away would lose a key the user owns, so it is stored
+ * and the row says which of the two happened — the founder's rule for Comfy Cloud's 429
+ * (2026-09-23: *"store it and mark it unverified"*).
+ *
+ * A read is not billed: the docs bill completed generations ("failed and cancelled jobs
+ * are not billed").
  */
 export const krea = {
   id: 'krea',
@@ -282,6 +291,8 @@ export const krea = {
     // `{ error }` while the live API answers `{ message: "Unauthorized" }`, so the
     // status decides and the body is never read for it.
     if (read.status === 401) return { error: 'invalid-key' }
+    // Out of API balance: every request is refused until the workspace is topped up.
+    if (read.status === 402) return { unverified: true, note: 'no-api-balance' }
     if (!read.ok) return { error: 'http-' + read.status }
     if (!read.payload || !Array.isArray(read.payload.items)) return { error: 'unexpected-response' }
     return { account: { jobs: read.payload.items.length } }

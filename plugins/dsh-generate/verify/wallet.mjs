@@ -680,6 +680,32 @@ function mount(credentials) {
   check('and the row names the subscription, not the key', body && body.verified === true && body.note === 'subscription-inactive', JSON.stringify(body))
 }
 
+// 17b. Krea's 402 is an empty API balance, not a bad key
+//
+// Krea's own key page, 2026-09-23: API calls draw on a separate USD balance, and when it
+// runs out "new API requests are rejected with HTTP 402 Payment Required". The key is
+// real, so it follows the founder's rule for Comfy Cloud's 429 — store it, mark it
+// unverified, and say which of the two happened.
+{
+  fetchCalls.length = 0
+  respond = () => ({
+    ok: false,
+    status: 402,
+    text: async () =>
+      JSON.stringify({
+        message:
+          'Your API balance is separate from your workspace compute balance. Please top up your API balance to continue using the API.',
+      }),
+  })
+  const credentials = fakeCredentials({})
+  const { handler } = mount(credentials)
+  const res = await call(handler, 'POST', { key: SECRET }, providerPath('krea', 'key'))
+  const body = json(res)
+  check('a Krea 402 is stored rather than thrown away', res.statusCode === 200 && credentials.held === SECRET, res.statusCode + ' ' + JSON.stringify(credentials.calls))
+  check('and the row names the balance, not the key', body && body.verified === false && body.note === 'no-api-balance', JSON.stringify(body))
+  check('the stored key is not echoed back in the note', !res.body.includes(SECRET), res.body.slice(0, 120))
+}
+
 // 18. a 401 anywhere is a bad key, and nothing is stored
 {
   for (const id of ['krea', 'magnific', 'comfycloud']) {

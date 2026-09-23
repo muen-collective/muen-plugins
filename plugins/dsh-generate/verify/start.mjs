@@ -842,6 +842,12 @@ for (const key of [
   'surface.pending',
   'card.community',
   'surface.image.choose',
+  // The notes a provider can attach to a stored key. Each one is rendered as
+  // `t('note.' + provider.note)` from the host's row, so a missing key here shows the
+  // raw id to the user — which is what a note without copy looks like.
+  'note.subscription-inactive',
+  'note.not-entitled',
+  'note.no-api-balance',
 ]) {
   check('the copy has ' + key + ' in English', typeof EN[key] === 'string' && EN[key] !== '', String(EN[key]))
   check('the copy has ' + key + ' in Chinese', typeof ZH[key] === 'string' && ZH[key] !== '', String(ZH[key]))

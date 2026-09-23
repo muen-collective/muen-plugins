@@ -200,9 +200,12 @@ window.__ModuleLoader__.load({
       'settings.workflows.copied': 'Copied',
       // Two providers answer about a key without accepting it, and the difference
       // matters: one subscription has lapsed, and the other is an entitlement Magnific
-      // never confirms. Neither is a bad key, so neither is called one.
+      // never confirms. Neither is a bad key, so neither is called one. Krea's third
+      // case is the same rule: HTTP 402 means the workspace's API balance is empty
+      // (Krea's own docs), and the key itself is fine.
       'note.subscription-inactive': 'The key works, but this account has no active Comfy Cloud subscription, so a run would be refused.',
       'note.not-entitled': 'Magnific answered the key but did not confirm access, so it is stored unchecked.',
+      'note.no-api-balance': 'The key works, but this Krea workspace has no API balance, so a run would be refused. Top it up in Krea.',
       'pane.noProviders': 'This build has no providers registered.',
       // Rotation is a normal act, not an edge case: a person creates a new key on
       // RunningHub and pastes it here. The hint says the field is the way to do
@@ -300,6 +303,7 @@ window.__ModuleLoader__.load({
       'settings.workflows.copied': '已复制',
       'note.subscription-inactive': '密钥可用，但此账户没有有效的 Comfy Cloud 订阅，运行会被拒绝。',
       'note.not-entitled': 'Magnific 回应了密钥但没有确认访问权限，因此仅保存、未校验。',
+      'note.no-api-balance': '密钥可用，但此 Krea 工作区没有 API 余额，运行会被拒绝。请在 Krea 充值。',
       'pane.noProviders': '此版本没有注册任何服务商。',
       'wallet.replace.hint': '在这里粘贴密钥会替换本机已保存的那个。',
       'remove.action': '移除密钥',
