@@ -1,10 +1,10 @@
 # @muen/dsh-runninghub
 
 The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a
-workflow, and run it in the right panel. Epic 61.
+workflow by pasting its app link, and run it in the right panel. Epic 61.
 
-**This is S1 + S2: the plugin installs, the surface mounts, and a RunningHub key can be linked.** The pane is
-the wallet and an empty state; the workflow list, the install flow and the run view are S3–S5 and are not
+**This is S1 + S2 + S3: the plugin installs, the surface mounts, a RunningHub key can be linked, and a
+workflow can be added from its app link.** The categorized flyout and the run view are S4–S5 and are not
 faked here.
 
 ## What it registers
@@ -17,6 +17,8 @@ faked here.
 | the type's `guide[]` | one entry, which puts the **Generate** card on the right panel's start page |
 | `settings.section` | one settings page, `runninghub-wallet`, where the key is changed or unlinked |
 | the client locale registry | namespace `generate`, en + zh |
+| `ctx.tools` | `rh_workflow_graph` (read an app's doors) and `rh_adapter_validate` (check a written adapter) |
+| `ctx.skills` | `add-rh-workflow`, read from `skills/add-rh-workflow/SKILL.md` at apply time |
 
 ## The pane links; Settings manages
 
@@ -119,6 +121,58 @@ and registers a renderer at `sidebar.right.tab.guide.entry` under the same id.
 new tab on every click. One page per pane is right until a tab carries a unit's
 params (S5, D17).
 
+## The install (S3)
+
+An **adapter** is one JSON file that says which RunningHub app, which revision, which doors it has and how
+those doors should look. The doors come from RunningHub; the words come from the glossary; everything else is
+stated in the file.
+
+| Tool | What it does |
+|---|---|
+| `rh_workflow_graph` | `{ link }` → the app's name, cover, tags and every exposed input, each with its node id, field name, control, the app's own options/bounds/default/tooltip, a glossary label, and a starter adapter object |
+| `rh_adapter_validate` | `{ path }` or `{ adapter }` → re-reads the app (read-only: it spends nothing and submits nothing) and reports every door that is not a `(nodeId, fieldName)` pair the app exposes, every control type the pane cannot render, and every derived value that has drifted |
+
+Both are host-side, both are read-only, and **neither writes a file**. The agent writes the adapter with its
+own file tools, guided by the `add-rh-workflow` skill — which is what makes "nothing is written before the
+user confirms" structural rather than a promise. The host half makes no model call, so the same two tools
+serve S4's mechanical install path with no model configured at all.
+
+A door is derived from the API and only its label is authored. `apiCallDemo` answers with `fieldData` as a
+JSON string — `["STRING", {"multiline": true}]`, `["COMBO", {"options": […], "tooltip": …}]`,
+`["FLOAT", {"min": 0.1, "max": 16, "step": 0.1, "default": 1}]` — so the control, the options, the bounds and
+the tooltip are all measured facts. Three findings shape the code: `descriptionEn` returns the raw field name,
+so it is not a label; an `IMAGE` door's `fieldData` leads with an array rather than a type string, so
+`fieldType` leads the control decision; and two doors can share a `nodeId` (`942` carries both `aspect_ratio`
+and `megapixels` on a real app), so the pair is the identity and the validator compares the pair. That last
+one is why `door-pair` is a different failure from `unknown-door`: the fixes differ.
+
+**Where the files go.** `<profile>/runninghub/adapters/<name>.json`, and the house style at
+`<profile>/runninghub/_house.json`. The harness exposes no "profile directory" service, so the root is
+resolved from two facts already in the process: the profile name in `argv` (`dsh --profile <name> app`, which
+is exactly how the shell and the stock CLI spawn it) and `DSH_HOME`. `RH_DATA_DIR` overrides the whole thing.
+The tool returns the resolved path with the rule that resolved it, so a wrong root is visible rather than
+silent. Nothing creates the directory: in S3 the only writer is the agent.
+
+**The house style has three layers.** The shipped default (`lib/house.js`) carries the run label convention,
+the four-door main-screen budget, the advanced-by-default field names and the glossary; a profile's
+`_house.json` adds and overrides entries per key; and the adapter's own `label`, `hint` and `ui` beat both. A
+malformed `_house.json` warns and falls back to the shipped default rather than breaking the install. The
+default's vocabulary is deliberately generic — *Image*, *Prompt*, *Aspect ratio* — never *Garment photo*: a
+fashion-flavoured default would be wrong for the first photographer who installs it, and the default is the
+one artefact every stranger reads. An unrecognised `fieldName` is title-cased and marked
+`fromGlossary: false` rather than guessed at.
+
+**Nothing is invented about authorship.** The API carries no author or account field, so `source.author`
+stays empty until the user types one, `source.url` keeps the link they pasted, and the adapter's `origin`
+(`mine` or `community`) is a question the skill asks — the validator refuses an adapter that does not say,
+rather than defaulting to "mine".
+
+**Only AI Apps, in v1.** `rh_workflow_graph` reads the AI App path (`apiCallDemo`), which the S0 probe
+measured on three real apps. The ComfyUI-workflow path (`getJsonApiFormat`) is documented but unmeasured here,
+and epic 61 §2 does not need it while the first source holds (D16 is moot), so nothing asks for a
+`workflowId`: a ComfyUI workflow link or id is refused as an unrecognised app reference rather than
+half-read.
+
 ## Install
 
 ```
@@ -141,6 +195,8 @@ captured at activation, so the card does not appear on a page reload alone
 node verify/mount.mjs            # registration contract (+ live page, which skips)
 node verify/wallet.mjs           # the wallet routes, driven against fakes (+ live route)
 node verify/save-confirmation.mjs # a save that worked, and one that was refused
+node verify/adapter.mjs          # the install: doors read, adapters written and refused
+node verify/skill.mjs            # the skill's order, and that the plugin has no write path
 node verify/mount.mjs --static   # registration only
 ```
 
@@ -160,6 +216,27 @@ until it is answered, declined without a `DELETE` leaving the wallet linked, and
 once it is. `node verify/save-confirmation.mjs --show` prints the dialog's lines in order, which is how the
 copy is read without restarting the app. A skip is printed as `SKIP`; a layer that ran and disagreed fails the
 run.
+
+`verify/adapter.mjs` (**86/86**) drives both tools through the definitions the plugin actually registers, with
+a stubbed RunningHub that answers **per app id** — a URL-blind stub would let an adapter naming one app pass
+against another app's doors, which is the confusion the pair check exists to catch. Its fixtures are trimmed
+copies of the committed S0 receipts, so the shapes are the shapes the live API returned, including the two
+doors on node `942` and the `IMAGE` door whose `fieldData` leads with an array. It holds: the app's options,
+bounds, step, default, multiline and tooltip are copied and not invented; an unrecognised field name is
+title-cased and marked unpolished; an app that sets `accessEncrypted` is refused; a bad link and a missing key
+fail **before any request is issued**; the API's own refusal is reported in its own words and not blamed on
+the network; a good adapter passes and a wrong node id, an unknown field name, a swapped pair, a drifted
+value, a missing derived value, an unrenderable type, a missing origin and an unstamped `dryRun` each fail
+distinctly; an adapter with no `ui` block still passes; and no call creates the data directory. It scores
+**80/86 when the validator compares `nodeId` alone instead of the pair**, **83/86 when the glossary loses the
+seed label**, **84/86 when the derived values stop being compared** and **83/86 when the data root ignores
+`--profile`** — the checks fail on the defects they were written for.
+
+`verify/skill.mjs` (**36/36**) mounts the plugin against a recording skills registry and reads the text the
+host would serve: it is the shipped file byte for byte, the ask comes before the fetch, the confirmation comes
+before the write, the agent is told to use its own file tool, and the host half contains no `writeFile`,
+`mkdir` or LLM import at all. It scores **35/36 with the confirmation step renamed away** and **35/36 with the
+rule against invented authors removed**.
 
 ## Not in this package, by rule
 

@@ -1,7 +1,7 @@
 {
   "name": "@muen/dsh-runninghub",
   "version": "0.1.0-dev",
-  "description": "The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a workflow and run it in the right panel. Epic 61 — the wallet is live (S1–S2 accepted); the workflow install flow and the run view are S3–S5.",
+  "description": "The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a workflow by pasting its app link, and run it in the right panel. Epic 61 — S1–S2 accepted; S3 is the install flow (rh_workflow_graph, rh_adapter_validate, the add-rh-workflow skill); the guide card and the run view are S4–S5.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -18,7 +18,9 @@
   "scripts": {
     "verify:mount": "node verify/mount.mjs",
     "verify:wallet": "node verify/wallet.mjs",
-    "verify:saved": "node verify/save-confirmation.mjs"
+    "verify:saved": "node verify/save-confirmation.mjs",
+    "verify:adapter": "node verify/adapter.mjs",
+    "verify:skill": "node verify/skill.mjs"
   },
   "dsh": {
     "bundle": {
@@ -40,6 +42,7 @@
   },
   "files": [
     "lib",
+    "skills",
     "cordis.patch.yml"
   ]
 }
