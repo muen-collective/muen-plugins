@@ -3166,7 +3166,7 @@ window.__ModuleLoader__.load({
       const row = (key, value) =>
         h(
           'div',
-          { key, style: S.gateRow },
+          { key, style: S.gateRow, 'data-generate-gate-row': key },
           h('span', { style: S.gateKey }, key),
           h('span', { style: S.gateValue }, value),
         )
@@ -3246,7 +3246,11 @@ window.__ModuleLoader__.load({
                     row(t('run.gate.model'), adapter.title),
                     row(t('run.gate.to'), run.preview.endpoint),
                     ...optionRows(run),
-                    Object.entries(run.preview.body).map(([key, value]) => row(run.labelOf(key), String(value))),
+                    // The host's own rows when it sent them: it knows the labels, and a
+                    // provider whose body is a node list cannot be read by key in here.
+                    ...(Array.isArray(run.preview.rows)
+                      ? run.preview.rows.map((entry, index) => row(entry.label + '\u0000' + index, entry.value))
+                      : Object.entries(run.preview.body).map(([key, value]) => row(run.labelOf(key), String(value)))),
                     run.preview.missing.length > 0
                       ? h(
                           'div',

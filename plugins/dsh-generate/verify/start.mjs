@@ -682,6 +682,10 @@ function stubHost({
           refused: [],
           // The host echoes the option it validated, so the gate draws what would be sent.
           options: posted.options || null,
+          // And it sends the gate's rows, labelled by the same words the form drew.
+          rows: Object.entries(values)
+            .filter(([, value]) => value !== undefined && value !== null && String(value) !== '')
+            .map(([key, value]) => ({ label: key, value: String(value) })),
         })
       }
       // Starting a run. The stub records the whole call, so a check can prove the confirm
@@ -2126,6 +2130,17 @@ check(
       textIn(gate).slice(0, 200),
     )
     check(
+      "the gate shows the request under the form's own labels, never as a raw body",
+      (() => {
+        const rows = nodesOf(gate).filter((node) => node.props && node.props['data-generate-gate-row'])
+        const text = textIn(gate)
+        // Every row is a labelled line; the body itself is only ever inside the disclosure's
+        // JSON, and a nested value must never reach the rows as `[object Object]`.
+        return rows.length >= 2 && !text.includes('[object Object]') && !text.includes('undefined')
+      })(),
+      JSON.stringify(nodesOf(gate).filter((node) => node.props && node.props['data-generate-gate-row']).map((node) => textIn(node))),
+    )
+    check(
       'a required door that is still empty is named, and the confirm is blocked',
       !!byAttr(gate, 'data-generate-gate-missing', 'prompt') &&
         (byAttr(gate, 'data-generate-gate-confirm', 'yes') || { props: {} }).props.disabled === true,
@@ -2200,6 +2215,80 @@ check(
         return !!result && !!image && image.props.src === 'https://gen.krea.ai/out.png' && !!byAttr(done, 'data-generate-result-url', 'https://gen.krea.ai/out.png')
       })(),
       JSON.stringify(nodesOf(done).filter((node) => node.props && node.props['data-generate-result']).map((node) => node.props['data-generate-result'])),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// ── RunningHub runs: the workflow surface lights up ──────────────────────────
+//
+// The slice that used to say "running comes next". A workflow file served with `runnable`
+// (which the host sets from the PROVIDER registry, not from the file) draws the run control;
+// with RunningHub's own run modes declared it draws the split button; and its image doors
+// draw the pick control its upload capability now earns.
+{
+  const RH_RUNNER_FILE = {
+    ...KREA_FILE,
+    name: 'outfit-swap',
+    title: 'Swap the outfit',
+    blurb: 'Put the garment from one photo on the person in another.',
+    runLabel: 'Swap the outfit',
+    order: ['value', 'person', 'garment'],
+    doors: {
+      value: { nodeId: '63', fieldName: 'value', type: 'text', label: 'Prompt', primary: true, multiline: true },
+      person: { nodeId: '10', fieldName: 'image', type: 'image', label: 'Person photo' },
+      garment: { nodeId: '11', fieldName: 'image', type: 'image', label: 'Garment photo' },
+    },
+    runnable: true,
+  }
+  const RUN_OPTION = {
+    key: 'instanceType',
+    label: 'Instance',
+    fallback: 'default',
+    modes: [
+      { id: 'default', label: 'Default', description: '24GB VRAM' },
+      { id: 'plus', label: 'Plus', description: '48GB VRAM' },
+      { id: 'ultra', label: 'Ultra', description: '84GB VRAM' },
+    ],
+  }
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: RH_RUNNER_FILE.name, provider: PROVIDER }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [RH_RUNNER_FILE], file: RH_RUNNER_FILE, runOption: RUN_OPTION })
+  // The provider row is what says this provider can upload; the pane passes that to the
+  // surface, so the stub row has to carry it the way the host sends it.
+  const inner = stub.fetch
+  const stubWithUpload = {
+    ...stub,
+    fetch: async (url, init) => {
+      if (url === PROVIDERS_API) {
+        const answer = await inner(url, init)
+        const body = await answer.json()
+        return { ok: true, status: 200, json: async () => ({ providers: body.providers.map((row) => (row.id === PROVIDER ? { ...row, upload: true, runOption: RUN_OPTION } : row)) }) }
+      }
+      return inner(url, init)
+    },
+  }
+  const real = globalThis.fetch
+  globalThis.fetch = stubWithUpload.fetch
+  try {
+    const tree = await settle(paneSlot.component, props, 'pane-rh-run')
+    check(
+      'a RunningHub workflow now draws the run control, because its provider can run',
+      !!byAttr(tree, 'data-generate-run', 'outfit-swap') && !byAttr(tree, 'data-generate-run-pending', 'yes'),
+      JSON.stringify({ run: !!byAttr(tree, 'data-generate-run', 'outfit-swap'), pending: !!byAttr(tree, 'data-generate-run-pending', 'yes') }),
+    )
+    check(
+      'it draws the split control too: RunningHub declares its own machines',
+      !!byAttr(tree, 'data-generate-split', 'yes') && !!byAttr(tree, 'data-generate-mode-toggle', 'yes'),
+      JSON.stringify(byAttr(tree, 'data-generate-mode') ? byAttr(tree, 'data-generate-mode').props : 'no segment'),
+    )
+    check(
+      "its image doors draw the pick control the provider's upload earns",
+      !!byAttr(tree, 'data-generate-upload', 'person') && !!byAttr(tree, 'data-generate-upload', 'garment'),
+      JSON.stringify({ person: !!byAttr(tree, 'data-generate-upload', 'person'), garment: !!byAttr(tree, 'data-generate-upload', 'garment') }),
     )
   } finally {
     globalThis.fetch = real

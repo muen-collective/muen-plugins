@@ -72,8 +72,11 @@
  */
 import { listAdapters, readAdapter } from './adapter.js'
 import { modelEntry, modelSurface, readKreaModels } from './krea-models.js'
-import { buildRunPayload, getRun, postRun, readRunRecord, writeRunRecord } from './krea-run.js'
+import { buildRunPayload, getRun, postRun } from './krea-run.js'
+import { buildRhPayload, readRhRun, postRhRun, RH_RUN_PATH, RH_UPLOAD_PATH } from './runninghub-run.js'
+import { readRunRecord, writeRunRecord } from './run-record.js'
 import { dataPaths } from './paths.js'
+import { join } from 'node:path'
 
 /** One key check: long enough for a cold API, short enough to fail at the field. */
 const TIMEOUT_MS = 15000
@@ -135,8 +138,11 @@ export function normalizeKey(raw) {
  *
  * @returns {{ payload: unknown } | { error: string, detail?: string }}
  */
-async function postFile({ url, headers, field, name, type, bytes, timeoutMs = TIMEOUT_MS, fetchImpl = fetch }) {
+async function postFile({ url, headers, fields, field, name, type, bytes, timeoutMs = TIMEOUT_MS, fetchImpl = fetch }) {
   const form = new FormData()
+  // A provider's own form fields, before the file: RunningHub's upload wants its key and
+  // the file's kind as form parts (`apiKey`, `fileType`), where Krea's wants neither.
+  for (const [key, value] of Object.entries(fields || {})) form.append(key, value)
   form.append(field, new Blob([bytes], { type }), name)
   let response
   try {
@@ -183,6 +189,7 @@ export async function uploadFile(provider, { key, name, type, bytes, timeoutMs, 
   const posted = await postFile({
     url: provider.base + upload.path,
     headers: upload.headers ? upload.headers(key) : { Authorization: `Bearer ${key}` },
+    fields: typeof upload.fields === 'function' ? upload.fields(key) : upload.fields,
     field: upload.field,
     name,
     type,
@@ -264,6 +271,23 @@ async function modelFor(root, name) {
   const model = models.find((entry) => entry.name === name)
   if (model === undefined) return { error: 'not-found', detail: 'no Krea model is named "' + String(name) + '"' }
   return { model }
+}
+
+/**
+ * One row per door a request carries: the form's own label, and the value that leaves.
+ *
+ * A door the body does not mention is one the person left alone, and a value that is not a
+ * scalar (a list door's rows) is shown as JSON rather than as `[object Object]`.
+ */
+function rowsOf(doors, body) {
+  const rows = []
+  for (const [key, value] of Object.entries(body || {})) {
+    if (value === undefined || value === null) continue
+    const door = doors && doors[key]
+    const label = door && typeof door.label === 'string' && door.label !== '' ? door.label : key
+    rows.push({ label, value: typeof value === 'object' ? JSON.stringify(value) : String(value) })
+  }
+  return rows
 }
 
 /**
@@ -412,6 +436,117 @@ export const runninghub = {
     return { account: accountOf(payload.data) }
   },
 
+  /**
+   * RUNNINGHUB CAN RUN (2026-09-23). Before this it answered `501` on both run routes and
+   * its surface said "running comes next": a workflow's run is a node list built from the
+   * adapter's own pairs, an upload per image door, and a task read back in two calls —
+   * which is what `lib/runninghub-run.js` is.
+   */
+  runnable: true,
+
+  /**
+   * THE UPLOAD. RunningHub is not a file host, and its own guide says so: a picked file
+   * goes up through `POST /task/openapi/upload` (multipart, `apiKey` + `file` + `fileType`)
+   * and what comes back is a `fileName` — *"the unique path for file loading … must be
+   * accurately passed to the corresponding node"* — which is the value an image door then
+   * carries. There is no URL to open and none is claimed: the surface shows the fileName.
+   *
+   * The limit is RunningHub's own 30MB, refused here rather than at the wire. Above it their
+   * guide recommends cloud storage and a public direct link into the loading node, which is
+   * why a pasted https URL is still a legal value for an image door.
+   */
+  upload: {
+    path: RH_UPLOAD_PATH,
+    field: 'file',
+    fields: (key) => ({ apiKey: key, fileType: 'input' }),
+    limitBytes: 30 * 1024 * 1024,
+    url: (payload) => {
+      const data = payload && typeof payload === 'object' ? payload.data : null
+      return data && typeof data.fileName === 'string' ? data.fileName : null
+    },
+  },
+
+  /**
+   * The gate's preview: the exact node list a run would post, built by the same function the
+   * run itself uses. No key, no network, nothing spent.
+   */
+  async previewRun({ root, name, values, options }) {
+    const read = await readAdapter(join(root, 'adapters'), name, { withSource: true })
+    if (read.error) return read
+    const built = buildRhPayload(read.adapter, values, options)
+    return {
+      name: read.adapter.name,
+      title: read.adapter.title,
+      model: read.adapter.name,
+      endpoint: RH_RUN_PATH,
+      docs: null,
+      // One row per door the request carries, under the label the form drew — never the
+      // node list itself, which is JSON for the disclosure and meaningless as a sentence.
+      rows: rowsOf(read.adapter.doors, Object.fromEntries(built.nodeInfoList.map((entry) => [entry.fieldName, entry.fieldValue]))),
+      ...built,
+    }
+  },
+
+  /**
+   * Start the task, and write the record the gate's answer belongs in.
+   */
+  async startRun({ root, name, values, options, key, timeoutMs, fetchImpl }) {
+    const read = await readAdapter(join(root, 'adapters'), name, { withSource: true })
+    if (read.error) return read
+    const adapter = read.adapter
+    const built = buildRhPayload(adapter, values, options)
+    if (built.missing.length > 0) return { error: 'payload-incomplete', detail: 'still empty: ' + built.missing.join(', ') }
+    if (built.refused.length > 0) {
+      return { error: 'payload-refused', detail: built.refused.map((row) => row.key + ': ' + row.reason).join(', ') }
+    }
+    const posted = await postRhRun({ base: this.base, body: built.body, key, timeoutMs, fetchImpl })
+    if (posted.error) return posted
+
+    const at = new Date().toISOString()
+    const record = {
+      schema: 'muen-rh-run/v1',
+      jobId: posted.jobId,
+      at,
+      adapter: adapter.name,
+      title: adapter.title,
+      appId: adapter.source ? adapter.source.appId : null,
+      endpoint: RH_RUN_PATH,
+      body: built.body,
+      // The run's own options, as the host validated them: which machine this ran on.
+      options: options || null,
+      // THE GATE'S OWN ANSWER, in the record, because rule 4 asks what was shipped and
+      // why: the node list above is what a person saw before this line existed.
+      gate: { confirmed: true, by: 'human', at },
+      status: posted.status,
+    }
+    await writeRunRecord(root, record)
+    return { jobId: posted.jobId, status: posted.status }
+  },
+
+  /**
+   * Read one task, and write its outcome into the same record on a terminal state.
+   */
+  async readRun({ root, jobId, key, timeoutMs, fetchImpl }) {
+    const read = await readRhRun({ base: this.base, jobId, key, timeoutMs, fetchImpl })
+    if (read.error) return read
+    if (read.state === 'done' || read.state === 'failed') {
+      const record = await readRunRecord(root, jobId)
+      if (record !== null) {
+        await writeRunRecord(root, {
+          ...record,
+          outcome: {
+            state: read.state,
+            status: read.status,
+            urls: read.urls,
+            error: read.error ? { code: read.error.code, message: read.error.message, node: read.error.node } : null,
+            at: new Date().toISOString(),
+          },
+        })
+      }
+    }
+    return read
+  },
+
   ...adapterBacked('runninghub'),
 }
 
@@ -535,6 +670,11 @@ export const krea = {
       model: found.model.model,
       endpoint: found.model.endpoint,
       docs: str(found.model.docs) || null,
+      // THE GATE'S ROWS, labelled by the same words the form drew. The body's own keys are
+      // the API's field names, which happen to match Krea's door keys and do NOT match
+      // RunningHub's node list — so the rows are built here, where the labels live, rather
+      // than guessed in the browser from whatever the body happens to be shaped like.
+      rows: rowsOf(found.model.doors, built.body),
       ...built,
     }
   },

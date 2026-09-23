@@ -440,10 +440,29 @@ job id; the pane polls the host every two seconds, which asks Krea and writes th
 `queued`/`running`, the elapsed seconds and the job id; a failure shows **Krea's own message verbatim** beside the
 job id and a way back to the form; a finished run draws the returned image with a link to it.
 
-**Krea is the provider that can run.** A model carries its own endpoint and its doors carry the API's own field
-names, which is everything a generation needs. RunningHub's run is a different job — a workflow's node ids, and an
-upload for every image door — so its surface still says running comes next, and the routes answer `501` for it
-rather than pretending.
+**RunningHub runs too, since 2026-09-23.** Its run is a different job from Krea's and it is built in
+`lib/runninghub-run.js`: the payload is a **node list** built from the adapter's own `(nodeId, fieldName)` pairs
+(`{ nodeId, fieldName, fieldValue }`, one entry per door that carries a value, in `ui.order`), posted to
+`POST /task/openapi/ai-app/run` with the app id and — when a person chose one — the `instanceType`. The task is
+read back in two calls: `POST /task/openapi/status` answers `QUEUED`/`RUNNING`/`FAILED`/`SUCCESS`, and on a
+terminal state `POST /task/openapi/outputs` answers the `fileUrl`s, or `code: 805` with
+`data.failedReason.exception_message` — the failing node's own words, which is what the strip shows.
+
+**Its image doors upload, because a node list cannot carry a URL.** `POST /task/openapi/upload` (multipart:
+`apiKey`, `file`, `fileType=input`) answers a `fileName` — RunningHub's own guide: *"the unique path for file
+loading … must be accurately passed to the corresponding node"* — and that `fileName` is the value the door then
+carries. The limit is RunningHub's 30MB, refused before the request; above it their guide points at cloud storage
+and a public direct link, which is why a pasted https URL is still a legal value. A browser file path is refused
+by the payload builder: no node can load a file on the person's disk.
+
+**Whether a surface can run is the PROVIDER's fact, not the file's.** `readAdapter` no longer writes
+`runnable`; the workflow route adds it from the registry, so one adapter file means the same thing under a
+provider that can spend and one that cannot. Comfy Cloud and Magnific still answer `501` on both run routes and
+their surfaces still say running comes next.
+
+**A run's record is provider-neutral.** `lib/run-record.js` owns where a record lives
+(`<profile>/generate/<provider>/runs/<jobId>.json`), how it is written and how it is read; each runner writes its
+own `schema` (`muen-krea-run/v1`, `muen-rh-run/v1`). No key is ever in one.
 
 **The run is one state drawn in two cards** (founder, 2026-09-23: *"Design for responsive, past mobile
 breakpoint we should 2 column parameters + output preview"*, then *"let's make layout 2 cards, parameters card
@@ -593,7 +612,7 @@ node verify/wallet.mjs           # the wallet routes, driven against fakes (+ li
 node verify/save-confirmation.mjs # a save that worked, and one that was refused
 node verify/adapter.mjs          # the install: doors read, adapters written and refused
 node verify/models.mjs           # the Krea models: the catalogue, the profile layer, both routes
-node verify/run.mjs              # S5 + the upload: the payload builder (lists included), the gate the route
+node verify/run.mjs              # S5 for both runners: the payload builders, the gate the route
                                  # enforces, the poll, the record, and the asset route an image door calls
 node verify/skill.mjs            # both skills' order, and that the plugin has no write path
 node verify/start.mjs            # the hub: the cards, the surface, one settings page, and what may be listed
@@ -624,7 +643,15 @@ trigger translated away**. Those four mutations were not re-run against the acco
 linked pane" one targets a note that no longer exists there — so treat them as the record of the earlier
 suite, not as a score for this one.
 
-`verify/start.mjs` (**231/231**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/run.mjs` (**74/74**) drives both runners against a temp profile and stubbed APIs: Krea's payload
+builder (lists included), the gate the route enforces, the poll and the record; and RunningHub's node list in
+`ui.order`, the fields it refuses (a browser file path), the run posted with its key, app id and machine, the
+status call that answers in flight without asking for outputs, the outputs call that answers the files, the
+failure that carries the failing node's own message, and the upload that turns a picked file into the `fileName`
+an image door carries. It also drives the routes: `runOptions` refuses an undeclared option and an out-of-list
+value, the workflow route serves `runnable` from the registry, and an adapter's `source` never reaches the page.
+
+`verify/start.mjs` (**235/235**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
 the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
 **one accordion section per provider in registry order, all four whether linked or not**, each header holding

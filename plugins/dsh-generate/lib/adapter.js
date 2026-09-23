@@ -405,7 +405,7 @@ function refusal(read) {
  * @param {string} name - the adapter's name, as the list reported it
  * @returns {Promise<{ adapter: object } | { error: string, detail?: string }>}
  */
-export async function readAdapter(dir, name, { readText = readFile } = {}) {
+export async function readAdapter(dir, name, { readText = readFile, withSource = false } = {}) {
   const wanted = str(name)
   if (wanted === null || !/^[a-z0-9][a-z0-9._-]*$/.test(wanted)) {
     return { error: 'bad-name', detail: 'a workflow is named by its file: lower case letters, digits, dot, dash or underscore' }
@@ -444,11 +444,15 @@ export async function readAdapter(dir, name, { readText = readFile } = {}) {
       order,
       defaults,
       doors: read.doors,
-      // WHETHER THIS SURFACE CAN RUN (S5). A RunningHub adapter cannot yet: its payload is
-      // a workflow's node ids and every image door needs an upload first, and both are the
-      // next slice. The surface says so at its foot rather than offering a control that
-      // would post a request this plugin cannot build.
-      runnable: false,
+      // `source` — the app id, the revision, the app's own name — is for the HOST's own
+      // callers, and only when one asks: the payload a run posts is addressed by `appId`,
+      // and the gate has to name what it will run. The page never asks, so it never
+      // receives one (`readAdapter` is what the surface route answers with).
+      ...(withSource ? { source: read.source, provenance: read.provenance } : {}),
+      // `runnable` IS NOT SET HERE. Whether a surface can spend is the PROVIDER's fact, not
+      // the file's: an adapter describes an app, and RunningHub's run landed on 2026-09-23
+      // while Krea's arrived before it. The workflow route adds the flag from the provider
+      // registry, so one adapter file means the same thing under either provider.
     },
   }
 }

@@ -820,7 +820,12 @@ export function apply(ctx, config = {}) {
       send(res, status, { error: read.error, detail: read.detail || null })
       return
     }
-    send(res, 200, read.adapter)
+    // `runnable` is the PROVIDER's fact, added here rather than in the adapter file: an
+    // adapter describes an app, and whether this plugin can spend on it is a property of
+    // the provider behind it (Krea could always run; RunningHub could not until 2026-09-23).
+    // The surface draws the run control from this flag, so a provider that cannot run keeps
+    // saying "running comes next" instead of offering a button that would 501.
+    send(res, 200, { ...read.adapter, runnable: provider.runnable === true })
   }
 
   /**

@@ -23,7 +23,7 @@
  *
  *   node verify/run.mjs
  */
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { Readable } from 'node:stream'
 import { dirname, join } from 'node:path'
@@ -37,7 +37,9 @@ const SECRET = 'krea_test_key_123456'
 const PROVIDERS_PATH = '/plugins/generate/providers'
 
 const { buildRunPayload, getRun, postRun } = await import(pathToFileURL(join(ROOT, 'lib/krea-run.js')).href)
-const { krea, runOptions } = await import(pathToFileURL(join(ROOT, 'lib/providers.js')).href)
+const providers = await import(pathToFileURL(join(ROOT, 'lib/providers.js')).href)
+const { krea, runninghub, runOptions } = providers
+const { buildRhPayload } = await import(pathToFileURL(join(ROOT, 'lib/runninghub-run.js')).href)
 const { dataPaths, resolveDataRoot } = await import(pathToFileURL(join(ROOT, 'lib/paths.js')).href)
 const { SHIPPED_KREA_MODELS } = await import(pathToFileURL(join(ROOT, 'lib/krea-models.js')).href)
 
@@ -563,6 +565,186 @@ check(
   JSON.stringify(json(pollWithoutJob)),
 )
 
+// ── RunningHub's run, end to end ─────────────────────────────────────────────
+//
+// The slice this file used to say was owed: a node list built from the adapter's own
+// `(nodeId, fieldName)` pairs, the task started with `instanceType` when one was chosen, and
+// the two calls that read it back — status, then outputs for the files and the failure's own
+// words. RunningHub's own OpenAPI, read 2026-09-23.
+{
+  const rhRoot = dataPaths(dataRoot, 'runninghub').root
+  const adaptersDir = dataPaths(dataRoot, 'runninghub').adapters
+  mkdirSync(adaptersDir, { recursive: true })
+  const rhAdapter = {
+    schema: 'muen-rh-adapter/v1',
+    name: 'outfit-swap',
+    title: 'Swap the outfit',
+    blurb: 'Put the garment from one photo on the person in another.',
+    origin: 'mine',
+    source: { appId: '2072445848017002498', webappName: 'qwen image edit', url: 'https://www.runninghub.ai/app/2072445848017002498', revision: 'v1', checkedAt: '2026-09-23' },
+    provenance: { dryRun: 'ok' },
+    ui: { runLabel: 'Swap the outfit', order: ['person', 'garment', 'notes'] },
+    doors: {
+      person: { nodeId: '10', fieldName: 'image', type: 'image', label: 'Person photo', primary: true },
+      garment: { nodeId: '11', fieldName: 'image', type: 'image', label: 'Garment photo' },
+      notes: { nodeId: '12', fieldName: 'text', type: 'text', label: 'Notes' },
+    },
+  }
+  writeFileSync(join(adaptersDir, 'outfit-swap.json'), JSON.stringify(rhAdapter, null, 2))
+  const rhValues = { person: 'api/person.png', garment: 'https://cdn.example/garment.png', notes: 'keep the shoes' }
+
+  const rhPreview = await runninghub.previewRun({ root: rhRoot, name: 'outfit-swap', values: rhValues, options: { instanceType: 'plus' } })
+  check(
+    'the RunningHub preview is the node list a run would post, in the order the adapter declares',
+    rhPreview.endpoint === '/task/openapi/ai-app/run' &&
+      rhPreview.body.webappId === '2072445848017002498' &&
+      rhPreview.body.instanceType === 'plus' &&
+      JSON.stringify(rhPreview.nodeInfoList) ===
+        JSON.stringify([
+          { nodeId: '10', fieldName: 'image', fieldValue: 'api/person.png' },
+          { nodeId: '11', fieldName: 'image', fieldValue: 'https://cdn.example/garment.png' },
+          { nodeId: '12', fieldName: 'text', fieldValue: 'keep the shoes' },
+        ]),
+    JSON.stringify(rhPreview.body),
+  )
+  check(
+    "a run left on the provider's own default does not name it: the API's default is the same word",
+    (() => {
+      const plain = buildRhPayload(rhAdapter, rhValues)
+      return plain.body.instanceType === undefined && plain.body.nodeInfoList.length === 3
+    })(),
+    'instanceType is sent only when a person chose a machine',
+  )
+  check(
+    'a browser file path is refused before the run: no node can load a file on the person\'s disk',
+    (() => {
+      const read = buildRhPayload(rhAdapter, { ...rhValues, person: 'C:\\Users\\me\\look.png' })
+      return read.refused.length === 1 && read.refused[0].key === 'person' && read.refused[0].reason === 'not-uploaded'
+    })(),
+    JSON.stringify(buildRhPayload(rhAdapter, { ...rhValues, person: 'blob:http://127.0.0.1/x' }).refused),
+  )
+  // WHETHER A SURFACE CAN RUN IS THE PROVIDER'S FACT, and the workflow route is where the
+  // page learns it: one adapter file means the same thing under a provider that can spend
+  // and one that cannot, which is why the flag is added at the route rather than written
+  // into the file.
+  const rhServed = await call(handler, 'GET', undefined, PROVIDERS_PATH + '/runninghub/workflow?name=outfit-swap')
+  check(
+    "the workflow route tells the page this provider can run, from the registry's own flag",
+    rhServed.statusCode === 200 && json(rhServed).runnable === true && json(rhServed).source === undefined,
+    JSON.stringify({ status: rhServed.statusCode, runnable: json(rhServed).runnable, source: json(rhServed).source }),
+  )
+  check(
+    'the registry says which providers can run, and the two that cannot say nothing',
+    (() => {
+      const { PROVIDERS } = providers
+      return (
+        PROVIDERS.find((provider) => provider.id === 'runninghub').runnable === true &&
+        PROVIDERS.find((provider) => provider.id === 'krea').runnable === true &&
+        PROVIDERS.find((provider) => provider.id === 'comfycloud').runnable !== true &&
+        PROVIDERS.find((provider) => provider.id === 'magnific').runnable !== true
+      )
+    })(),
+    JSON.stringify(providers.PROVIDERS.map((provider) => [provider.id, provider.runnable === true])),
+  )
+  check(
+    'the preview of a name that is not an installed workflow is not-found',
+    (await runninghub.previewRun({ root: rhRoot, name: 'nope', values: rhValues })).error === 'not-found',
+    '',
+  )
+
+  // The run itself, with the API's own answers: start, status, outputs.
+  const rhCalls = []
+  const rhFetch = async (url, init = {}) => {
+    rhCalls.push({ url: String(url), body: JSON.parse((init && init.body) || '{}') })
+    const path = String(url).replace(/^https:\/\/www\.runninghub\.ai/, '')
+    const answer = (body) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) })
+    if (path === '/task/openapi/ai-app/run') return answer({ code: 0, msg: 'success', data: { taskId: '1907035719658053634', taskStatus: 'RUNNING' } })
+    if (path === '/task/openapi/status') return answer({ code: 0, msg: '', data: rhStatus })
+    if (path === '/task/openapi/outputs') return answer(rhOutputs)
+    return answer({ code: 404, msg: 'no such route' })
+  }
+  let rhStatus = 'RUNNING'
+  let rhOutputs = { code: 804, msg: 'APIKEY_TASK_IS_RUNNING', data: { netWssUrl: 'wss://…' } }
+
+  const started = await runninghub.startRun({ root: rhRoot, name: 'outfit-swap', values: rhValues, options: { instanceType: 'ultra' }, key: SECRET, fetchImpl: rhFetch })
+  check(
+    'the run posts to the AI App endpoint with the key, the app and the node list, and answers a task id',
+    started.jobId === '1907035719658053634' &&
+      (() => {
+        const first = rhCalls[0]
+        return (
+          first.url === 'https://www.runninghub.ai/task/openapi/ai-app/run' &&
+          first.body.apiKey === SECRET &&
+          first.body.webappId === '2072445848017002498' &&
+          first.body.instanceType === 'ultra' &&
+          first.body.nodeInfoList.length === 3
+        )
+      })(),
+    JSON.stringify(rhCalls[0]),
+  )
+  check(
+    "the run's record holds the node list and the machine, and never the key",
+    (() => {
+      const record = JSON.parse(readFileSync(join(rhRoot, 'runs', '1907035719658053634.json'), 'utf8'))
+      return (
+        record.schema === 'muen-rh-run/v1' &&
+        record.appId === '2072445848017002498' &&
+        record.options.instanceType === 'ultra' &&
+        record.gate.confirmed === true &&
+        !JSON.stringify(record).includes(SECRET)
+      )
+    })(),
+    join(rhRoot, 'runs', '1907035719658053634.json'),
+  )
+
+  const running = await runninghub.readRun({ root: rhRoot, jobId: started.jobId, key: SECRET, fetchImpl: rhFetch })
+  check(
+    'a task in flight answers the state the strip draws, without asking for outputs',
+    running.state === 'running' && running.status === 'RUNNING' && rhCalls.filter((call) => call.url.endsWith('/outputs')).length === 0,
+    JSON.stringify(running),
+  )
+
+  rhStatus = 'SUCCESS'
+  rhOutputs = {
+    code: 0,
+    msg: 'success',
+    data: [{ fileUrl: 'https://rh-images.example/output/swap_00001.png', fileType: 'png', taskCostTime: '83', nodeId: '12', consumeCoins: '17' }],
+  }
+  const done = await runninghub.readRun({ root: rhRoot, jobId: started.jobId, key: SECRET, fetchImpl: rhFetch })
+  check(
+    'a finished task answers its files, and the record gains the outcome',
+    done.state === 'done' &&
+      done.urls[0] === 'https://rh-images.example/output/swap_00001.png' &&
+      (() => {
+        const record = JSON.parse(readFileSync(join(rhRoot, 'runs', '1907035719658053634.json'), 'utf8'))
+        return record.outcome && record.outcome.state === 'done' && record.outcome.urls.length === 1
+      })(),
+    JSON.stringify(done),
+  )
+
+  rhStatus = 'FAILED'
+  rhOutputs = {
+    code: 805,
+    msg: 'APIKEY_TASK_STATUS_ERROR',
+    data: { failedReason: { node_name: 'KSampler', exception_message: 'KSampler.sample() got an unexpected keyword argument' } },
+  }
+  const failed = await runninghub.readRun({ root: rhRoot, jobId: started.jobId, key: SECRET, fetchImpl: rhFetch })
+  check(
+    "a failed task carries the workflow's own words, not a sentence this plugin invented",
+    failed.state === 'failed' && failed.error.message === 'KSampler.sample() got an unexpected keyword argument' && failed.error.node === 'KSampler',
+    JSON.stringify(failed.error),
+  )
+  check(
+    'a task the provider does not know is job-not-found, not a network failure',
+    (async () => {
+      const unknown = async (url) => ({ ok: true, status: 200, text: async () => JSON.stringify({ code: 805, msg: 'APIKEY_TASK_STATUS_ERROR', data: null }) })
+      const read = await runninghub.readRun({ root: rhRoot, jobId: 'nope', key: SECRET, fetchImpl: unknown })
+      return read.error === 'job-not-found'
+    })(),
+    '',
+  )
+}
+
 // ── a run's own options, read through what the provider declares ─────────────
 //
 // RunningHub's `instanceType` (default 24GB / plus 48GB / ultra 84GB, from its own OpenAPI)
@@ -570,12 +752,20 @@ check(
 // level. The provider declares it, the route validates a request against that declaration,
 // and the preview echoes what it would send so the gate can show it.
 {
+  // RunningHub can run now, so its payload route answers instead of 501, and a mode outside
+  // the declared list is refused by name before anything is built.
   const RH_PAYLOAD = PROVIDERS_PATH + '/runninghub/payload'
-  const rhPayload = await call(handler, 'POST', { name: 'x', values: {}, options: { instanceType: 'plus' } }, RH_PAYLOAD)
+  const rhBadMode = await call(handler, 'POST', { name: 'outfit-swap', values: {}, options: { instanceType: 'quantum' } }, RH_PAYLOAD)
   check(
-    "RunningHub's declared modes cannot be sent yet: its run is not built, so the route still answers 501",
-    rhPayload.statusCode === 501 && json(rhPayload).error === 'unsupported',
-    JSON.stringify({ status: rhPayload.statusCode, body: json(rhPayload) }),
+    'a mode outside the declared list is refused by the route, by name',
+    rhBadMode.statusCode === 400 && json(rhBadMode).error === 'bad-option',
+    JSON.stringify({ status: rhBadMode.statusCode, body: json(rhBadMode) }),
+  )
+  const rhGood = await call(handler, 'POST', { name: 'outfit-swap', values: { notes: 'keep the shoes' }, options: { instanceType: 'plus' } }, RH_PAYLOAD)
+  check(
+    'the RunningHub payload route answers the node list, and echoes the machine it would run on',
+    rhGood.statusCode === 200 && json(rhGood).options.instanceType === 'plus' && json(rhGood).body.instanceType === 'plus',
+    JSON.stringify({ status: rhGood.statusCode, body: json(rhGood).body }),
   )
   // Krea declares no runOption at all, so options sent to it are refused rather than
   // silently dropped: a value nobody declared must not travel into somebody else's API.
@@ -654,7 +844,7 @@ check(
 
 // A provider with no run path answers 501 rather than pretending: RunningHub's run is a
 // workflow's node ids and an upload per image door, which is a different slice.
-const unsupported = await call(handler, 'POST', { name: 'x', values: {}, confirmed: true }, PROVIDERS_PATH + '/runninghub/run')
+const unsupported = await call(handler, 'POST', { name: 'x', values: {}, confirmed: true }, PROVIDERS_PATH + '/comfycloud/run')
 check(
   'a provider that cannot run yet says so, instead of failing at something else',
   unsupported.statusCode === 501 && json(unsupported).error === 'unsupported',
@@ -760,11 +950,39 @@ check(
   noKeyUpload.statusCode === 400 && json(noKeyUpload).error === 'no-key',
   JSON.stringify({ status: noKeyUpload.statusCode, body: json(noKeyUpload) }),
 )
-const noUploadProvider = await call(handler, 'POST', {}, PROVIDERS_PATH + '/runninghub/asset')
+// RunningHub uploads too, since its run landed (2026-09-23), and it does it the way its own
+// guide says: a multipart post carrying the key and the file kind as form parts, answering a
+// `fileName` — the value an image door then holds, not a URL.
+calls.length = 0
+respond = () => ({ status: 200, body: { code: 0, msg: 'success', data: { fileName: 'api/9d77b8530f.png', fileType: 'input' } } })
+const rhUpload = await callBytes(handler, PROVIDERS_PATH + '/runninghub/asset', FILE_BYTES, { 'content-type': 'image/png', 'x-file-name': 'look.png' })
 check(
-  'the provider whose run is still owed has no upload path either, and says so',
-  noUploadProvider.statusCode === 501 && json(noUploadProvider).error === 'unsupported',
-  JSON.stringify({ status: noUploadProvider.statusCode, body: json(noUploadProvider) }),
+  'RunningHub uploads a picked file and answers the fileName an image door carries',
+  rhUpload.statusCode === 200 && json(rhUpload).url === 'api/9d77b8530f.png',
+  JSON.stringify({ status: rhUpload.statusCode, body: json(rhUpload) }),
+)
+check(
+  "the upload goes to RunningHub's own endpoint, with its key and file kind as form parts",
+  (() => {
+    const last = calls[calls.length - 1]
+    if (!last || last.method !== 'POST' || !(last.body instanceof FormData)) return false
+    const form = last.body
+    return (
+      String(last.url).endsWith('/task/openapi/upload') &&
+      form.get('apiKey') === SECRET &&
+      form.get('fileType') === 'input' &&
+      form.get('file') instanceof Blob
+    )
+  })(),
+  JSON.stringify(calls.map((row) => ({ url: row.url, method: row.method }))),
+)
+// RunningHub's own limit is 30MB (its upload guide), refused here rather than at the wire.
+respond = () => ({ status: 200, body: { code: 0, data: { fileName: 'x.png', fileType: 'input' } } })
+const tooBig = await callBytes(handler, PROVIDERS_PATH + '/runninghub/asset', Buffer.alloc(30 * 1024 * 1024 + 1), { 'content-type': 'image/png', 'x-file-name': 'huge.png' })
+check(
+  "a file past RunningHub's own 30MB limit is refused before the upload",
+  tooBig.statusCode === 413 && json(tooBig).error === 'too-large',
+  JSON.stringify({ status: tooBig.statusCode, body: json(tooBig) }),
 )
 
 // The route-written run, not only the provider-written one: this is the check that the

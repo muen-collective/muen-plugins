@@ -21,8 +21,7 @@
  *
  * @module @muen/dsh-generate/lib/krea-run
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { runPath, writeRunRecord, readRunRecord } from './run-record.js'
 
 /** One run: long enough for a cold API, short enough to fail in front of a person. */
 const TIMEOUT_MS = 30000
@@ -262,30 +261,6 @@ export async function getRun({ base, jobId, key, timeoutMs = TIMEOUT_MS, fetchIm
   return { state: state === 'done' && urls.length === 0 ? 'failed' : state, status, urls, error: failure }
 }
 
-/** Where one run's record lives: beside the adapters, one file per job. */
-export function runPath(root, jobId) {
-  return join(root, 'runs', String(jobId) + '.json')
-}
-
-/**
- * Write the record of a run.
- *
- * ON SUBMIT it is the gate's own answer: what was asked for, when, and that a person
- * confirmed it. ON SETTLE the same file gains the outcome, so one file answers "what did
- * we ship and why" (rule 4) without a second log to reconcile. No key is ever in it.
- */
-export async function writeRunRecord(root, record, { writeText = writeFile, makeDir = mkdir } = {}) {
-  await makeDir(join(root, 'runs'), { recursive: true })
-  await writeText(runPath(root, record.jobId), JSON.stringify(record, null, 2) + '\n', 'utf8')
-  return record
-}
-
-/** The record of one run, or `null`. A missing file is a job this install did not start. */
-export async function readRunRecord(root, jobId, { readText = readFile } = {}) {
-  try {
-    const parsed = JSON.parse(await readText(runPath(root, jobId), 'utf8'))
-    return parsed && typeof parsed === 'object' ? parsed : null
-  } catch {
-    return null
-  }
-}
+// The record itself is provider-neutral and lives in its own module; this runner imports it
+// so its callers keep one import for "the Krea run and its record".
+export { runPath, writeRunRecord, readRunRecord }
