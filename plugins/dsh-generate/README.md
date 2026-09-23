@@ -360,7 +360,7 @@ start page card; icon + label + 2nd row (no thumbnails)"*):
 
 | Screen | What it is |
 |---|---|
-| home | the wallet strip, then **one accordion section per provider — every one in the registry, in registry order, minus the ones switched off in Settings → Generate** — each header carrying the provider's status light, its name, `family · count`, and two glyph controls on the right: **add a workflow** and **refresh**, both with a hover tooltip; the open section holds that provider's workflows as cards; under the sections, where the key is managed |
+| home | the wallet strip, then **one accordion section per provider — every one in the registry, in registry order, minus the ones switched off in Settings → Generate** — each header holding **two rows** (the provider's status light and name, then its wallet balance) with the shared count line (`Workflows · 3 installed`, the same word on every provider; founder 2026-09-23) in the right cluster immediately left of two glyph controls, **add a workflow** and **refresh**, both with a hover tooltip; the open section holds that provider's workflows as cards; under the sections, where the key is managed |
 | a workflow card | the harness's own start-page card: **glyph + title + one line**, no thumbnail. The second row is whose app it is (when that is a fact), then the blurb; a workflow with no description falls back to the provider's name. The provider is not on the card — the section header names it, and `data-generate-provider` carries the fact in the DOM |
 | the add glyph | the add path for every section, empty or not, in the header beside refresh. One click reveals **that provider's own install prompt** (`addPrompt`) with Copy beside it — the sentence the agent's skill answers to — and opens the section if it was closed |
 | an open section with nothing in it | one quiet line saying so and naming the glyph that fixes it (`pane.section.empty`). It is replaced by the prompt when the glyph is clicked |
@@ -575,11 +575,13 @@ trigger translated away**. Those four mutations were not re-run against the acco
 linked pane" one targets a note that no longer exists there — so treat them as the record of the earlier
 suite, not as a score for this one.
 
-`verify/start.mjs` (**205/205**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/start.mjs` (**209/209**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
 the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
-**one accordion section per provider in registry order, all four whether linked or not**, each header naming
-its provider and its `family · count`, the section with workflows opening by itself, one section open at a time,
+**one accordion section per provider in registry order, all four whether linked or not**, each header holding
+**two rows** — the name and the balance, with the count line in the right cluster left of the add glyph — every
+section counting its entries with the same word (`Workflows · N installed`, Krea included), the section with
+workflows opening by itself, one section open at a time,
 a card carrying its workflow's title and its one-line second row with **no thumbnail**, the add glyph in the
 header beside refresh revealing that provider's own prompt only when clicked (and wearing a tooltip on hover,
 as refresh does), an empty open section saying so and naming that glyph, a failed list saying so instead of

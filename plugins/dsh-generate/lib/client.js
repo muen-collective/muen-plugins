@@ -204,6 +204,14 @@ window.__ModuleLoader__.load({
       // screen has no separate "how to add" note any more — the glyph IS that sentence.
       'pane.section.none': 'No workflows yet',
       'pane.section.count': 'installed',
+      // The family word the count line opens with. ONE WORD FOR EVERY PROVIDER
+      // (founder, 2026-09-23: *"use same naming on Krea accordion (and all
+      // accordions)"*) — the Krea section used to read "Image · 3 installed" while
+      // RunningHub read "Workflows · …". The family tag still tells the two apart on
+      // the Settings row, which is where the distinction is worth drawing; the pane's
+      // count line is about how much is in the section, and settings already counts a
+      // Krea section's entries as workflows too (`settings.workflows.many`).
+      'pane.section.family': 'Workflows',
       // The open section of a provider with nothing installed. The empty state used to
       // BE the add control; the control moved to the header (founder, 2026-09-23:
       // *"move + workflow button as an icon button next to refresh"*), so the body says
@@ -395,6 +403,7 @@ window.__ModuleLoader__.load({
       'pane.add.hint': '要添加工作流，在对话里对智能体说：「add this RunningHub workflow <app link>」。',
       'pane.section.none': '还没有工作流',
       'pane.section.count': '个已安装',
+      'pane.section.family': '工作流',
       'pane.section.empty': '尚未安装任何工作流。点击上方的 + 添加。',
       'pane.add.button': '添加工作流',
       'pane.list.failed': '无法读取已安装的工作流。',
@@ -1051,7 +1060,11 @@ window.__ModuleLoader__.load({
         fontSize: 12,
         lineHeight: '18px',
         color: 'var(--dsw-alias-label-secondary)',
+        // One line, always: the second of the header's two rows clips rather than
+        // grows, so a provider's explanatory note cannot deepen the header.
+        whiteSpace: 'nowrap',
         overflow: 'hidden',
+        textOverflow: 'ellipsis',
       },
       /** Row 1 of a header: the provider's name and the way out to its own page. */
       sectionTitleRow: {
@@ -1080,8 +1093,21 @@ window.__ModuleLoader__.load({
         fontWeight: 600,
         lineHeight: 1.4,
         color: 'var(--dsw-alias-label-primary)',
+        // The header is TWO ROWS and stays two rows (founder, 2026-09-23: *"the
+        // accordion title should only be 2 rows"*): a long provider name, a long
+        // balance note and a long count line are all clipped rather than wrapped, so
+        // no vendor's wording can deepen the header.
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
       },
+      /**
+       * The count line: the right cluster's own text, sitting immediately left of the
+       * add glyph (founder, 2026-09-23). It takes its width from its words and never
+       * shrinks — the text column beside it is the one that gives way.
+       */
       sectionMeta: {
+        flex: 'none',
         fontSize: 12,
         lineHeight: 1.4,
         color: 'var(--dsw-alias-label-caption)',
@@ -2861,10 +2887,13 @@ window.__ModuleLoader__.load({
       // (founder, 2026-09-23: *"move + workflow button as an icon button next to
       // refresh"*) and the thing it reveals is still the body's.
       const [addShown, setAddShown] = React.useState(false)
-      const kind = provider.kind === 'image' ? t('settings.kind.image') : t('settings.kind.workflow')
       // "Workflows · 2 installed", not "Workflows · 2 workflows installed": the header
-      // already said the family, so the count says only the number.
-      const meta = kind + ' · ' + (units.length === 0 ? t('pane.section.none') : units.length + ' ' + t('pane.section.count'))
+      // already said the family, so the count says only the number. The family word is
+      // the same on every section (founder, 2026-09-23) — see `pane.section.family`.
+      const meta =
+        t('pane.section.family') +
+        ' · ' +
+        (units.length === 0 ? t('pane.section.none') : units.length + ' ' + t('pane.section.count'))
       // The header's light (founder, 2026-09-23): green when the section is ready to
       // run, amber when a key is there and the section still is not ready — nothing
       // installed yet, or a key the provider never confirmed — and red when there is no
@@ -2973,9 +3002,13 @@ window.__ModuleLoader__.load({
                 provider.note ? t('note.' + provider.note) : null,
               ),
             ),
-            // ROW 3: what the section holds.
-            h('span', { style: S.sectionMeta, 'data-generate-section-meta': provider.id }, meta),
           ),
+          // The section's count line, at the right of the header and immediately left
+          // of the add glyph (founder, 2026-09-23: *"Move Workflows 3 installed to left
+          // of + icon"*). It used to be row 3 of the text column, which made the header
+          // three rows deep; the column now holds the name and the balance and nothing
+          // else, so a header is two rows whatever its provider says.
+          h('span', { style: S.sectionMeta, 'data-generate-section-meta': provider.id }, meta),
           // The section's own controls, right-justified before the chevron: add a
           // workflow, then re-read the section. Both are glyphs, so both carry a hover
           // tooltip (the harness's own bubble, not a native `title`) and an `aria-label`

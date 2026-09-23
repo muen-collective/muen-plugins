@@ -1182,11 +1182,15 @@ check(
   byAttr(home.tree, 'data-generate-section-toggle', PROVIDER) ? textIn(byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)) : 'no header',
 )
 check(
-  'an image provider is tagged as one, and says it has nothing installed',
+  'an image provider\'s section draws like every other one: the name, and the shared count line',
   (() => {
     const head = byAttr(home.tree, 'data-generate-section-toggle', 'krea')
     const text = head ? textIn(head) : ''
-    return text.includes('Krea') && text.includes(EN['settings.kind.image']) && text.includes(EN['pane.section.none'])
+    // The family TAG ("Image") is the Settings row's, and stays there. On the pane a
+    // Krea section counts in the same words as RunningHub's (founder, 2026-09-23:
+    // *"use same naming on Krea accordion (and all accordions)"*), so the header says
+    // the shared family word and never the kind tag.
+    return text.includes('Krea') && text.includes(EN['pane.section.family']) && text.includes(EN['pane.section.none']) && !text.includes(EN['settings.kind.image'])
   })(),
   byAttr(home.tree, 'data-generate-section-toggle', 'krea') ? textIn(byAttr(home.tree, 'data-generate-section-toggle', 'krea')) : 'no header',
 )
@@ -1274,17 +1278,78 @@ check(
       }),
     JSON.stringify(balanceRows.map((node) => node.props['data-generate-provider-strip'])),
   )
+  // The header is TWO ROWS, and the count line lives in the right cluster (founder,
+  // 2026-09-23: *"the accordion title should only be 2 rows. Move Workflows 3
+  // installed to left of + icon"*). Both claims are structural, so both are checked
+  // against the tree rather than against the stylesheet: the text column has exactly
+  // two children (the name row and the balance row) and holds no count line, and the
+  // count line sits between that column and the add glyph.
+  const parentOf = (root, node) => nodesOf(root).find((candidate) => candidate.children.includes(node)) || null
   check(
-    'name · balance · count is the order the header owes',
+    'the count line is the header\'s right cluster, immediately left of the add glyph',
+    (() => {
+      if (!header) return false
+      const flat = nodesOf(header)
+      const metaAt = flat.findIndex((node) => node.props && node.props['data-generate-section-meta'] === PROVIDER)
+      const addAt = flat.findIndex((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
+      const textAt = balanceRow ? flat.indexOf(parentOf(header, balanceRow)) : -1
+      return metaAt !== -1 && addAt !== -1 && textAt !== -1 && textAt < metaAt && metaAt < addAt
+    })(),
+    header ? textIn(header) : 'no header',
+  )
+  check(
+    'the header\'s text column is the name row and the balance row, and nothing else',
+    (() => {
+      if (!header || !balanceRow) return false
+      const column = parentOf(header, balanceRow)
+      if (!column || column.children.length !== 2) return false
+      // The count line is not one of the two, and neither is the add glyph.
+      return !nodesOf(column).some(
+        (node) => node.props && (node.props['data-generate-section-meta'] || node.props['data-generate-add-button']),
+      )
+    })(),
+    (() => {
+      const column = header && balanceRow ? parentOf(header, balanceRow) : null
+      return column ? String(column.children.length) + ' child(ren)' : 'no column'
+    })(),
+  )
+  check(
+    'name · balance is the order the header owes',
     (() => {
       if (!header || !balanceRow) return false
       const flat = nodesOf(header)
       const nameAt = flat.findIndex((node) => textIn(node) === 'RunningHub')
       const balanceAt = flat.indexOf(balanceRow)
-      const metaAt = flat.findIndex((node) => node.props && node.props['data-generate-section-meta'] === PROVIDER)
-      return nameAt !== -1 && balanceAt !== -1 && metaAt !== -1 && nameAt < balanceAt && balanceAt < metaAt
+      return nameAt !== -1 && balanceAt !== -1 && nameAt < balanceAt
     })(),
     header ? textIn(header) : 'no header',
+  )
+  check(
+    'every section counts its entries with the same word, whatever the provider is',
+    (() => {
+      const metas = heads.map((id) => byAttr(home.tree, 'data-generate-section-meta', id))
+      if (metas.some((node) => !node)) return false
+      const lines = metas.map((node) => textIn(node))
+      // "Workflows · N installed" on all four: a Krea section is not "Image · …" any
+      // more (founder, 2026-09-23: *"use same naming on Krea accordion (and all
+      // accordions)"*).
+      return lines.every((line) => line.startsWith(EN['pane.section.family'] + ' · ')) && lines[0] === 'Workflows · 2 installed'
+    })(),
+    JSON.stringify(heads.map((id) => {
+      const node = byAttr(home.tree, 'data-generate-section-meta', id)
+      return node ? textIn(node) : null
+    })),
+  )
+  check(
+    'an image provider\'s section says workflows too, so the two families read alike',
+    (() => {
+      const kreaMeta = byAttr(home.tree, 'data-generate-section-meta', 'krea')
+      const rhMeta = byAttr(home.tree, 'data-generate-section-meta', PROVIDER)
+      if (!kreaMeta || !rhMeta) return false
+      const word = (line) => line.slice(0, line.indexOf(' · '))
+      return word(textIn(kreaMeta)) === word(textIn(rhMeta)) && !/image/i.test(textIn(kreaMeta))
+    })(),
+    byAttr(home.tree, 'data-generate-section-meta', 'krea') ? textIn(byAttr(home.tree, 'data-generate-section-meta', 'krea')) : 'no meta',
   )
   check(
     'an unlinked provider says its state in words rather than drawing an empty wallet',
