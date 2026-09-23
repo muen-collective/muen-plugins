@@ -1279,19 +1279,41 @@ window.__ModuleLoader__.load({
         marginBottom: 18,
       },
       /**
+       * A CARD: the surface a group of controls or a piece of output is drawn on.
+       *
+       * REUSABLE ON PURPOSE (founder, 2026-09-23: *"let's make layout 2 cards, parameters
+       * card and preview card, these are reusable components so when you build UI from
+       * design.md it will be consistent"*). One definition, used by every card in this
+       * plugin, so the next surface gets the same surface, radius, border and padding
+       * instead of inventing its own. It follows the design system's card rules: the card
+       * is a raised layer, its definition comes from the border (dark elevation carries no
+       * shadow), and rows inside it separate by spacing rather than by dividers.
+       *
+       * The tokens are the harness's own `--dsw-alias-*` aliases, never a brand's: this
+       * package runs under EVA, the stock theme and any community theme alike (§5 rule 9).
+       */
+      card: {
+        boxSizing: 'border-box',
+        background: 'var(--dsw-alias-bg-layer-2)',
+        border: '1px solid var(--dsw-alias-border-l3)',
+        borderRadius: 12,
+        padding: '14px',
+        minWidth: 0,
+      },
+      /**
        * PARAMETERS BESIDE THE OUTPUT (founder, 2026-09-23: *"Design for responsive, past
        * mobile breakpoint we should 2 column parameters + output preview"*). It is a
        * WRAPPING FLEX ROW, not a media query: the pane is what changes width — docked,
        * split, or fullscreen — so the breakpoint is the container's own, and the two
-       * columns stack in a narrow pane and stand side by side in a wide one.
+       * cards stack in a narrow pane and stand side by side in a wide one.
        */
       surfaceColumns: {
         display: 'flex',
         flexWrap: 'wrap',
         alignItems: 'flex-start',
-        gap: 20,
+        gap: 16,
       },
-      /** The left column: the doors, and the control that spends. */
+      /** The parameters card: the doors, and the control that spends. */
       surfaceParams: {
         flex: '1 1 320px',
         minWidth: 260,
@@ -1299,13 +1321,20 @@ window.__ModuleLoader__.load({
         flexDirection: 'column',
         gap: 12,
       },
-      /** The right column: what the run is doing and what it made. */
+      /** The preview card: what the run is doing and what it made. */
       surfaceOutput: {
         flex: '1 1 300px',
         minWidth: 240,
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
+      },
+      /**
+       * A preview card with nothing in it yet keeps a panel's height rather than collapsing
+       * to a bar: two cards that change shape as a run starts would make the pane jump.
+       */
+      surfaceOutputEmpty: {
+        minHeight: 120,
       },
       /** A door's control. Same field as the key form, tighter under its own label. */
       input: {
@@ -2488,6 +2517,23 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * A CARD, as a component rather than a style applied by hand.
+     *
+     * Every panel in a surface is this: the parameters and the preview today, whatever a
+     * later surface needs tomorrow (founder, 2026-09-23: *"these are reusable components
+     * so when you build UI from design.md it will be consistent"*). It carries the same
+     * surface, radius, border and padding every time, and it takes the caller's layout on
+     * top — the two cards differ in how wide they grow, not in what they look like.
+     *
+     * No visible title on either card (founder's call, 2026-09-23): the workflow's own
+     * title and blurb head the parameters card as content, and the preview card is the
+     * output. A card that needs a heading later can render one inside itself.
+     */
+    function Card({ children, style, ...attrs }) {
+      return h('div', { style: { ...S.card, ...(style || {}) }, ...attrs }, children)
+    }
+
+    /**
      * One workflow's surface, inside the pane.
      *
      * §10's "doors as controls in `ui.order`, `primary` first": `label` is the
@@ -2551,6 +2597,11 @@ window.__ModuleLoader__.load({
       const keys = doorsInOrder(adapter)
       const main = keys.filter((key) => adapter.doors[key].advanced !== true)
       const advanced = keys.filter((key) => adapter.doors[key].advanced === true)
+      // Whether the preview card has anything to draw yet. It is the card's own fact: an
+      // empty one keeps a panel's height, so opening a surface and starting a run do not
+      // change the shape of the pane around them.
+      const hasOutput =
+        run.phase === 'queued' || run.phase === 'running' || run.phase === 'failed' || (run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0)
 
       /** One row of a list door, at the values the row's own doors declare. */
       const addRow = (key, door) => () =>
@@ -2732,9 +2783,12 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: S.surfaceColumns, 'data-generate-columns': 'two' },
+          // CARD 1 — the parameters. The workflow's own title and blurb head it as
+          // content (the cards carry no headings of their own), then the doors, then the
+          // control that spends, so the button sits at the foot of the form it applies to.
           h(
-            'div',
-            { style: S.surfaceParams, 'data-generate-column': 'params' },
+            Card,
+            { style: S.surfaceParams, 'data-generate-column': 'params', 'data-generate-card': 'params' },
             h('div', { style: S.title }, adapter.title),
             adapter.blurb ? h('div', { style: S.body }, adapter.blurb) : null,
             ...main.map(doorRow),
@@ -2751,17 +2805,24 @@ window.__ModuleLoader__.load({
                 )
               : null,
             showAdvanced ? advanced.map(doorRow) : null,
-            // A surface that can run gets the run control under its own form, the way the
-            // reference design puts the button at the foot of the parameters; one that
-            // cannot says so rather than offering a control that would post a request this
-            // plugin cannot build yet.
+            adapter.runnable === true ? h(RunControl, { key: adapter.name, t, adapter, run }) : null,
+          ),
+          // CARD 2 — the preview. It is drawn for every ready surface, runnable or not
+          // (founder, 2026-09-23: *"2 cards, parameters card and preview card"*): a
+          // workflow whose run is not built yet says so here rather than leaving the panes
+          // lopsided, and the pane never reflows as a run starts.
+          h(
+            Card,
+            {
+              style: { ...S.surfaceOutput, ...(hasOutput ? {} : S.surfaceOutputEmpty) },
+              'data-generate-card': 'preview',
+              'data-generate-run-output': adapter.name,
+              ...(hasOutput ? {} : { 'data-generate-output-empty': 'yes' }),
+            },
             adapter.runnable === true
-              ? h(RunControl, { key: adapter.name, t, adapter, run })
+              ? h(RunOutput, { key: adapter.name + '-out', t, adapter, run })
               : h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
           ),
-          // The right column: what the run is doing, and what it made. Empty until there
-          // is something to say, so a wide pane does not open on a blank half.
-          adapter.runnable === true ? h(RunOutput, { key: adapter.name + '-out', t, adapter, run }) : null,
         ),
       )
     }
@@ -2991,13 +3052,12 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** The output column: the phase, the failure, and the result. */
+    /** The preview card's content: the phase, the failure, and the result. */
     function RunOutput({ t, adapter, run }) {
       if (!adapter) return null
-      const anything = run.phase === 'queued' || run.phase === 'running' || run.phase === 'failed' || (run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0)
       return h(
         'div',
-        { style: S.runOutput, 'data-generate-run-output': adapter.name, ...(anything ? {} : { 'data-generate-output-empty': 'yes' }) },
+        { style: S.runOutput },
         run.phase === 'queued' || run.phase === 'running'
           ? h(
               'div',

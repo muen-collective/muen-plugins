@@ -19,6 +19,10 @@ never invents a control, never invents a number, and never writes plugin code.
   to the user, not a layout problem to solve alone.
 - **A workflow gets the chrome that exists.** There is no per-workflow layout. If a design
   needs a shape the pane does not have, say so and ask — do not invent one.
+- **A panel is a `Card`.** A workflow surface is two of them — the parameters card and the
+  preview card — and the card surface, radius, border and padding live in that one component.
+  Use it, and never restate a panel's style: the next screen stays consistent with this one
+  only if every panel is drawn by the same component.
 - **Copy is the profile's language, and data.** Labels are authored words. The plugin's own
   sentences come from `ctx.locale` under namespace `generate`.
 - **The visual layer is the harness's own.** `--dsw-alias-*` tokens only: no EVA token name, no
@@ -109,7 +113,7 @@ rules are here so a design does not fight them.
 |---|---|---|
 | the start-page card | the surface's own label (**Generate**) and one line | a workflow list, a thumbnail, stats |
 | the pane home | the wallet strip, then one accordion section per provider, in registry order, minus the hidden ones; each header has the provider's name, `family · count` and the add and refresh glyphs; the open section holds its workflows as cards | a workflow's doors |
-| the workflow surface | the doors as controls in `ui.order`, primary first, the app's tooltip under each, advanced doors behind one disclosure, the app's own bounds and options on every control, and a way back | a node id, a field name, an engine metadata row (the `title` may name the engine; nothing else renders model metadata) |
+| the workflow surface | two cards that wrap: the parameters card (the workflow's title and blurb, the doors as controls in `ui.order` primary first, the app's tooltip under each, advanced doors behind one disclosure, the app's own bounds and options on every control, the run control at its foot) and the preview card (the run's state and its result) — plus a way back | a node id, a field name, an engine metadata row (the `title` may name the engine; nothing else renders model metadata), a panel that is not a `Card`, a card heading of its own |
 | the payload gate | the run label's own button; then the prompt, every image input by name, the target workflow by its semantic name, the balance before, the expected wait, and — behind one disclosure — the exact request, readable and not editable | anything editable in the request |
 | the run strip and result | `queued`/`running`, the elapsed time, the job id; a failure shows the provider's message verbatim beside the job id and a way back; a finished run draws the result with a link to it | a progress bar with no number behind it |
 

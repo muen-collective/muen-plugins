@@ -1786,6 +1786,20 @@ check(
     })(),
     'a wrapping row of two columns is the responsive shape a resizable pane needs',
   )
+  check(
+    'a workflow whose run is not built yet still gets its preview card, and says so in it',
+    (() => {
+      // This fixture's workflow cannot run, so the note that says running comes next is
+      // the preview card's own content: two cards whether or not the run behind one of
+      // them exists, rather than a lopsided pane that fills in later.
+      const preview = byAttr(opened.tree, 'data-generate-card', 'preview')
+      const params = byAttr(opened.tree, 'data-generate-card', 'params')
+      const pending = byAttr(opened.tree, 'data-generate-run-pending', 'yes')
+      if (!preview || !params || !pending) return false
+      return nodesOf(preview).includes(pending) && !nodesOf(params).includes(pending) && preview.props['data-generate-output-empty'] === 'yes'
+    })(),
+    'two cards, whether or not the run behind one of them is built',
+  )
 
   // The number door is the stepper primitive: a decrement, the value, an increment.
   check(
@@ -1989,6 +2003,45 @@ check(
       !!nodesOf(tree).find((node) => node.props && node.props['data-generate-run-output'] === MODEL_UNIT.name) &&
         !!byAttr(tree, 'data-generate-output-empty', 'yes'),
       'a column that appears only after a run would make the pane jump',
+    )
+    // TWO CARDS, ONE SURFACE (founder, 2026-09-23: *"let's make layout 2 cards, parameters
+    // card and preview card, these are reusable components so when you build UI from
+    // design.md it will be consistent"*). Equal background, border, radius and padding is
+    // what "reusable component" means in a bundle with no CSS layer to share — the two
+    // cards differ in how wide they grow, not in what they look like.
+    check(
+      'the parameters and the preview are two cards drawn from one surface',
+      (() => {
+        const params = byAttr(tree, 'data-generate-card', 'params')
+        const preview = byAttr(tree, 'data-generate-card', 'preview')
+        if (!params || !preview) return false
+        const styles = [params.props.style, preview.props.style]
+        const same = (key) => styles[0][key] === styles[1][key]
+        // Equal to each other AND equal to the kit's own values: two cards that agree on
+        // a wrong surface would pass a comparison-only check.
+        return (
+          same('background') &&
+          same('border') &&
+          same('borderRadius') &&
+          same('padding') &&
+          styles[0].background === 'var(--dsw-alias-bg-layer-2)' &&
+          styles[0].borderRadius === 12 &&
+          styles[0].padding === '14px' &&
+          String(styles[0].border).includes('--dsw-alias-border-l3') &&
+          !/eva|--card/i.test(JSON.stringify(styles[0]))
+        )
+      })(),
+      JSON.stringify(byAttr(tree, 'data-generate-card', 'preview') ? byAttr(tree, 'data-generate-card', 'preview').props.style : 'no preview card'),
+    )
+    check(
+      'the result lands in the preview card, not beside the form',
+      (() => {
+        const preview = byAttr(tree, 'data-generate-card', 'preview')
+        const params = byAttr(tree, 'data-generate-card', 'params')
+        const run = byAttr(tree, 'data-generate-run', MODEL_UNIT.name)
+        return !!preview && !!params && !!run && nodesOf(params).includes(run) && !nodesOf(preview).includes(run)
+      })(),
+      'one card spends, the other one shows',
     )
     check('nothing is posted until that control is pressed', stub.runs.length === 0, JSON.stringify(stub.runs))
 
