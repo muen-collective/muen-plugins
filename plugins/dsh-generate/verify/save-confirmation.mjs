@@ -144,6 +144,8 @@ const PRIMITIVES = {
   IconCheckOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'check', ...props }),
   IconInfoOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'info', ...props }),
   IconPlusOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'plus', ...props }),
+  /** The harness's hover bubble: it keeps the label and renders the anchor it wraps. */
+  Tooltip: (props) => REACT.createElement('span', { 'data-stub': 'tooltip', label: props.label, side: props.side }, props.children),
   /** The settings hide switch: a 36×20 button whose label lives in `aria-label`. */
   Switch: (props) =>
     REACT.createElement('button', { type: 'button', role: 'switch', 'aria-checked': props.checked, label: props.label, 'data-stub': 'switch', onClick: () => props.onChange(!props.checked) }, props.children),
@@ -574,8 +576,8 @@ if (pane && settings) {
         check(
           'the linked pane stays after the dialog closes',
           !!firstOf(closed, 'div') &&
-            !!nodesOf(closed).find((node) => node.props && node.props['data-generate-add-card']) &&
-            textOf(closed).join(' ').includes(EN['pane.add.card']),
+            !!nodesOf(closed).find((node) => node.props && node.props['data-generate-add-button']) &&
+            textOf(closed).join(' ').includes(EN['pane.section.empty']),
           textOf(closed).join(' | ').slice(0, 160),
         )
       }
@@ -894,16 +896,17 @@ if (pane && settings) {
       !!noteHolder && !textOf(noteHolder).join(' ').includes('8,600'),
       noteHolder ? textOf(noteHolder).join(' ').slice(0, 200) : 'no block holds the note',
     )
-    // The add path moved onto the dashed card inside the section (founder,
-    // 2026-09-23). The pane must not lose the action while gaining the design.
+    // The add path moved into the section's HEADER, beside refresh (founder,
+    // 2026-09-23: *"move + workflow button as an icon button next to refresh"*). The
+    // pane must not lose the action while gaining the design.
     check(
-      'the linked pane still has a way to add, inside the section it belongs to',
+      'the linked pane still has a way to add, in the header of the section it belongs to',
       (() => {
-        const card = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-add-card'] === PROVIDER)
-        const body = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-section-body'] === PROVIDER)
-        return !!card && !!body && nodesOf(body).includes(card)
+        const button = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
+        const head = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-section-toggle'] === PROVIDER)
+        return !!button && !!head && nodesOf(head).includes(button)
       })(),
-      'the sentence moved onto the card',
+      'the control moved into the header',
     )
     check(
       'the linked directions carry the shipped info glyph',
@@ -934,9 +937,9 @@ if (pane && settings) {
     // The pane cannot hand the job to the chat: a third-party client plugin cannot
     // put text into the composer and a slash command cannot start a turn (measured
     // 2026-09-22). On a FRESH install the sentence is a note under the key directions.
-    // On a LINKED pane it is the dashed add card inside the provider's section
-    // (founder, 2026-09-23: *"use + workflow empty card w dashed border, click on it
-    // to get code snippet to copy/paste to composer"*) — the same words, on the control
+    // On a LINKED pane it is the glyph in the provider's section header
+    // (founder, 2026-09-23: *"move + workflow button as an icon button next to
+    // refresh. also add tooltip on hover for both"*) — the same job, on the control
     // that reveals the prompt.
     {
       const noteAt = (tree, attr) => nodesOf(tree).findIndex((node) => node.props && node.props[attr] === 'yes')
@@ -975,10 +978,9 @@ if (pane && settings) {
         'the note node must carry the copy itself',
       )
       check(
-        'the linked pane adds a workflow through the dashed card, not a note',
-        linkedText.includes(EN['pane.add.card']) &&
-          !linkedText.includes(EN['pane.add.hint']) &&
-          !!nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-add-card'] === PROVIDER),
+        'the linked pane adds a workflow through the header glyph, not a note',
+        !linkedText.includes(EN['pane.add.hint']) &&
+          !!nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-add-button'] === PROVIDER),
         linkedText.slice(0, 240),
       )
       // Both notes belong to the fresh screen's own block, not to the pane root: the

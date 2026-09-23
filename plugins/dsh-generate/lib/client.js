@@ -77,8 +77,8 @@ window.__ModuleLoader__.load({
       IconCheckOutline16,
       IconInfoOutline14,
       // The pane's own glyphs: a chevron per accordion header, a flow glyph on a
-      // workflow card, and the plus on the dashed add card. The image provider's own
-      // glyph is gone with the header icon it used to fill: the header draws the
+      // workflow card, and the plus on the header's add control. The image provider's
+      // own glyph is gone with the header icon it used to fill: the header draws the
       // section's status light instead (founder, 2026-09-23).
       IconChevronDownOutline14,
       IconChevronRightOutline14,
@@ -87,10 +87,13 @@ window.__ModuleLoader__.load({
       // The add control and the snippet it reveals are the harness's own atoms, not
       // copies: `Button` draws the capsule and `CodeBlock` draws the prompt, the same
       // pair a start-page control and an agent's code answer are made of. `Switch` is
-      // the settings toggle that hides a provider from the panel.
+      // the settings toggle that hides a provider from the panel, and `Tooltip` is the
+      // harness's own hover bubble — the header's glyph controls wear it rather than a
+      // native `title`, so a hover reads the way every other glyph in the app does.
       Button,
       CodeBlock,
       Switch,
+      Tooltip,
       Modal,
     } = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
@@ -156,13 +159,19 @@ window.__ModuleLoader__.load({
       'pane.add.hint': 'To add a workflow, ask the agent in chat: “add this RunningHub workflow <app link>”.',
       // The pane's home is a stacked accordion, one section per provider (founder,
       // 2026-09-23). A provider with nothing installed no longer draws a paragraph
-      // about being empty: it draws the dashed add card, whose click yields the prompt
-      // that installs one. That is also why the linked screen has no separate "how to
-      // add" note any more — the card under the workflows IS that sentence.
+      // about being empty either: it says so in one line and names the header glyph
+      // whose click yields the prompt that installs one. That is also why the linked
+      // screen has no separate "how to add" note any more — the glyph IS that sentence.
       'pane.section.none': 'No workflows yet',
       'pane.section.count': 'installed',
-      'pane.add.card': 'Workflow',
-      'pane.add.card.hint': 'Click for the prompt you paste in chat',
+      // The open section of a provider with nothing installed. The empty state used to
+      // BE the add control; the control moved to the header (founder, 2026-09-23:
+      // *"move + workflow button as an icon button next to refresh"*), so the body says
+      // what is missing and names the glyph that fixes it.
+      'pane.section.empty': 'Nothing installed yet. Use + above to add one.',
+      // The header's add glyph. A glyph has no text of its own, so this is both its
+      // hover tooltip and its accessible name.
+      'pane.add.button': 'Add a workflow',
       // A host that did not answer is not an empty install, and saying so is the
       // difference between "add a workflow" and "something is wrong".
       'pane.list.failed': 'The installed workflows could not be read.',
@@ -312,8 +321,8 @@ window.__ModuleLoader__.load({
       'pane.add.hint': '要添加工作流，在对话里对智能体说：「add this RunningHub workflow <app link>」。',
       'pane.section.none': '还没有工作流',
       'pane.section.count': '个已安装',
-      'pane.add.card': '工作流',
-      'pane.add.card.hint': '点击获取可粘贴到对话里的指令',
+      'pane.section.empty': '尚未安装任何工作流。点击上方的 + 添加。',
+      'pane.add.button': '添加工作流',
       'pane.list.failed': '无法读取已安装的工作流。',
       'key.label.suffix': 'API 密钥',
       'wallet.key.placeholder': '粘贴你的密钥',
@@ -1005,6 +1014,27 @@ window.__ModuleLoader__.load({
         alignItems: 'center',
         color: 'var(--dsw-alias-label-tertiary)',
       },
+      /**
+       * The header's own controls, right-justified before the chevron: add a workflow
+       * and re-read the section, both as glyphs (founder, 2026-09-23: *"move + workflow
+       * button as an icon button next to refresh"*).
+       */
+      sectionActions: {
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+      },
+      /**
+       * What a tooltip hangs on. The primitive needs a DOM node for its own ref, and
+       * the harness's `Button` is a function component that forwards none, so the
+       * bubble is attached to this box around the button: the box is the button's own
+       * size, and mouse and focus events reach it from the button inside.
+       */
+      tipAnchor: {
+        flex: 'none',
+        display: 'inline-flex',
+      },
       sectionBody: {
         display: 'flex',
         flexDirection: 'column',
@@ -1105,11 +1135,6 @@ window.__ModuleLoader__.load({
         textOverflow: 'ellipsis',
       },
       /** What the add control's click reveals: the sentence, the snippet, and Copy. */
-      addWrap: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-      },
       /** The revealed prompt: the primitive draws it, this only carries the attribute. */
       promptBlock: {
         minWidth: 0,
@@ -2038,71 +2063,42 @@ window.__ModuleLoader__.load({
      * showing an empty list.
      */
     /**
-     * How a workflow arrives, as two of the harness's own atoms: the control is
-     * `Button` and the prompt it reveals is `CodeBlock` (founder, 2026-09-23: *"+ workflow
-     * is a button primitive"*, *"click on + workflow is a code snippet primitive"*).
+     * The install prompt a section's `+` reveals: the sentence the agent's skill answers
+     * to, in the harness's own code block, with the primitive's Copy control.
      *
-     * A plugin cannot put text into the conversation composer and a slash command
-     * cannot start a turn (measured 2026-09-22), so the pane cannot hand the job to
-     * chat itself. What it can do is hand over the sentence: one click reveals the
-     * provider's own install prompt — the phrase the agent's skill answers to — with
-     * Copy beside it.
+     * A plugin cannot put text into the conversation composer and a slash command cannot
+     * start a turn (measured 2026-09-22), so the pane cannot hand the job to chat itself.
+     * What it can do is hand over the sentence: one click on the header's glyph reveals
+     * the provider's own install prompt — the phrase the agent's skill answers to — with
+     * Copy beside it (founder, 2026-09-23: *"click on + workflow is a code snippet
+     * primitive"*).
      *
      * The snippet is the CODE BLOCK and not a `<code>` on a styled row, so the prompt
      * arrives in the same shape as every other code answer in this UI. The primitive's
      * own header is off: the Copy control below is the owner's, which is the case its
      * `showHeader` documents.
-     *
-     * It rides at the foot of every section, not only an empty one: a provider with
-     * three workflows still needs a way to gain a fourth, and this is the only place in
-     * the pane that says how.
      */
-    function AddWorkflowCard({ t, provider }) {
-      const [shown, setShown] = React.useState(false)
-
+    function AddPromptPanel({ t, provider }) {
       return h(
         'div',
-        { style: S.addWrap, 'data-generate-add-wrap': provider.id },
+        { style: S.addPrompt, 'data-generate-add-open': provider.id },
+        h('div', { style: S.hint, 'data-generate-add-hint': 'yes' }, t('settings.workflows.add')),
+        // The snippet is the primitive WHOLE, its header included: that bar — the
+        // language slot on the left, Copy on the right — is what every code snippet in
+        // this UI wears, and the primitive owns the click that copies (founder,
+        // 2026-09-23: *"code snippet primitive in dsh looks like this"*). No `lang`: the
+        // prompt is a sentence for the composer, not a language, so the header carries
+        // the Copy control and invents no label. The primitive drops unknown props, so
+        // the wrapper carries this pane's own attribute.
         h(
-          Button,
-          {
-            variant: 'outline',
-            size: 'md',
-            icon: h(IconPlusOutline16, { size: 16 }),
-            // A capsule, not a card: it stays its own width inside the section. The
-            // second line the old card carried is the tooltip here, because a capsule
-            // has one row to say the label in.
-            style: { alignSelf: 'flex-start' },
-            title: t('pane.add.card.hint'),
-            'data-generate-add-card': provider.id,
-            'aria-expanded': shown ? 'true' : 'false',
-            onClick: () => setShown(!shown),
-          },
-          t('pane.add.card'),
+          'div',
+          { style: S.promptBlock, 'data-generate-add-prompt': provider.id },
+          h(CodeBlock, {
+            code: provider.addPrompt,
+            copyLabel: t('settings.workflows.copy'),
+            copiedLabel: t('settings.workflows.copied'),
+          }),
         ),
-        shown
-          ? h(
-              'div',
-              { style: S.addPrompt, 'data-generate-add-open': provider.id },
-              h('div', { style: S.hint, 'data-generate-add-hint': 'yes' }, t('settings.workflows.add')),
-              // The snippet is the primitive WHOLE, its header included: that bar — the
-              // language slot on the left, Copy on the right — is what every code
-              // snippet in this UI wears, and the primitive owns the click that copies
-              // (founder, 2026-09-23: *"code snippet primitive in dsh looks like this"*).
-              // No `lang`: the prompt is a sentence for the composer, not a language, so
-              // the header carries the Copy control and invents no label. The primitive
-              // drops unknown props, so the wrapper carries this pane's own attribute.
-              h(
-                'div',
-                { style: S.promptBlock, 'data-generate-add-prompt': provider.id },
-                h(CodeBlock, {
-                  code: provider.addPrompt,
-                  copyLabel: t('settings.workflows.copy'),
-                  copiedLabel: t('settings.workflows.copied'),
-                }),
-              ),
-            )
-          : null,
       )
     }
 
@@ -2111,13 +2107,18 @@ window.__ModuleLoader__.load({
      * and says what the section holds, and a body holding its cards.
      *
      * ONE SECTION PER PROVIDER, ALL OF THEM (founder, 2026-09-23). A provider with
-     * nothing installed is still a section, because a section is where its dashed add
-     * card lives: an install that showed only the providers that already work could
+     * nothing installed is still a section, because a section's header is where its add
+     * control lives: an install that showed only the providers that already work could
      * never be filled. A provider whose list could not be read says so instead of
      * showing the empty state, because "nothing installed" and "nothing answered" are
      * different facts.
      */
     function ProviderSection({ t, provider, units, failed, open, onToggle, onOpen, onRefresh }) {
+      // Whether this section's install prompt is revealed. It lives here rather than in
+      // the panel below, because the control that toggles it is in the HEADER now
+      // (founder, 2026-09-23: *"move + workflow button as an icon button next to
+      // refresh"*) and the thing it reveals is still the body's.
+      const [addShown, setAddShown] = React.useState(false)
       const kind = provider.kind === 'image' ? t('settings.kind.image') : t('settings.kind.workflow')
       // "Workflows · 2 installed", not "Workflows · 2 workflows installed": the header
       // already said the family, so the count says only the number.
@@ -2233,23 +2234,64 @@ window.__ModuleLoader__.load({
             // ROW 3: what the section holds.
             h('span', { style: S.sectionMeta, 'data-generate-section-meta': provider.id }, meta),
           ),
-          // The balance's own control, right-justified in the row: the same two reads
-          // the foot of the pane used to offer, now beside the number they refresh
-          // (founder, 2026-09-23: *"refresh the balance move to header"*). The row is the
-          // toggle, so this click is not the section's.
-          h(Button, {
-            variant: 'ghost',
-            size: 'sm',
-            icon: h(IconRefreshOutline16, { size: 14 }),
-            title: t('wallet.refresh'),
-            'aria-label': t('wallet.refresh'),
-            'data-generate-refresh': provider.id,
-            style: { flex: 'none' },
-            onClick: (event) => {
-              event.stopPropagation()
-              onRefresh()
-            },
-          }),
+          // The section's own controls, right-justified before the chevron: add a
+          // workflow, then re-read the section. Both are glyphs, so both carry a hover
+          // tooltip (the harness's own bubble, not a native `title`) and an `aria-label`
+          // — the bubble is the sighted answer, the label is the one a screen reader
+          // reads (founder, 2026-09-23: *"add tooltip on hover for both"*).
+          h(
+            'span',
+            { style: S.sectionActions },
+            // A provider whose list could not be read offers no add control: "nothing is
+            // installed" is not known when nothing answered, so neither is what to add.
+            failed
+              ? null
+              : h(
+                  Tooltip,
+                  { label: t('pane.add.button'), side: 'bottom', delayMs: 500 },
+                  h(
+                    'span',
+                    { style: S.tipAnchor, 'data-generate-add-tip': provider.id },
+                    h(Button, {
+                      variant: 'ghost',
+                      size: 'sm',
+                      icon: h(IconPlusOutline16, { size: 14 }),
+                      'aria-label': t('pane.add.button'),
+                      'aria-expanded': addShown ? 'true' : 'false',
+                      'data-generate-add-button': provider.id,
+                      style: { flex: 'none' },
+                      onClick: (event) => {
+                        event.stopPropagation()
+                        // The prompt it reveals lives in the body, so a closed section
+                        // opens first: a click that changed nothing visible would read
+                        // as a control that does not work.
+                        if (!open) onToggle()
+                        setAddShown(!addShown)
+                      },
+                    }),
+                  ),
+                ),
+            h(
+              Tooltip,
+              { label: t('wallet.refresh'), side: 'bottom', delayMs: 500 },
+              h(
+                'span',
+                { style: S.tipAnchor, 'data-generate-refresh-tip': provider.id },
+                h(Button, {
+                  variant: 'ghost',
+                  size: 'sm',
+                  icon: h(IconRefreshOutline16, { size: 14 }),
+                  'aria-label': t('wallet.refresh'),
+                  'data-generate-refresh': provider.id,
+                  style: { flex: 'none' },
+                  onClick: (event) => {
+                    event.stopPropagation()
+                    onRefresh()
+                  },
+                }),
+              ),
+            ),
+          ),
           h('span', { style: S.sectionChevron }, h(open ? IconChevronDownOutline14 : IconChevronRightOutline14, { size: 14 })),
         ),
         open
@@ -2263,12 +2305,19 @@ window.__ModuleLoader__.load({
                     {
                       style: S.sectionCards,
                       'data-generate-cards': String(units.length),
-                      // The empty state is this container: a provider with nothing
-                      // installed holds one card, and that card is how it gets filled.
+                      // The empty state is this container. Its one child is the sentence
+                      // that says so and names the header glyph that fixes it, because
+                      // the add control is no longer here to explain itself.
                       ...(units.length === 0 ? { 'data-generate-none': provider.id } : {}),
                     },
                     units.map((unit) => h(UnitCard, { key: unit.name, t, unit, onOpen })),
-                    h(AddWorkflowCard, { t, provider }),
+                    units.length === 0 && !addShown
+                      ? h('div', { style: S.hint, 'data-generate-section-empty': provider.id }, t('pane.section.empty'))
+                      : null,
+                    // The revealed prompt rides at the foot of the section, not only on
+                    // an empty one: a provider with three workflows still needs a way to
+                    // gain a fourth, and this is the only place in the pane that says how.
+                    addShown ? h(AddPromptPanel, { t, provider }) : null,
                   ),
             )
           : null,

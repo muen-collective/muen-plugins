@@ -172,17 +172,19 @@ app gets added. On a fresh install it is the note:
 
 > To add a workflow, ask the agent in chat: “add this RunningHub workflow &lt;app link&gt;”.
 
-On a linked pane it is the **dashed `+ Workflow` card**, one per provider section, which reveals that
-provider's own `addPrompt` with Copy beside it when clicked (founder, 2026-09-23).
+On a linked pane it is the **glyph in that provider's section header, immediately left of refresh**
+(founder, 2026-09-23: *"move + workflow button as an icon button next to refresh. also add tooltip on hover for
+both"*): the glyph reveals that provider's own `addPrompt` with Copy beside it, and a closed section opens when
+it is clicked, because what it reveals is the body's. Both header glyphs — add and refresh — wear the harness's
+own `Tooltip` on hover, not a native `title`, and carry the same words as their `aria-label`.
 
-Text and not a button for the same class of reason: a third-party client plugin cannot put text
-into the conversation composer, and a slash command cannot start a turn (both measured 2026-09-22). So the
-pane says what to ask for and the agent's `add-rh-workflow` skill does the rest. **The quoted trigger stays
-English in both dictionaries, deliberately** — it is the phrase the skill's `whenToUse` names, so translating
-it would produce a sentence the user types and nothing picks up; a user may of course say it in their own
-language. The fresh-install line is the note (`data-generate-add-hint`); the linked pane's copy is the `code`
-node inside the dashed card (`data-generate-add-prompt`, with `data-generate-copy-prompt` beside it) and is read
-off those nodes by the verify rather than by matching a phrase.
+Neither control does the work: a third-party client plugin cannot put text into the conversation composer, and
+a slash command cannot start a turn (both measured 2026-09-22). So the pane hands over the words and the agent's
+`add-rh-workflow` skill does the rest. **The quoted trigger stays English in both dictionaries, deliberately** —
+it is the phrase the skill's `whenToUse` names, so translating it would produce a sentence the user types and
+nothing picks up; a user may of course say it in their own language. The fresh-install line is the note
+(`data-generate-add-hint`); the linked pane's copy is the `code` node inside the panel the glyph reveals
+(`data-generate-add-prompt`), and it is read off those nodes by the verify rather than by matching a phrase.
 
 ## The key (S2, now per provider)
 
@@ -289,9 +291,10 @@ start page card; icon + label + 2nd row (no thumbnails)"*):
 
 | Screen | What it is |
 |---|---|
-| home | the wallet strip, then **one accordion section per provider — every one in the registry, in registry order, minus the ones switched off in Settings → Generate** — each header carrying the provider's glyph, its name and `family · count`; the open section holds that provider's workflows as cards, then its dashed add card; under the sections, where the key is managed |
+| home | the wallet strip, then **one accordion section per provider — every one in the registry, in registry order, minus the ones switched off in Settings → Generate** — each header carrying the provider's status light, its name, `family · count`, and two glyph controls on the right: **add a workflow** and **refresh**, both with a hover tooltip; the open section holds that provider's workflows as cards; under the sections, where the key is managed |
 | a workflow card | the harness's own start-page card: **glyph + title + one line**, no thumbnail. The second row is whose app it is (when that is a fact), then the blurb; a workflow with no description falls back to the provider's name. The provider is not on the card — the section header names it, and `data-generate-provider` carries the fact in the DOM |
-| the dashed add card | the empty state, and the add path for a section that already has workflows. One click reveals **that provider's own install prompt** (`addPrompt`) with Copy beside it — the sentence the agent's skill answers to |
+| the add glyph | the add path for every section, empty or not, in the header beside refresh. One click reveals **that provider's own install prompt** (`addPrompt`) with Copy beside it — the sentence the agent's skill answers to — and opens the section if it was closed |
+| an open section with nothing in it | one quiet line saying so and naming the glyph that fixes it (`pane.section.empty`). It is replaced by the prompt when the glyph is clicked |
 | a workflow | its surface, in the same pane: **doors as controls** in `ui.order` with the primary door first, the app's tooltip under each, `advanced` doors behind one disclosure, the app's own bounds/options/defaults on every control, and a way back to the list |
 | the host did not answer | that, said plainly — not a false "nothing installed". A section whose list failed says so inside its own body, and when no provider answered the pane draws the failure block instead of the accordion |
 
@@ -426,7 +429,7 @@ key, a dialog that closes on dismiss or on the next keystroke, the strip's note 
 the fresh-install and linked panes both naming Settings → Generate as the place the key is managed (with the
 info glyph, and the linked note in its own block below the sections rather than beside the strip), **the fresh
 pane telling the user how to add a workflow, under the key directions, with the trigger phrase intact in `zh`
-too, and the linked pane adding one through the dashed card in the provider's own section**, and for rotation a
+too, and the linked pane adding one through the glyph in the provider's own section header**, and for rotation a
 question that deletes nothing until it is answered, declined without a `DELETE` leaving the wallet linked, and a
 receipt in the same dialog once it is.
 `node verify/save-confirmation.mjs --show` prints the dialog's lines in order — including both pane states,
@@ -438,14 +441,16 @@ trigger translated away**. Those four mutations were not re-run against the acco
 linked pane" one targets a note that no longer exists there — so treat them as the record of the earlier
 suite, not as a score for this one.
 
-`verify/start.mjs` (**120/120**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/start.mjs` (**168/168**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
 the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
 **one accordion section per provider in registry order, all four whether linked or not**, each header naming
 its provider and its `family · count`, the section with workflows opening by itself, one section open at a time,
-a card carrying its workflow's title and its one-line second row with **no thumbnail**, the dashed add card
-standing in for the empty state and revealing that provider's own prompt only when clicked, a failed list
-saying so instead of wearing the empty state, and a workflow's doors rendered as the app's own controls. It
+a card carrying its workflow's title and its one-line second row with **no thumbnail**, the add glyph in the
+header beside refresh revealing that provider's own prompt only when clicked (and wearing a tooltip on hover,
+as refresh does), an empty open section saying so and naming that glyph, a failed list saying so instead of
+wearing the empty state and offering no add control at all, and a workflow's doors rendered as the app's own
+controls. It
 also drives the host half for real over temp directories: what may be listed, and what `readAdapter` refuses.
 
 `verify/adapter.mjs` (**86/86**) drives both tools through the definitions the plugin actually registers, with

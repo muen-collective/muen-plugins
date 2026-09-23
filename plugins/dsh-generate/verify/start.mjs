@@ -186,6 +186,13 @@ const PRIMITIVES = {
     ),
   Modal: () => null,
   /**
+   * The harness's hover bubble. The real one clones its single child, positions a fixed
+   * bubble and owns the hover/focus timing; the stub keeps the label and renders the
+   * child, so a check can read which glyph wears which tooltip.
+   */
+  Tooltip: (props) =>
+    REACT.createElement('span', { 'data-stub': 'tooltip', label: props.label, side: props.side, delayMs: props.delayMs }, props.children),
+  /**
    * The settings hide switch. The real one is a 36×20 button whose label lives in
    * `aria-label`, so the stub keeps the props a check reads and lets the click be
    * driven the way the primitive drives it.
@@ -273,6 +280,18 @@ const textOf = (tree) => {
 const textIn = (tree) => textOf(tree).join(' ')
 const byAttr = (tree, attr, value) =>
   nodesOf(tree).find((node) => node.props && (value === undefined ? node.props[attr] !== undefined : node.props[attr] === value)) || null
+/**
+ * The tooltip a glyph control wears: the bubble node whose own subtree holds the
+ * control carrying `attr`. The stub nests the anchor inside the bubble, which is the
+ * one thing a check needs from the primitive.
+ */
+const tooltipOn = (tree, attr, id) =>
+  nodesOf(tree).find(
+    (node) =>
+      node.props &&
+      node.props['data-stub'] === 'tooltip' &&
+      nodesOf(node).some((child) => child.props && child.props[attr] === id),
+  ) || null
 const linesOf = (tree, out = []) => {
   if (tree === null || typeof tree === 'string') return out
   if (Array.isArray(tree)) {
@@ -1211,13 +1230,31 @@ check(
   )
   check(
     'the refresh is named for what it does, since it is drawn as a glyph',
-    !!refresh && refresh.props.title === EN['wallet.refresh'] && refresh.props['aria-label'] === EN['wallet.refresh'],
-    refresh ? JSON.stringify({ title: refresh.props.title, label: refresh.props['aria-label'] }) : 'no refresh control',
+    !!refresh && refresh.props['aria-label'] === EN['wallet.refresh'] && tooltipOn(home.tree, 'data-generate-refresh', PROVIDER)?.props.label === EN['wallet.refresh'],
+    refresh ? JSON.stringify({ label: refresh.props['aria-label'], tooltip: tooltipOn(home.tree, 'data-generate-refresh', PROVIDER)?.props.label }) : 'no refresh control',
   )
   check(
     'the refresh is its own control, not the header toggle it sits inside',
     !!refresh && typeof refresh.props.onClick === 'function' && !!header && refresh.props.onClick !== header.props.onClick,
     'a refresh that folded the section would be the toggle twice',
+  )
+  // The add glyph moved out of the body and next to refresh (founder, 2026-09-23:
+  // *"move + workflow button as an icon button next to refresh"*). The order is pinned
+  // rather than the presence, so a later edit that puts it back in the body fails.
+  check(
+    'the add glyph sits beside the refresh it was moved next to, on its left',
+    (() => {
+      if (!header) return false
+      const flat = nodesOf(header)
+      const addAt = flat.findIndex((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
+      const refreshAt = flat.indexOf(refresh)
+      return addAt !== -1 && refreshAt !== -1 && addAt < refreshAt
+    })(),
+    JSON.stringify(
+      nodesOf(header || { children: [] })
+        .filter((node) => node.props && (node.props['data-generate-add-button'] || node.props['data-generate-refresh']))
+        .map((node) => node.props['data-generate-add-button'] || node.props['data-generate-refresh']),
+    ),
   )
 
   // ONE SECTION IS ONE CARD (founder, 2026-09-23): the card is the section, so opening
@@ -1292,26 +1329,43 @@ check(
 }
 
 // The add control is the pane's one install control, and it is the harness's own
-// Button (founder, 2026-09-23: "+ workflow is a button primitive", "click on + workflow
-// is a code snippet primitive"). Its click has to yield THAT provider's own prompt,
-// because the phrase the agent's skill answers to names the provider.
+// Button plus its own CodeBlock (founder, 2026-09-23: "+ workflow is a button
+// primitive", "click on + workflow is a code snippet primitive"). It moved out of the
+// section body and into the header, beside refresh, as a glyph (founder, 2026-09-23:
+// *"move + workflow button as an icon button next to refresh"*). Its click has to yield
+// THAT provider's own prompt, because the phrase the agent's skill answers to names the
+// provider.
 {
   const real = globalThis.fetch
   globalThis.fetch = stubHost({ units: [] }).fetch
   try {
     const first = await settle(paneSlot.component, { t }, 'pane-add-card')
-    const card = byAttr(first, 'data-generate-add-card', PROVIDER)
+    const button = byAttr(first, 'data-generate-add-button', PROVIDER)
+    const header = byAttr(first, 'data-generate-section-toggle', PROVIDER)
     check(
-      'a provider with nothing installed carries the add button, hinting what its click does',
-      !!card && textIn(card).includes(EN['pane.add.card']) && card.props.title === EN['pane.add.card.hint'],
-      card ? JSON.stringify({ label: textIn(card), title: card.props.title }) : 'no add control',
+      'a provider with nothing installed carries the add control in its header, as a glyph',
+      !!button && !!header && nodesOf(header).includes(button),
+      button ? JSON.stringify({ stub: button.props['data-stub'] }) : 'no add control',
     )
     check(
-      'the prompt is not on screen until the card is clicked',
+      'the add control is the Button primitive, carrying the plus as its icon',
+      !!button && button.props['data-stub'] === 'button' && !!nodesOf(button).find((node) => node.props && node.props['data-stub'] === 'plus'),
+      button ? JSON.stringify({ stub: button.props['data-stub'] }) : 'no add control',
+    )
+    check(
+      'the glyph says what it does on hover, and wears the same words as its accessible name',
+      !!button && tooltipOn(first, 'data-generate-add-button', PROVIDER)?.props.label === EN['pane.add.button'] && button.props['aria-label'] === EN['pane.add.button'],
+      JSON.stringify({
+        tooltip: tooltipOn(first, 'data-generate-add-button', PROVIDER)?.props.label,
+        label: button && button.props['aria-label'],
+      }),
+    )
+    check(
+      'the prompt is not on screen until the glyph is clicked',
       !byAttr(first, 'data-generate-add-prompt', PROVIDER),
       'the sentence and the prompt stay behind the click',
     )
-    if (card) card.props.onClick()
+    if (button) button.props.onClick({ stopPropagation: () => {} })
     const after = await settle(paneSlot.component, { t }, 'pane-add-card')
     check(
       "clicking the add control yields that provider's own prompt",
@@ -1322,13 +1376,6 @@ check(
           return !!code && textIn(code).trim() === 'add this RunningHub workflow <app link>'
         })(),
       textIn(after).slice(0, 240),
-    )
-    check(
-      'the add control is the Button primitive, carrying the plus as its icon',
-      !!card &&
-        card.props['data-stub'] === 'button' &&
-        !!nodesOf(card).find((node) => node.props && node.props['data-stub'] === 'plus'),
-      card ? JSON.stringify({ stub: card.props['data-stub'], title: card.props.title }) : 'no add control',
     )
     check(
       "the snippet is the primitive whole: its own header bar, and its own Copy on the right",
@@ -1354,6 +1401,14 @@ check(
         const block = byAttr(after, 'data-generate-add-prompt', PROVIDER)
         return block ? JSON.stringify(nodesOf(block).filter((node) => node.props && node.props['data-stub']).map((node) => node.props['data-stub'])) : 'no snippet'
       })(),
+    )
+    check(
+      'the glyph is a toggle: it says whether the prompt is open',
+      (() => {
+        const open = byAttr(after, 'data-generate-add-button', PROVIDER)
+        return !!button && button.props['aria-expanded'] === 'false' && !!open && open.props['aria-expanded'] === 'true'
+      })(),
+      JSON.stringify([button && button.props['aria-expanded'], byAttr(after, 'data-generate-add-button', PROVIDER)?.props['aria-expanded']]),
     )
   } finally {
     globalThis.fetch = real
@@ -1471,10 +1526,15 @@ check(
 // ── nothing installed, and a host that cannot answer ────────────────────────
 
 check(
-  'nothing installed: the open section holds the add button, not a paragraph',
+  'nothing installed: the section says so and names the header glyph, instead of an empty box',
   (() => {
     const box = byAttr(empty.tree, 'data-generate-none', PROVIDER)
-    return !!box && textIn(box).includes(EN['pane.add.card']) && !!byAttr(box, 'data-generate-add-card', PROVIDER)
+    return (
+      !!box &&
+      !!byAttr(box, 'data-generate-section-empty', PROVIDER) &&
+      textIn(box).includes(EN['pane.section.empty']) &&
+      !!byAttr(empty.tree, 'data-generate-add-button', PROVIDER)
+    )
   })(),
   byAttr(empty.tree, 'data-generate-none', PROVIDER) ? textIn(byAttr(empty.tree, 'data-generate-none', PROVIDER)) : 'no empty section',
 )
@@ -1497,7 +1557,7 @@ check(
   'a host that cannot answer says so, instead of looking like an empty install',
   !!byAttr(failed.tree, 'data-generate-list-failed', 'yes') &&
     !nodesOf(failed.tree).some((node) => node.props && node.props['data-generate-none']) &&
-    !byAttr(failed.tree, 'data-generate-add-card') &&
+    !byAttr(failed.tree, 'data-generate-add-button') &&
     !!byAttr(failed.tree, 'data-generate-pane') &&
     byAttr(failed.tree, 'data-generate-pane').props['data-generate-pane'] === 'home',
   textIn(failed.tree).slice(0, 160),
@@ -1521,13 +1581,14 @@ for (const key of [
   'surface.pending',
   'card.community',
   'surface.image.choose',
-  // The accordion and its dashed add card (founder, 2026-09-23). `pane.section.none`
-  // is the count on an empty section's header and `pane.add.card` is the card itself,
-  // so a missing key would put a raw id on the pane's most-used control.
+  // The accordion and its add control (founder, 2026-09-23). `pane.section.none` is the
+  // count on an empty section's header, `pane.section.empty` is the body's own sentence,
+  // and `pane.add.button` is the header glyph's tooltip and accessible name — so a
+  // missing key would put a raw id on the pane's most-used control.
   'pane.section.none',
   'pane.section.count',
-  'pane.add.card',
-  'pane.add.card.hint',
+  'pane.section.empty',
+  'pane.add.button',
   // The section header's light (founder, 2026-09-23): each state's sentence is the
   // dot's own tooltip, so a missing key here is a raw id on hover.
   'pane.light.ready',
