@@ -1,9 +1,9 @@
 /**
- * @muen/dsh-generate — host half (Epic 61, S1 + S2 + S3).
+ * @muen/dsh-generate — host half (Epic 61, S1 + S2 + S3 + the provider registry).
  *
- * WHAT THIS IS: the wallet and the install. The pane never holds the RunningHub
- * key, so every conversation with RunningHub happens here, in the host process,
- * behind two rules the epic's safety section makes imperative (§12):
+ * WHAT THIS IS: the keys and the install. The browser never holds a provider's key,
+ * so every conversation with a provider happens here, in the host process, behind two
+ * rules the epic's safety section makes imperative (§12):
  *
  *   2. The browser never sees the key. No key in page state, no key in
  *      `localStorage`, no key echoed by a route response.
@@ -12,11 +12,21 @@
  *      the status route reports where the value came from so the surface can say
  *      so out loud.
  *
- * ROUTES — one path, three verbs, all under the plugin's own prefix:
+ * ROUTES — the provider registry, one prefix, all under the plugin's own namespace
+ * (S2's single wallet route became the per-provider key route when the plugin turned
+ * provider-neutral):
  *
- *   GET    /plugins/generate/wallet   → the wallet status (never the key)
- *   POST   /plugins/generate/wallet   → { key } — validate, then store
- *   DELETE /plugins/generate/wallet   → unlink
+ *   GET    /plugins/generate/providers                → every provider: its key state
+ *                                                       and its installed workflows
+ *   GET    /plugins/generate/providers/<id>/key       → that provider's key state
+ *   POST   /plugins/generate/providers/<id>/key       → { key } — check, then store
+ *   DELETE /plugins/generate/providers/<id>/key       → unlink
+ *   GET    /plugins/generate/providers/<id>/workflows → what it has installed
+ *   GET    /plugins/generate/providers/<id>/workflow?name=  → one workflow, whole
+ *
+ * FOUR PROVIDERS (providers.js): Krea and Magnific (image), RunningHub and Comfy
+ * Cloud (workflows). Every route is provider-addressed, so a fifth provider is one
+ * object in that file.
  *
  * S3 ADDS THE INSTALL, and it is two tools and a skill, not a route:
  *
@@ -34,17 +44,18 @@
  *
  * WHERE THE KEY LIVES (epic 61 D1): the `credentials` seam, as a
  * `CredentialRef` — the half of that service that answers "what is behind this
- * environment-variable name". Naming it `RH_API_KEY` is what makes the founder's
- * existing env file a fallback rather than a second place to paste the key: the
- * service layers the process environment, its own writable store, and `.env`
+ * environment-variable name". Naming RunningHub's `RH_API_KEY` is what makes the
+ * founder's existing env file a fallback rather than a second place to paste the key:
+ * the service layers the process environment, its own writable store, and `.env`
  * files, and `set` refuses while a read-only source shadows the reference. So a
  * change that cannot take effect fails loudly instead of appearing to work while
  * the old value keeps resolving.
  *
- * THE KEY IS VALIDATED BY READING THE WALLET (epic 61 §9). A wrong key fails at
- * the moment it is entered, at the field, instead of three screens later inside a
- * paid run. That read is also the gate on the write: the key reaches the seam
- * only after RunningHub has accepted it.
+ * THE KEY IS VALIDATED BY ONE CHEAP READ (epic 61 §9). A wrong key fails at the
+ * moment it is entered, at the field, instead of three screens later inside a paid
+ * run. That read is also the gate on the write: the key reaches the seam only after
+ * the provider accepted it — except where a provider answers about the key without
+ * accepting it, which is stored and reported unverified (providers.js).
  *
  * WHAT THIS DOES NOT DO YET: submit a task (S5), price a run (§15 D5), or render
  * the guide card's flyout (S4). It reads one account, reads one app's doors, and
@@ -439,9 +450,46 @@ export function apply(ctx, config = {}) {
   // out loud once).
   const root = resolveDataRoot()
 
-  /** The key state of one provider: the wallet the pane and Settings both read. */
+  /**
+   * The host one provider is asked at.
+   *
+   * `config.base` / `RH_BASE` predates the second provider and stays what it was: an
+   * override for the verify scripts and a pinned deployment. With four providers it
+   * can only name RunningHub's host — one override cannot mean four hosts, and letting
+   * it rewrite every provider would send Krea's key to RunningHub's server.
+   */
+  const baseFor = (provider) => (provider.id === 'runninghub' ? base || provider.base : provider.base)
+
+  /**
+   * What every row says about a provider, whatever the state of its key.
+   *
+   * The page's own copy comes from here rather than from the browser half, because it
+   * is provider data: the label, the family the settings page orders by, the page that
+   * issues the key and what that page is called, and the sentence that installs one of
+   * its workflows. No key and no credential reference: a route answers a page.
+   */
+  const identity = (provider) => ({
+    id: provider.id,
+    label: provider.label,
+    kind: provider.kind,
+    keyPageLabel: provider.keyPageLabel,
+    keyUrl: provider.keyUrl,
+    accountUrl: provider.accountUrl,
+    addPrompt: provider.addPrompt,
+  })
+
+  /**
+   * The key state of one provider: what the pane and Settings both read.
+   *
+   * `linked` is "a value resolves"; `verified` is "the provider answered about it".
+   * They are two facts, and a provider can hold the first without the second: a key
+   * the provider would not check (Magnific's 403, whose response component the spec
+   * never defines) or one whose subscription has lapsed (Comfy Cloud's 429) is stored
+   * and reported unverified rather than thrown away (founder, 2026-09-23: *"store it
+   * and mark it unverified"*). `note` carries the caveat when there is one.
+   */
   const keyStatus = async (provider) => {
-    const empty = { id: provider.id, label: provider.label, linked: false, writable: false, source: null, account: null, error: null, accountUrl: provider.accountUrl }
+    const empty = { ...identity(provider), linked: false, verified: false, writable: false, source: null, account: null, note: null, error: null }
     const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
     if (!credentials) return { ...empty, error: 'no-credentials' }
 
@@ -461,13 +509,15 @@ export function apply(ctx, config = {}) {
     }
     if (!resolved || !resolved.value) return { ...empty, writable: !!info.writable }
 
-    const probe = await provider.account({ base: base || provider.base, key: resolved.value })
+    const probe = await provider.account({ base: baseFor(provider), key: resolved.value })
     return {
       ...empty,
       linked: true,
+      verified: !!probe.account,
       writable: !!info.writable,
       source: str(info.source) || str(resolved.source) || null,
       account: probe.account || null,
+      note: probe.note || null,
       error: probe.error || null,
     }
   }
@@ -513,19 +563,20 @@ export function apply(ctx, config = {}) {
         send(res, 400, { error: 'key-required' })
         return
       }
-      const probe = await provider.account({ base: base || provider.base, key })
-      if (!probe.account) {
-        // Nothing is stored on a rejected key: an unvalidated secret is worse than
-        // no secret.
+      const probe = await provider.account({ base: baseFor(provider), key })
+      // A key the provider could not check is still the user's key: it is stored and
+      // the row reports it unverified. A key the provider REFUSED is never stored —
+      // an unvalidated secret is worse than no secret.
+      if (!probe.account && probe.unverified !== true) {
         send(res, probe.error === 'invalid-key' ? 400 : 502, {
-          id: provider.id,
-          label: provider.label,
+          ...identity(provider),
           linked: false,
+          verified: false,
           writable: true,
           source: null,
           account: null,
+          note: null,
           error: probe.error,
-          accountUrl: provider.accountUrl,
         })
         return
       }
@@ -539,31 +590,31 @@ export function apply(ctx, config = {}) {
         // The seam refuses while a read-only source shadows the reference. Say
         // which, because "the key did not change" is otherwise unexplainable.
         send(res, 409, {
-          id: provider.id,
-          label: provider.label,
+          ...identity(provider),
           linked: true,
+          verified: !!probe.account,
           writable: false,
           source: null,
-          account: probe.account,
+          account: probe.account || null,
+          note: probe.note || null,
           error: 'read-only',
           detail: String((error && error.message) || error),
-          accountUrl: provider.accountUrl,
         })
         return
       }
       send(res, 200, {
-        id: provider.id,
-        label: provider.label,
+        ...identity(provider),
         linked: true,
+        verified: !!probe.account,
         writable: true,
         // The seam's own word for the value it manages: a `credentials` read after
         // this save reports `file`, and the surface's note is keyed on that. It said
         // `store` here until 2026-09-22, which no read ever confirms — the strip then
         // called a pasted key "from your environment".
         source: 'file',
-        account: probe.account,
+        account: probe.account || null,
+        note: probe.note || null,
         error: null,
-        accountUrl: provider.accountUrl,
       })
       return
     }
@@ -577,15 +628,15 @@ export function apply(ctx, config = {}) {
         await credentials.unset(provider.keyRef)
       } catch (error) {
         send(res, 409, {
-          id: provider.id,
-          label: provider.label,
+          ...identity(provider),
           linked: true,
+          verified: false,
           writable: false,
           source: null,
           account: null,
+          note: null,
           error: 'read-only',
           detail: String((error && error.message) || error),
-          accountUrl: provider.accountUrl,
         })
         return
       }

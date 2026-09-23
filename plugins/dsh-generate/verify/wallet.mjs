@@ -37,7 +37,8 @@ const KEY_PATH = PROVIDERS_PREFIX + PROVIDER + '/key'
 /**
  * The account page that issues keys, from the founder's own address bar
  * (2026-09-22) after he had to search the web for it: nothing in the product
- * links it obviously, so the pane links it directly.
+ * links it obviously, so the pane links it directly. Since 2026-09-23 every
+ * provider carries its own such page (`keyUrl`), and this is RunningHub's.
  *
  * Pinned WITHOUT a `type` parameter on purpose. The page has three key types and
  * `type` selects one; the founder's URL carried `type=shared` (and his first
@@ -252,15 +253,37 @@ function mount(credentials) {
   const res = await call(list, 'GET')
   const body = json(res)
   check('the provider list answers 200', res.statusCode === 200, res.statusCode)
+  const ids = body && Array.isArray(body.providers) ? body.providers.map((provider) => provider.id) : []
   check(
-    'it names the one provider this build ships',
-    !!body && Array.isArray(body.providers) && body.providers.length === 1 && body.providers[0].id === PROVIDER && body.providers[0].label === 'RunningHub',
-    JSON.stringify(body && body.providers && body.providers.map((provider) => provider.id)),
+    'it names every provider this build ships, image providers first',
+    ids.join(',') === 'krea,magnific,runninghub,comfycloud',
+    JSON.stringify(ids),
   )
   check(
-    'each provider carries its own key state and its own account page',
-    !!body && body.providers[0].linked === false && body.providers[0].accountUrl === ACCOUNT_URL,
-    JSON.stringify(body && body.providers && body.providers[0]),
+    'every row carries the identity the settings page draws from',
+    !!body &&
+      body.providers.every(
+        (provider) =>
+          typeof provider.label === 'string' &&
+          provider.label !== '' &&
+          (provider.kind === 'image' || provider.kind === 'workflow') &&
+          /^https:\/\/[^/]+\/.+/.test(String(provider.keyUrl || '')) &&
+          typeof provider.keyPageLabel === 'string' &&
+          provider.keyPageLabel !== '' &&
+          typeof provider.addPrompt === 'string' &&
+          /^add this /.test(provider.addPrompt),
+      ),
+    JSON.stringify(body && body.providers && body.providers.map((provider) => [provider.id, provider.kind, provider.keyUrl])),
+  )
+  check(
+    'the RunningHub row still points at the key page the founder verified',
+    !!body && (body.providers.find((provider) => provider.id === PROVIDER) || {}).keyUrl === ACCOUNT_URL,
+    JSON.stringify(body && body.providers && body.providers.map((provider) => provider.keyUrl)),
+  )
+  check(
+    'no row ever carries a credential reference, let alone a key',
+    !!body && body.providers.every((provider) => !('keyRef' in provider) && !('key' in provider)),
+    JSON.stringify(body && body.providers && Object.keys(body.providers[0] || {})),
   )
   check(
     'the list read stores nothing',
@@ -288,9 +311,9 @@ function mount(credentials) {
   check('GET while unlinked reports linked:false', body && body.linked === false, JSON.stringify(body))
   check('nothing is stored by a read', !credentials.calls.some((c) => c[0] === 'set'), JSON.stringify(credentials.calls))
   check(
-    'the status carries the verified account page, not a vague site root',
-    !!body && body.accountUrl === ACCOUNT_URL,
-    body && body.accountUrl,
+    'the status carries the key page, not a vague site root',
+    !!body && body.keyUrl === ACCOUNT_URL,
+    body && body.keyUrl,
   )
 }
 
@@ -455,12 +478,141 @@ function mount(credentials) {
         return null
       }
     })
-    .filter((body) => body && 'accountUrl' in body)
+    .filter((body) => body && 'keyUrl' in body)
   check(
-    'every status answer points at the same verified account page',
-    withUrl.length > 0 && withUrl.every((body) => body.accountUrl === ACCOUNT_URL),
+    'every status answer points at a page that issues keys, never a site root',
+    withUrl.length > 0 && withUrl.every((body) => /^https:\/\/[^/]+\/.+/.test(String(body.keyUrl || ''))),
     withUrl.length + ' answers carry it',
   )
+}
+
+// 15. every provider checks its own key, at its own host, with its own header
+//
+// THE HEADER IS THE THING THAT SILENTLY BREAKS. Three providers, three auth schemes
+// researched on 2026-09-23 (Krea: `Authorization: Bearer`; Magnific:
+// `x-magnific-api-key`; Comfy Cloud: `X-API-Key`), and a wrong one does not fail here —
+// it fails as "the key was not accepted" in front of a user whose key is fine. The host
+// override (`RH_BASE`) is asserted too: it names RunningHub only, so no other provider's
+// key can be sent to RunningHub's server.
+{
+  const CASES = [
+    {
+      id: 'krea',
+      ref: 'KREA_API_KEY',
+      host: 'https://api.krea.ai',
+      header: 'authorization',
+      headerValue: 'Bearer ' + SECRET,
+      answer: { ok: true, status: 200, text: async () => JSON.stringify({ items: [], next_cursor: null }) },
+      note: null,
+    },
+    {
+      id: 'magnific',
+      ref: 'MAGNIFIC_API_KEY',
+      host: 'https://api.magnific.com',
+      header: 'x-magnific-api-key',
+      headerValue: SECRET,
+      answer: { ok: true, status: 200, text: async () => JSON.stringify({ data: [], meta: { pagination: {} } }) },
+      note: null,
+    },
+    {
+      id: 'comfycloud',
+      ref: 'COMFY_CLOUD_API_KEY',
+      host: 'https://cloud.comfy.org',
+      header: 'x-api-key',
+      headerValue: SECRET,
+      answer: { ok: true, status: 200, text: async () => JSON.stringify({ status: 'active' }) },
+      note: null,
+    },
+  ]
+  for (const item of CASES) {
+    fetchCalls.length = 0
+    respond = () => item.answer
+    const credentials = fakeCredentials({})
+    const { handler } = mount(credentials)
+    const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + item.id + '/key')
+    const body = json(res)
+    const sent = fetchCalls[0]
+    const headers = (sent && sent.init && sent.init.headers) || {}
+    const headerKey = Object.keys(headers).find((name) => name.toLowerCase() === item.header)
+    check(item.id + ': the check goes to its own host, not the override', String(sent && sent.url).startsWith(item.host + '/'), sent && sent.url)
+    check(item.id + ': the check sends its own header', headerKey !== undefined && headers[headerKey] === item.headerValue, JSON.stringify(headers))
+    check(
+      item.id + ': an accepted key is stored under its own reference',
+      credentials.held === SECRET && credentials.calls.some((call) => call[0] === 'set' && call[1] === item.ref),
+      JSON.stringify(credentials.calls),
+    )
+    check(
+      item.id + ': the row comes back linked and verified',
+      res.statusCode === 200 && body && body.linked === true && body.verified === true && body.note === item.note,
+      res.statusCode + ' ' + JSON.stringify(body),
+    )
+  }
+}
+
+// 16. a key the provider will not check is stored, and the row says so
+//
+// Magnific answers 403 with a response component its own spec never defines. Calling
+// that key invalid would be a guess about a key the user owns; the founder's rule
+// (2026-09-23) is "store it and mark it unverified".
+{
+  fetchCalls.length = 0
+  respond = () => ({ ok: false, status: 403, text: async () => JSON.stringify({ message: 'Forbidden' }) })
+  const credentials = fakeCredentials({})
+  const { handler } = mount(credentials)
+  const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + 'magnific/key')
+  const body = json(res)
+  check('a Magnific 403 is stored rather than thrown away', res.statusCode === 200 && credentials.held === SECRET, res.statusCode + ' ' + JSON.stringify(credentials.calls))
+  check('and the row reports it unverified, with the reason', body && body.linked === true && body.verified === false && body.note === 'not-entitled', JSON.stringify(body))
+}
+
+// 17. Comfy Cloud's 429 is a real key whose subscription is inactive
+{
+  fetchCalls.length = 0
+  respond = () => ({ ok: false, status: 429, text: async () => JSON.stringify({ code: 'rate_limited', message: 'inactive subscription' }) })
+  const credentials = fakeCredentials({})
+  const { handler } = mount(credentials)
+  const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + 'comfycloud/key')
+  const body = json(res)
+  check('a Comfy Cloud 429 is stored', res.statusCode === 200 && credentials.held === SECRET, res.statusCode + ' ' + JSON.stringify(credentials.calls))
+  check('and the row names the subscription, not the key', body && body.verified === true && body.note === 'subscription-inactive', JSON.stringify(body))
+}
+
+// 18. a 401 anywhere is a bad key, and nothing is stored
+{
+  for (const id of ['krea', 'magnific', 'comfycloud']) {
+    fetchCalls.length = 0
+    respond = () => ({ ok: false, status: 401, text: async () => JSON.stringify({ message: 'Unauthorized' }) })
+    const credentials = fakeCredentials({})
+    const { handler } = mount(credentials)
+    const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + id + '/key')
+    const body = json(res)
+    check(id + ': a 401 is invalid-key, not a network failure', res.statusCode === 400 && body && body.error === 'invalid-key', res.statusCode + ' ' + String(res.body).slice(0, 120))
+    check(id + ': a 401 stores nothing', !credentials.calls.some((call) => call[0] === 'set'), JSON.stringify(credentials.calls))
+  }
+}
+
+// 19. an unreachable provider is not a bad key, at any provider
+{
+  fetchCalls.length = 0
+  respond = () => new Error('network down')
+  const credentials = fakeCredentials({})
+  const { handler } = mount(credentials)
+  const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + 'krea/key')
+  const body = json(res)
+  check('an unreachable provider answers 502 unreachable', res.statusCode === 502 && body && body.error === 'unreachable', res.statusCode + ' ' + JSON.stringify(body))
+  check('and nothing is stored on a network failure', !credentials.calls.some((call) => call[0] === 'set'), JSON.stringify(credentials.calls))
+}
+
+// 20. a stored key the provider refuses is reported unverified on the next read
+{
+  fetchCalls.length = 0
+  respond = () => ({ ok: false, status: 401, text: async () => JSON.stringify({ message: 'Unauthorized' }) })
+  const credentials = fakeCredentials({ value: SECRET })
+  const { handler } = mount(credentials)
+  const res = await call(handler, 'GET', undefined, PROVIDERS_PREFIX + 'krea/key')
+  const body = json(res)
+  check('a stored key the provider refuses comes back linked but unverified', body && body.linked === true && body.verified === false && body.error === 'invalid-key', JSON.stringify(body))
+  check('and reading it stores nothing', !credentials.calls.some((call) => call[0] === 'set'), JSON.stringify(credentials.calls.map((call) => call[0])))
 }
 
 // ── live layer ───────────────────────────────────────────────────────────────

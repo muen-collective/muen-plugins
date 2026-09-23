@@ -12,17 +12,29 @@
 //                 "Browser". It is the HARNESS'S OWN standard card: no renderer of
 //                 ours is registered, because a card that lists workflows stops
 //                 saying what it opens (founder, 2026-09-22).
-//   its settings  ONE `settings.section` page listing every provider — the Models →
-//                 Providers shape. `settings.section` is a list slot, so a plugin per
+//   its settings  ONE `settings.section` page listing every provider, in the Models →
+//                 Providers shape (founder, 2026-09-23: *"use the models settings
+//                 design for generate settings"*): the section's own title and intro,
+//                 a row per provider with a credential dot, its family and the state
+//                 of its key, and one open editor card at a time whose primary field
+//                 is the API key. `settings.section` is a list slot, so a plugin per
 //                 provider would be one Generate page per provider, which is exactly
 //                 what the founder ruled out.
 //
-// ONE PLUGIN, SEVERAL PROVIDERS (founder, 2026-09-22). The pane is the hub: a meter
-// per linked provider, then a card per installed workflow from every provider, and a
-// card opens that workflow's surface in the same pane. The provider list, each
-// provider's key and each provider's workflows come from the host over
+// ONE PLUGIN, SEVERAL PROVIDERS (founder, 2026-09-22). Four are registered in the host
+// half (Krea, Magnific, RunningHub, Comfy Cloud), image providers first. The pane is
+// the hub: a meter per linked provider, then a card per installed workflow from every
+// provider, and a card opens that workflow's surface in the same pane. The provider
+// list, each provider's key and each provider's workflows come from the host over
 // `/plugins/generate/providers/…`; the browser half never reads a file and never
 // holds a key.
+//
+// WHAT MODELS DOES THAT THIS CANNOT (founder, 2026-09-23: *"it should be analogous to
+// models except we don't fetch the model, we add the workflow using prompt"*): a model
+// list is fetched from the provider over the API, and a workflow is installed by the
+// agent from a link the user gives it. So the open card carries the install sentence
+// and a Copy control instead of a discovery button — a plugin cannot type into the
+// composer, and a slash command cannot start a turn (measured 2026-09-22).
 //
 // THE RUN IS NOT HERE. The surface renders the doors as controls, in `ui.order`, with
 // the app's own bounds and defaults, and nothing is submitted: the payload gate, the
@@ -122,13 +134,17 @@ window.__ModuleLoader__.load({
       // A host that did not answer is not an empty install, and saying so is the
       // difference between "add a workflow" and "something is wrong".
       'pane.list.failed': 'The installed workflows could not be read.',
-      'wallet.key.label': 'RunningHub API key',
+      // The field names its provider out loud — "Krea API key", "RunningHub API key" —
+      // so the label is the provider's own label plus this suffix, and four providers
+      // on one page stay tellable apart.
+      'key.label.suffix': 'API key',
       'wallet.key.placeholder': 'Paste your key',
-      'wallet.key.hint': 'Your key is on your RunningHub account page, under',
-      // The account page that issues keys is not linked from anywhere obvious;
-      // the founder had to search for it (2026-09-22). So the hint ends in a link
-      // straight to it rather than directions to go and find it.
-      'wallet.key.getKey': 'API → Keys',
+      'wallet.key.hint': 'Your key is on your account page, under',
+      // The account page that issues keys is not linked from anywhere obvious; the
+      // founder had to search for it (2026-09-22). So the hint ends in a link straight
+      // to that page rather than directions to go and find it, and the link's own text
+      // comes from the provider: its key page is a different page in every case.
+      'wallet.key.getKey': 'API keys',
       'wallet.key.save': 'Save',
       'wallet.key.saving': 'Checking…',
       // A save that worked opens a confirmation. The strip is the proof, but it
@@ -137,28 +153,54 @@ window.__ModuleLoader__.load({
       // missed it). The dialog is what says the key works, that the wallet
       // answered, and where the balance now lives.
       'saved.title': 'Key valid. Wallet linked.',
+      'saved.titlePlain': 'Key saved.',
+      'saved.unverifiedTitle': 'Key saved, not checked.',
       'saved.close': 'Close',
-      'saved.intro': 'RunningHub accepted the key and answered your wallet, so both work.',
-      'saved.keyOk': 'The key works: RunningHub validated it before storing it.',
+      'saved.intro': 'The provider accepted the key and answered your account, so both work.',
+      'saved.introPlain': 'The provider accepted the key, so it works. It is stored on this machine only.',
+      'saved.unverifiedIntro': 'The provider did not confirm this key, so it is stored unchecked.',
+      'saved.keyOk': 'The key works: the provider validated it before storing it.',
+      'saved.keyOkPlain': 'The key works: the provider checked it before storing it.',
       'saved.walletOk': 'Your wallet is readable:',
-      'saved.walletOkBare': 'Your wallet is readable.',
-      'saved.where': 'The balance now sits at the top left of this panel, beside the Top up link.',
+      'saved.unverified': 'A run may be refused until the provider confirms it. The row says why.',
+      'saved.where': 'The balance now sits at the top left of this panel, beside the Account link.',
       'saved.dismiss': 'Got it',
       'wallet.coins': 'coins',
       'wallet.running': 'running',
-      'wallet.topup': 'Top up',
       'wallet.refresh': 'Refresh the balance',
       'wallet.notLinked': 'No key linked',
       'wallet.fromEnvironment': 'from your environment',
       'wallet.fromStore': 'stored on this machine',
       // ONE settings page for every provider (founder, 2026-09-22), so the title is
-      // the surface's and each provider's own name is drawn on its own row.
+      // the surface's and each provider's own name is drawn on its own row. The page
+      // is the Models → Providers shape (founder, 2026-09-23: *"use the models settings
+      // design for generate settings"*): a row per provider, one open card at a time,
+      // and the API key is the primary field on every card. What Models fills with a
+      // fetched model list, Generate fills by installing a workflow through the agent.
       'settings.title': 'Generate',
       'settings.body': 'Each provider keeps its own key on this machine. The browser never sees it.',
+      'settings.kind.image': 'Image',
+      'settings.kind.workflow': 'Workflows',
+      'settings.row.setup': 'Set up',
+      'settings.row.edit': 'Edit',
+      'settings.row.close': 'Close',
+      'settings.account': 'Account',
+      'settings.linked': 'Key saved',
+      'settings.linked.unverified': 'Saved, not checked',
+      'settings.workflows.title': 'Workflows',
       'settings.workflows.none': 'No workflows installed yet.',
       'settings.workflows.one': 'workflow installed',
       'settings.workflows.many': 'workflows installed',
       'settings.workflows.unknown': 'Workflows could not be read.',
+      'settings.workflows.doors': 'inputs',
+      'settings.workflows.add': 'To add one, ask the agent in chat:',
+      'settings.workflows.copy': 'Copy',
+      'settings.workflows.copied': 'Copied',
+      // Two providers answer about a key without accepting it, and the difference
+      // matters: one subscription has lapsed, and the other is an entitlement Magnific
+      // never confirms. Neither is a bad key, so neither is called one.
+      'note.subscription-inactive': 'The key works, but this account has no active Comfy Cloud subscription, so a run would be refused.',
+      'note.not-entitled': 'Magnific answered the key but did not confirm access, so it is stored unchecked.',
       'pane.noProviders': 'This build has no providers registered.',
       // Rotation is a normal act, not an edge case: a person creates a new key on
       // RunningHub and pastes it here. The hint says the field is the way to do
@@ -166,20 +208,20 @@ window.__ModuleLoader__.load({
       'wallet.replace.hint': 'Pasting a key here replaces the one stored on this machine.',
       'remove.action': 'Remove key',
       'remove.title': 'Remove the stored key?',
-      'remove.intro': 'It is deleted from this machine. The key itself still exists on RunningHub, so the same one can be pasted here again.',
+      'remove.intro': 'It is deleted from this machine. The key itself still exists at the provider, so the same one can be pasted here again.',
       'remove.confirm': 'Remove key',
       'remove.cancel': 'Cancel',
       'remove.pending': 'Removing…',
       'remove.doneTitle': 'Key removed.',
-      'remove.doneIntro': 'This machine no longer holds a RunningHub key, and the wallet is unlinked.',
-      'remove.gone': 'The stored key is gone. Paste a key to link the wallet again.',
+      'remove.doneIntro': 'This machine no longer holds a key for this provider.',
+      'remove.gone': 'The stored key is gone. Paste a key to link this provider again.',
       'remove.failed': 'The key could not be removed.',
       'settings.readOnly': 'This key comes from your environment, so it cannot be changed or unlinked here.',
       'error.keyRequired': 'Paste a key first.',
-      'error.invalidKey': 'RunningHub did not accept that key.',
-      'error.unreachable': 'RunningHub could not be reached. Check your connection and try again.',
-      'error.timeout': 'RunningHub did not answer in time. Try again.',
-      'error.unexpected': 'RunningHub answered in a way this plugin does not understand.',
+      'error.invalidKey': 'That key was not accepted.',
+      'error.unreachable': 'The provider could not be reached. Check your connection and try again.',
+      'error.timeout': 'The provider did not answer in time. Try again.',
+      'error.unexpected': 'The provider answered in a way this plugin does not understand.',
       'error.readOnly': 'That key is fixed by your environment, so it cannot be changed here.',
       'error.noCredentials': 'This harness has no credential store, so the key cannot be saved.',
       'error.generic': 'The key could not be saved.',
@@ -198,8 +240,8 @@ window.__ModuleLoader__.load({
       'surface.pending': '运行功能稍后提供：付费前的载荷确认与运行状态尚未构建。',
       'card.community': '他人的应用',
       'surface.image.choose': '选择图片',
-      'pane.loading': '正在检查钱包…',
-      'pane.first.title': '连接你的 RunningHub 账户',
+      'pane.loading': '正在检查密钥…',
+      'pane.first.title': '连接服务商账户',
       'pane.first.body': '粘贴你的 API 密钥。现在就会校验，并且只保存在这台机器上。',
       'pane.first.manage': '之后可以在「设置 → 生成」里修改或移除这个密钥。设置菜单位于左侧边栏底部。',
       'pane.linked.manage': '在「设置 → 生成」里修改或移除密钥。设置菜单位于左侧边栏底部。',
@@ -208,51 +250,70 @@ window.__ModuleLoader__.load({
       'pane.empty.title': '还没有安装应用',
       'pane.empty.body': '你添加的 RunningHub 应用会在这里打开，每个应用一张卡片。',
       'pane.list.failed': '无法读取已安装的工作流。',
-      'wallet.key.label': 'RunningHub API 密钥',
+      'key.label.suffix': 'API 密钥',
       'wallet.key.placeholder': '粘贴你的密钥',
-      'wallet.key.hint': '密钥在你的 RunningHub 账户页面里：',
-      'wallet.key.getKey': 'API → Keys',
+      'wallet.key.hint': '密钥在你的账户页面里：',
+      'wallet.key.getKey': 'API 密钥',
       'wallet.key.save': '保存',
       'wallet.key.saving': '校验中…',
       'saved.title': '密钥有效，钱包已连接。',
+      'saved.titlePlain': '密钥已保存。',
+      'saved.unverifiedTitle': '密钥已保存，未校验。',
       'saved.close': '关闭',
-      'saved.intro': 'RunningHub 接受了密钥并返回了钱包信息，两项都可用。',
-      'saved.keyOk': '密钥可用：RunningHub 在保存前已校验通过。',
+      'saved.intro': '服务商接受了密钥并返回了账户信息，两项都可用。',
+      'saved.introPlain': '服务商接受了密钥，可以使用。密钥只保存在这台机器上。',
+      'saved.unverifiedIntro': '服务商没有确认这个密钥，因此仅保存、未校验。',
+      'saved.keyOk': '密钥可用：服务商在保存前已校验通过。',
+      'saved.keyOkPlain': '密钥可用：服务商在保存前已检查过。',
       'saved.walletOk': '钱包信息可以读取：',
-      'saved.walletOkBare': '钱包信息可以读取。',
-      'saved.where': '余额现在显示在此面板左上角，旁边就是充值链接。',
+      'saved.unverified': '在服务商确认之前，运行可能被拒绝。原因显示在该服务商那一行。',
+      'saved.where': '余额现在显示在此面板左上角，旁边就是「账户」链接。',
       'saved.dismiss': '知道了',
       'wallet.coins': '金币',
       'wallet.running': '个任务运行中',
-      'wallet.topup': '充值',
       'wallet.refresh': '刷新余额',
       'wallet.notLinked': '未连接密钥',
       'wallet.fromEnvironment': '来自环境变量',
       'wallet.fromStore': '保存在本机',
       'settings.title': '生成',
       'settings.body': '每个服务商的密钥都保存在这台机器上，浏览器不会看到它。',
+      'settings.kind.image': '图像',
+      'settings.kind.workflow': '工作流',
+      'settings.row.setup': '设置',
+      'settings.row.edit': '编辑',
+      'settings.row.close': '收起',
+      'settings.account': '账户',
+      'settings.linked': '密钥已保存',
+      'settings.linked.unverified': '已保存，未校验',
+      'settings.workflows.title': '工作流',
       'settings.workflows.none': '还没有安装工作流。',
       'settings.workflows.one': '个工作流已安装',
       'settings.workflows.many': '个工作流已安装',
       'settings.workflows.unknown': '无法读取工作流。',
+      'settings.workflows.doors': '个输入',
+      'settings.workflows.add': '要添加工作流，请在对话里对智能体说：',
+      'settings.workflows.copy': '复制',
+      'settings.workflows.copied': '已复制',
+      'note.subscription-inactive': '密钥可用，但此账户没有有效的 Comfy Cloud 订阅，运行会被拒绝。',
+      'note.not-entitled': 'Magnific 回应了密钥但没有确认访问权限，因此仅保存、未校验。',
       'pane.noProviders': '此版本没有注册任何服务商。',
       'wallet.replace.hint': '在这里粘贴密钥会替换本机已保存的那个。',
       'remove.action': '移除密钥',
       'remove.title': '移除已保存的密钥？',
-      'remove.intro': '密钥会从这台机器上删除。RunningHub 上的密钥仍然存在，同一个密钥可以再次粘贴到这里。',
+      'remove.intro': '密钥会从这台机器上删除。服务商那边的密钥仍然存在，同一个密钥可以再次粘贴到这里。',
       'remove.confirm': '移除密钥',
       'remove.cancel': '取消',
       'remove.pending': '正在移除…',
       'remove.doneTitle': '密钥已移除。',
-      'remove.doneIntro': '这台机器上不再保存 RunningHub 密钥，钱包已断开连接。',
-      'remove.gone': '已保存的密钥已删除。粘贴密钥即可重新连接钱包。',
+      'remove.doneIntro': '这台机器上不再保存该服务商的密钥。',
+      'remove.gone': '已保存的密钥已删除。粘贴密钥即可重新连接该服务商。',
       'remove.failed': '密钥移除失败。',
       'settings.readOnly': '此密钥来自环境变量，无法在这里修改或解除。',
       'error.keyRequired': '请先粘贴密钥。',
-      'error.invalidKey': 'RunningHub 没有接受这个密钥。',
-      'error.unreachable': '无法连接 RunningHub，请检查网络后重试。',
-      'error.timeout': 'RunningHub 没有及时响应，请重试。',
-      'error.unexpected': 'RunningHub 返回了本插件无法识别的响应。',
+      'error.invalidKey': '该密钥未被接受。',
+      'error.unreachable': '无法连接服务商，请检查网络后重试。',
+      'error.timeout': '服务商没有及时响应，请重试。',
+      'error.unexpected': '服务商返回了本插件无法识别的响应。',
       'error.readOnly': '该密钥由环境变量固定，无法在这里修改。',
       'error.noCredentials': '此环境没有凭据存储，密钥无法保存。',
       'error.generic': '密钥保存失败。',
@@ -300,20 +361,6 @@ window.__ModuleLoader__.load({
         boxSizing: 'border-box',
         textAlign: 'center',
       },
-      /** The form itself carries no centering: its parent owns where it sits. */
-      formBody: {
-        display: 'block',
-        textAlign: 'left',
-      },
-      /** A settings page: the same column, but copy reads left, not centred. */
-      page: {
-        margin: '0 auto',
-        padding: '20px 18px 28px',
-        width: '100%',
-        maxWidth: 360,
-        boxSizing: 'border-box',
-        textAlign: 'left',
-      },
       mark: {
         display: 'block',
         margin: '0 auto 14px',
@@ -330,19 +377,6 @@ window.__ModuleLoader__.load({
         fontSize: 12,
         lineHeight: 1.5,
         color: 'var(--dsw-alias-label-secondary)',
-      },
-      field: {
-        display: 'block',
-        width: '100%',
-        boxSizing: 'border-box',
-        marginTop: 12,
-        padding: '7px 9px',
-        fontSize: 12,
-        color: 'var(--dsw-alias-label-primary)',
-        background: 'var(--dsw-alias-bg-layer-1)',
-        border: '1px solid var(--dsw-alias-border-l1)',
-        borderRadius: 6,
-        outline: 'none',
       },
       /**
        * Directions to the one page that changes or removes the key. An info glyph
@@ -475,16 +509,255 @@ window.__ModuleLoader__.load({
         whiteSpace: 'nowrap',
         color: 'var(--dsw-alias-label-secondary)',
       },
-      /** One provider's block on the one settings page. */
-      providerCard: {
-        marginTop: 18,
-        paddingBottom: 14,
-        borderBottom: '1px solid var(--dsw-alias-border-l1)',
+      /**
+       * THE SETTINGS PAGE, IN THE MODELS → PROVIDERS SHAPE (founder, 2026-09-23:
+       * *"use the models settings design for generate settings"*).
+       *
+       * Every number here is the shipped Models page's own: a 720px column, a 16px
+       * title over a 14px intro, 8px between rows, each row a 16px-radius card with a
+       * 12/14px padding, an 8px credential dot, a 4px-radius family tag, and an editor
+       * card on the platform module background at 12px radius. The plugin has no
+       * stylesheet (a bundle's client half is one script), so they are inline and the
+       * values are read from `ModelsSection.module.css` rather than invented.
+       */
+      settingsPage: {
+        margin: '0 auto',
+        padding: '20px 18px 28px',
+        width: '100%',
+        maxWidth: 720,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        textAlign: 'left',
       },
-      providerName: {
+      settingsTitle: {
+        margin: 0,
+        fontSize: 16,
+        fontWeight: 500,
+        lineHeight: '24px',
+        color: 'var(--dsw-alias-label-primary)',
+      },
+      settingsIntro: {
+        margin: 0,
+        fontSize: 14,
+        lineHeight: '22px',
+        color: 'var(--dsw-alias-label-tertiary)',
+      },
+      rows: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        margin: '12px 0 0',
+        padding: 0,
+        listStyle: 'none',
+      },
+      rowCard: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        padding: '12px 14px',
+        border: '.5px solid var(--dsw-alias-border-l4)',
+        borderRadius: 16,
+      },
+      rowHead: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+      },
+      rowIdentity: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        minWidth: 0,
+      },
+      rowName: {
+        fontSize: 14,
+        fontWeight: 500,
+        lineHeight: '22px',
+        color: 'var(--dsw-alias-label-primary)',
+      },
+      rowTag: {
+        flex: 'none',
+        padding: '1px 6px',
+        fontSize: 11,
+        lineHeight: '16px',
+        color: 'var(--dsw-alias-label-secondary)',
+        border: '.5px solid var(--dsw-alias-border-l3)',
+        borderRadius: 4,
+      },
+      rowActions: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        marginLeft: 'auto',
+      },
+      /** The credential dot: green answered, amber answered-with-a-caveat, red
+       * refused, hollow not linked yet. Paired with the row's own sentence, because a
+       * dot alone is not a fact a person can act on. */
+      dot: {
+        display: 'inline-block',
+        flex: 'none',
+        boxSizing: 'border-box',
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+      },
+      dotOk: { background: 'var(--dsw-alias-state-success-primary)' },
+      dotWarn: { background: 'var(--dsw-alias-state-warn-primary)' },
+      dotBad: { background: 'var(--dsw-alias-state-error-primary)' },
+      dotNone: { border: '.5px solid var(--dsw-alias-border-l3)' },
+      rowSummary: {
+        fontSize: 12,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-secondary)',
+      },
+      summaryWarn: { color: 'var(--dsw-alias-state-warn-label)' },
+      summaryError: { color: 'var(--dsw-alias-state-error-primary)' },
+      /** The open card: the Models editor's own background and radius. */
+      editor: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+        padding: '14px 16px',
+        background: 'var(--dsw-alias-bg-module-platform)',
+        borderRadius: 12,
+      },
+      fieldGroup: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      },
+      fieldLabel: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 10,
+        fontSize: 12,
+        fontWeight: 500,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-secondary)',
+      },
+      /** The Models page's own input: 32px tall, 8px radius, a half-pixel border. */
+      settingsInput: {
+        boxSizing: 'border-box',
+        width: '100%',
+        height: 32,
+        padding: '0 10px',
+        font: 'inherit',
+        fontSize: 14,
+        lineHeight: '22px',
+        color: 'var(--dsw-alias-label-primary)',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '.5px solid var(--dsw-alias-border-l4)',
+        borderRadius: 8,
+        outline: 'none',
+      },
+      /** A row's action: the Models page's secondary button at its row size. */
+      secondary: {
+        boxSizing: 'border-box',
+        height: 28,
+        padding: '0 10px',
+        font: 'inherit',
+        fontSize: 12,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-primary)',
+        background: 'transparent',
+        border: '.5px solid var(--dsw-alias-border-l3)',
+        borderRadius: 14,
+        cursor: 'pointer',
+      },
+      /** Saving a key inside a card. The pane's primary button, card-sized. */
+      cardPrimary: {
+        boxSizing: 'border-box',
+        height: 32,
+        padding: '0 14px',
+        font: 'inherit',
         fontSize: 13,
         fontWeight: 600,
+        color: 'var(--dsw-alias-label-primary-foreground)',
+        background: 'var(--dsw-alias-button-primary-fill)',
+        border: '1px solid transparent',
+        borderRadius: 16,
+        cursor: 'pointer',
+      },
+      /** Removing a key inside a card. Same colour rule as the pane's danger button. */
+      cardDanger: {
+        boxSizing: 'border-box',
+        height: 32,
+        padding: '0 14px',
+        font: 'inherit',
+        fontSize: 13,
+        color: 'var(--dsw-alias-state-error-primary)',
+        background: 'transparent',
+        border: '.5px solid var(--dsw-alias-border-l3)',
+        borderRadius: 16,
+        cursor: 'pointer',
+      },
+      /** The workflow block: the analog of Models' model catalog fold. */
+      workflows: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        paddingTop: 12,
+        borderTop: '.5px solid var(--dsw-alias-border-l2)',
+      },
+      workflowsTitle: {
+        fontSize: 12,
+        fontWeight: 500,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-secondary)',
+      },
+      workflowsMeta: {
+        margin: 0,
+        fontSize: 12,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-tertiary)',
+      },
+      workflowList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        margin: 0,
+        padding: 0,
+        listStyle: 'none',
+      },
+      workflowItem: {
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 6,
+        fontSize: 13,
+        lineHeight: '20px',
         color: 'var(--dsw-alias-label-primary)',
+      },
+      workflowMeta: {
+        fontSize: 11,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-tertiary)',
+      },
+      /**
+       * The install prompt. Models fetches a model list; Generate cannot — a workflow
+       * is installed by the agent from a link the user gives it (founder, 2026-09-23:
+       * *"we don't fetch the model, we add the workflow using prompt"*). So the card
+       * shows the sentence to say, and Copy puts it on the clipboard, because a plugin
+       * cannot type into the composer (measured 2026-09-22).
+       */
+      promptRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 10px',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '.5px solid var(--dsw-alias-border-l1)',
+        borderRadius: 8,
+      },
+      promptCode: {
+        flex: 1,
+        minWidth: 0,
+        fontFamily: 'var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, monospace)',
+        fontSize: 12,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-secondary)',
+        overflowWrap: 'anywhere',
       },
       stripValue: {
         fontWeight: 600,
@@ -895,8 +1168,11 @@ window.__ModuleLoader__.load({
      * confirmation, and only found the balance after looking away from the button
      * (2026-09-22).
      */
-    function SaveDialog({ t, wallet, onClose }) {
-      const parts = balanceParts(t, wallet)
+    function SaveDialog({ t, provider, onClose }) {
+      const parts = provider ? balanceParts(t, provider) : []
+      // A key the provider would not check is still saved, and saying "valid" about it
+      // would be the same lie the row refuses to tell.
+      const unverified = !!(provider && provider.linked && !provider.verified)
       const row = (key, text) =>
         h(
           'div',
@@ -904,23 +1180,26 @@ window.__ModuleLoader__.load({
           h('span', { style: S.savedCheck }, h(IconCheckOutline16, { size: 14 })),
           h('span', null, text),
         )
+      const title = unverified ? t('saved.unverifiedTitle') : parts.length ? t('saved.title') : t('saved.titlePlain')
+      const description = unverified ? t('saved.unverifiedIntro') : parts.length ? t('saved.intro') : t('saved.introPlain')
       return h(
         Modal,
         {
           open: true,
           onClose,
-          title: t('saved.title'),
+          title,
           closeLabel: t('saved.close'),
-          description: t('saved.intro'),
+          description,
           footer: h(
             'button',
             { type: 'button', style: S.primary, 'data-generate-dismiss': 'yes', onClick: onClose },
             t('saved.dismiss'),
           ),
         },
-        row('key', t('saved.keyOk')),
-        row('wallet', parts.length ? t('saved.walletOk') + ' ' + parts.join(' · ') : t('saved.walletOkBare')),
-        h('div', { style: S.savedWhere }, t('saved.where')),
+        unverified ? row('unverified', t('saved.unverified')) : row('key', parts.length ? t('saved.keyOk') : t('saved.keyOkPlain')),
+        !unverified && parts.length ? row('wallet', t('saved.walletOk') + ' ' + parts.join(' · ')) : null,
+        // Where the balance went is only a fact for a provider that has one.
+        !unverified && parts.length ? h('div', { style: S.savedWhere }, t('saved.where')) : null,
       )
     }
 
@@ -928,12 +1207,13 @@ window.__ModuleLoader__.load({
      * The key field. The error lands here, under the input, because S2's exit
      * criterion is that a bad key fails *at the field* rather than three screens
      * later inside a paid run (§9).
+     *
+     * It names its provider (`Krea API key`, not `API key`) and links that provider's
+     * own key page, because the page is now one of several on one card list and four
+     * identical fields would be four guesses.
      */
-    function KeyForm({ t, onSave, busy, autofocus, accountUrl, onEdit, suffix }) {
-      // One page can carry several providers' fields now, so the input's id and
-      // its label's htmlFor are per provider: two fields sharing `generate-key`
-      // would make the second label point at the first input.
-      const fieldId = 'generate-key' + (suffix ? '-' + suffix : '')
+    function KeyForm({ t, provider, onSave, busy, autofocus, onEdit }) {
+      const fieldId = 'generate-key-' + provider.id
       const [value, setValue] = React.useState('')
       const [error, setError] = React.useState(null)
 
@@ -953,13 +1233,21 @@ window.__ModuleLoader__.load({
         }
       }
 
+      const keyLink = provider.keyUrl
+        ? h(
+            'a',
+            { href: provider.keyUrl, target: '_blank', rel: 'noreferrer', style: S.hintLink },
+            provider.keyPageLabel || t('wallet.key.getKey'),
+          )
+        : null
+
       return h(
         'form',
-        { style: S.formBody, onSubmit: submit },
-        h('label', { style: S.label, htmlFor: fieldId }, t('wallet.key.label')),
+        { style: S.fieldGroup, onSubmit: submit },
+        h('label', { style: S.fieldLabel, htmlFor: fieldId }, provider.label + ' ' + t('key.label.suffix')),
         h('input', {
           id: fieldId,
-          style: S.field,
+          style: S.settingsInput,
           type: 'password',
           value,
           autoComplete: 'off',
@@ -982,32 +1270,20 @@ window.__ModuleLoader__.load({
               errorText(t, error),
               // A field error is exactly when a user needs the page that issues
               // keys, so the link stays reachable from the failure too.
-              accountUrl
-                ? h(
-                    'a',
-                    { href: accountUrl, target: '_blank', rel: 'noreferrer', style: S.hintLink },
-                    t('wallet.key.getKey'),
-                  )
-                : null,
+              keyLink,
             )
           : h(
               'div',
               { style: S.hint },
               t('wallet.key.hint'),
-              accountUrl
-                ? h(
-                    'a',
-                    { href: accountUrl, target: '_blank', rel: 'noreferrer', style: S.hintLink },
-                    t('wallet.key.getKey'),
-                  )
-                : null,
+              keyLink,
             ),
         h(
           'div',
           { style: S.row },
           h(
             'button',
-            { type: 'submit', style: S.primary, disabled: busy || value.trim() === '' },
+            { type: 'submit', style: S.cardPrimary, disabled: busy || value.trim() === '' },
             busy ? t('wallet.key.saving') : t('wallet.key.save'),
           ),
         ),
@@ -1031,7 +1307,13 @@ window.__ModuleLoader__.load({
         'div',
         { style: S.strip, 'data-generate-provider-strip': provider.id },
         showLabel ? h('span', { style: S.stripLabel }, provider.label) : null,
-        h('span', { style: S.stripValue }, parts.length ? parts.join(' · ') : t('wallet.notLinked')),
+        // A provider with no balance endpoint says `Key saved` rather than claiming an
+        // empty wallet: Krea, Magnific and Comfy Cloud have no balance route at all.
+        h(
+          'span',
+          { style: S.stripValue },
+          parts.length ? parts.join(' · ') : provider.linked ? t('settings.linked') : t('wallet.notLinked'),
+        ),
         h(
           'span',
           {
@@ -1044,12 +1326,13 @@ window.__ModuleLoader__.load({
           provider.writable === false ? t('settings.readOnly') : null,
           provider.writable !== false && provider.source === STORED_SOURCE ? t('wallet.fromStore') : null,
           provider.writable !== false && ENVIRONMENT_SOURCES.includes(provider.source) ? t('wallet.fromEnvironment') : null,
+          provider.note ? t('note.' + provider.note) : null,
         ),
         provider.accountUrl
           ? h(
               'a',
               { href: provider.accountUrl, target: '_blank', rel: 'noreferrer', style: S.link },
-              t('wallet.topup'),
+              t('settings.account'),
               h(IconRightUpOutline16, { size: 12 }),
             )
           : null,
@@ -1298,7 +1581,16 @@ window.__ModuleLoader__.load({
       }
 
       const linked = providers.providers.filter((provider) => provider.linked)
-      const first = providers.providers[0] || null
+      // The first-run form belongs to a WORKFLOW provider: the pane is where workflows
+      // run, RunningHub and Comfy Cloud are the two that have them, and with four
+      // providers registered "the first one" would otherwise be an image provider the
+      // pane has nothing to run. When every workflow provider is already linked it falls
+      // back to the first unlinked provider, then to the first in the registry.
+      const first =
+        providers.providers.find((provider) => provider.kind === 'workflow' && !provider.linked) ||
+        providers.providers.find((provider) => !provider.linked) ||
+        providers.providers[0] ||
+        null
       const several = providers.providers.length > 1
 
       // No provider linked yet: the pane asks for the first one's key. That is the
@@ -1313,15 +1605,13 @@ window.__ModuleLoader__.load({
             h(GenerateMark, null),
             h('div', { style: S.title }, t('pane.first.title')),
             h('div', { style: S.body }, t('pane.first.body')),
-            several && first ? h('div', { style: S.label }, first.label) : null,
             first
               ? h(KeyForm, {
                   t,
-                  suffix: first.id,
+                  provider: first,
                   onSave: (key) => providers.save(first.id, key),
                   busy: providers.busy,
                   autofocus: true,
-                  accountUrl: first.accountUrl,
                   onEdit: providers.forget,
                 })
               : h('div', { style: S.hint }, t('pane.noProviders')),
@@ -1350,7 +1640,7 @@ window.__ModuleLoader__.load({
         // The link just happened. The dialog says the key works, that the provider
         // answered, and where the balance went; the strip below it is the thing the
         // dialog is pointing at.
-        saved && active === null ? h(SaveDialog, { t, wallet: saved, onClose: providers.forget }) : null,
+        saved && active === null ? h(SaveDialog, { t, provider: saved, onClose: providers.forget }) : null,
         linked.map((provider) => h(ProviderStrip, { key: provider.id, t, provider, showLabel: several })),
         linked
           .filter((provider) => provider.error)
@@ -1504,25 +1794,267 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * What a provider's dot says. Four states, because "linked" is not one fact:
+     *
+     *   ok        the provider answered about the key
+     *   unchecked the provider did not confirm it (or its subscription has lapsed)
+     *   refused   the stored key was rejected, so it needs replacing
+     *   none      no key on this machine yet
+     */
+    function providerState(provider) {
+      if (!provider.linked) return { dot: 'dotNone', state: 'none' }
+      if (provider.error === 'invalid-key') return { dot: 'dotBad', state: 'refused' }
+      if (provider.note || !provider.verified) return { dot: 'dotWarn', state: 'unchecked' }
+      return { dot: 'dotOk', state: 'ok' }
+    }
+
+    /**
+     * The row's own sentence, next to its dot.
+     *
+     * A dot is not a fact a person can act on, so every state has a line: what is
+     * linked, what the provider answered, or what it refused to confirm. A provider
+     * with no balance endpoint says `Key saved` rather than showing an empty wallet.
+     */
+    function providerSummary(t, provider) {
+      if (!provider.linked) return { text: t('wallet.notLinked'), warn: false, error: false }
+      if (provider.error === 'invalid-key') return { text: t('error.storedKeyRejected'), warn: false, error: true }
+      if (provider.note) return { text: t('note.' + provider.note), warn: true, error: false }
+      const parts = balanceParts(t, provider)
+      if (parts.length > 0) return { text: parts.join(' · '), warn: false, error: false }
+      if (!provider.verified) return { text: t('settings.linked.unverified'), warn: true, error: false }
+      return { text: t('settings.linked'), warn: false, error: false }
+    }
+
+    /** How many workflows a provider has, said in words. */
+    function workflowCount(t, total) {
+      if (total === 0) return t('settings.workflows.none')
+      return total + ' ' + (total === 1 ? t('settings.workflows.one') : t('settings.workflows.many'))
+    }
+
+    /**
+     * One provider's installed workflows, read when its card opens.
+     *
+     * Mounted by the editor, so it runs on open and not before: the list route reads a
+     * directory and needs no key, but a collapsed row has no reason to ask.
+     */
+    function useProviderWorkflows(provider) {
+      const [state, setState] = React.useState({ phase: 'loading', entries: [] })
+
+      React.useEffect(() => {
+        let live = true
+        const read = async () => {
+          try {
+            const response = await fetch(providerUrl(provider.id, 'workflows'), { headers: { accept: 'application/json' } })
+            const body = await response.json()
+            if (!live) return
+            if (!response.ok || !body || !Array.isArray(body.entries)) {
+              setState({ phase: 'failed', entries: [] })
+              return
+            }
+            setState({ phase: 'ready', entries: body.entries })
+          } catch {
+            if (live) setState({ phase: 'failed', entries: [] })
+          }
+        }
+        read()
+        return () => {
+          live = false
+        }
+      }, [provider.id])
+
+      return state
+    }
+
+    /**
+     * The open card: the key, the account, and what is installed.
+     *
+     * The key is the primary field, the way it is on a Models card. Where Models puts
+     * a model catalog, this puts the workflow list and the sentence that installs one
+     * — a workflow cannot be fetched from an API (founder, 2026-09-23: *"we don't fetch
+     * the model, we add the workflow using prompt"*), so the card shows the prompt and
+     * copies it.
+     */
+    function ProviderEditor({ t, provider, busy, onSave, onRemove, onEdit }) {
+      const work = useProviderWorkflows(provider)
+      const summary = providerSummary(t, provider)
+      const [copied, setCopied] = React.useState(false)
+
+      const copy = async () => {
+        try {
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            await navigator.clipboard.writeText(provider.addPrompt)
+            setCopied(true)
+          }
+        } catch {
+          // The prompt is on screen either way; a refused clipboard is not an error
+          // worth a message of its own.
+        }
+      }
+
+      return h(
+        'div',
+        { style: S.editor, 'data-generate-provider-editor': provider.id },
+        h(
+          'div',
+          {
+            style: summary.error ? S.summaryError : summary.warn ? S.summaryWarn : S.rowSummary,
+            'data-generate-provider-note': provider.id,
+          },
+          summary.text,
+        ),
+        provider.linked && provider.writable === false
+          ? h('div', { style: S.hint }, t('settings.readOnly'))
+          : h(
+              React.Fragment,
+              null,
+              provider.linked ? h('div', { style: S.hint }, t('wallet.replace.hint')) : null,
+              h(KeyForm, { t, provider, onSave, busy, onEdit }),
+            ),
+        h(
+          'div',
+          { style: S.row },
+          provider.linked && provider.writable !== false
+            ? h(
+                'button',
+                { type: 'button', style: S.cardDanger, disabled: busy, 'data-generate-remove': provider.id, onClick: onRemove },
+                t('remove.action'),
+              )
+            : null,
+          provider.accountUrl
+            ? h(
+                'a',
+                { href: provider.accountUrl, target: '_blank', rel: 'noreferrer', style: S.link },
+                t('settings.account'),
+                h(IconRightUpOutline16, { size: 12 }),
+              )
+            : null,
+        ),
+        h(
+          'div',
+          { style: S.workflows, 'data-generate-provider-workflows': provider.id },
+          h('div', { style: S.workflowsTitle }, t('settings.workflows.title')),
+          h(
+            'p',
+            { style: S.workflowsMeta },
+            work.phase === 'failed'
+              ? t('settings.workflows.unknown')
+              : work.phase === 'loading'
+                ? t('pane.loading')
+                : workflowCount(t, work.entries.length),
+          ),
+          work.entries.length > 0
+            ? h(
+                'ul',
+                { style: S.workflowList },
+                work.entries.map((entry) =>
+                  h(
+                    'li',
+                    { key: entry.name, style: S.workflowItem },
+                    h('span', null, entry.title || entry.name),
+                    entry.doorCount > 0 ? h('span', { style: S.workflowMeta }, entry.doorCount + ' ' + t('settings.workflows.doors')) : null,
+                  ),
+                ),
+              )
+            : null,
+          h(
+            'div',
+            { style: S.fieldGroup },
+            h('div', { style: S.hint }, t('settings.workflows.add')),
+            h(
+              'div',
+              { style: S.promptRow },
+              h('code', { style: S.promptCode, 'data-generate-add-prompt': provider.id }, provider.addPrompt),
+              h(
+                'button',
+                { type: 'button', style: S.secondary, 'data-generate-copy-prompt': provider.id, onClick: copy },
+                copied ? t('settings.workflows.copied') : t('settings.workflows.copy'),
+              ),
+            ),
+          ),
+        ),
+      )
+    }
+
+    /** One provider's row: its dot, its name, its family, its state and its card. */
+    function ProviderRow({ t, provider, open, busy, onToggle, onSave, onRemove, onEdit }) {
+      const look = providerState(provider)
+      const summary = providerSummary(t, provider)
+      return h(
+        'li',
+        { style: S.rowCard, 'data-generate-provider-card': provider.id, 'data-generate-provider-state': look.state },
+        h(
+          'div',
+          { style: S.rowHead },
+          h('span', { style: { ...S.dot, ...S[look.dot] }, 'data-generate-provider-dot': look.state, 'aria-hidden': true }),
+          h(
+            'span',
+            { style: S.rowIdentity },
+            h('span', { style: S.rowName }, provider.label),
+            h('span', { style: S.rowTag }, t(provider.kind === 'image' ? 'settings.kind.image' : 'settings.kind.workflow')),
+          ),
+          h(
+            'span',
+            { style: S.rowActions },
+            h(
+              'button',
+              {
+                type: 'button',
+                style: S.secondary,
+                'data-generate-provider-toggle': provider.id,
+                'aria-expanded': open ? 'true' : 'false',
+                onClick: onToggle,
+              },
+              open ? t('settings.row.close') : provider.linked ? t('settings.row.edit') : t('settings.row.setup'),
+            ),
+          ),
+        ),
+        h(
+          'div',
+          {
+            style: summary.error ? S.summaryError : summary.warn ? S.summaryWarn : S.rowSummary,
+            'data-generate-provider-summary': provider.id,
+          },
+          summary.text,
+        ),
+        open ? h(ProviderEditor, { t, provider, busy, onSave, onRemove, onEdit }) : null,
+      )
+    }
+
+    /**
      * The settings page: ONE page, listing every provider.
      *
      * "we should only have 1 generate settings with the different adapters" (founder,
      * 2026-09-22) — and that is the reason the providers live inside this plugin
      * instead of one plugin each: `settings.section` is a list, so a plugin per
-     * provider would be one Generate page per provider. This page is the Models →
-     * Providers shape: a row per provider with its key state, the way to link, replace
-     * or remove it, and what it has installed.
+     * provider would be one Generate page per provider.
+     *
+     * THE MODELS → PROVIDERS SHAPE, in full (founder, 2026-09-23: *"use the models
+     * settings design for generate settings"*): the section's own title and intro, then
+     * one row per provider carrying its credential dot, its name, the family it belongs
+     * to and the state of its key, and one editor card open at a time with the API key
+     * as the primary field. Image providers are listed before workflow providers
+     * (founder: *"add image provider, then RunningHub"*), which is the registry's own
+     * order and not a second sort.
+     *
+     * The one thing Models does and this page cannot: a model list is fetched from the
+     * provider, a workflow is installed by the agent from a link, so the card carries
+     * the sentence to say instead of a discovery button.
      */
     function GenerateSettings(props) {
       const t = translatorOf(props)
       const { phase, providers, busy, save, unlink, confirmed, forget } = useProviders()
+      // Which card is open. `undefined` means "the page has not been touched", which is
+      // what lets the first-run posture open the first unlinked provider's card — the
+      // same posture Models gives a provider with no key anywhere. No effect is needed
+      // and none is used: a choice, once made, is the page's.
+      const [chosen, setChosen] = React.useState(undefined)
       // The provider being asked about, and whether the answer is the question or the
       // receipt. The two states are one dialog.
       const [removing, setRemoving] = React.useState(null)
       const [removeError, setRemoveError] = React.useState(null)
 
       if (phase === 'loading') {
-        return h('div', { style: S.page }, h('div', { style: S.body }, t('pane.loading')))
+        return h('div', { style: S.settingsPage }, h('div', { style: S.settingsIntro }, t('pane.loading')))
       }
 
       const saved = providers.find((provider) => provider.id === confirmed) || null
@@ -1555,10 +2087,16 @@ window.__ModuleLoader__.load({
         if (removing !== null && removing.endsWith(':done')) setRemoving(null)
       }
 
+      // The first unlinked provider is the one the first-run card opens, in registry
+      // order: with nothing linked the page would otherwise be four closed rows and no
+      // field to type into.
+      const firstUnlinked = providers.find((provider) => !provider.linked) || null
+      const openId = chosen !== undefined ? chosen : firstUnlinked === null ? null : firstUnlinked.id
+
       return h(
         'div',
-        { style: S.page, 'data-generate-settings': providers.some((provider) => provider.linked) ? 'linked' : 'unlinked' },
-        saved ? h(SaveDialog, { t, wallet: saved, onClose: forget }) : null,
+        { style: S.settingsPage, 'data-generate-settings': providers.some((provider) => provider.linked) ? 'linked' : 'unlinked' },
+        saved ? h(SaveDialog, { t, provider: saved, onClose: forget }) : null,
         asking
           ? h(RemoveKeyDialog, {
               t,
@@ -1570,49 +2108,24 @@ window.__ModuleLoader__.load({
               onClose: cancelRemove,
             })
           : null,
-        h('div', { style: S.title }, t('settings.title')),
-        h('div', { style: S.body }, t('settings.body')),
-        providers.map((provider) =>
-          h(
-            'div',
-            { key: provider.id, style: S.providerCard, 'data-generate-provider-card': provider.id },
-            h('div', { style: S.providerName }, provider.label),
-            provider.linked ? h(ProviderStrip, { t, provider, showLabel: false }) : null,
-            provider.linked && provider.writable === false
-              ? h('div', { style: S.hint }, t('settings.readOnly'))
-              : h(
-                  React.Fragment,
-                  null,
-                  provider.linked ? h('div', { style: S.hint }, t('wallet.replace.hint')) : null,
-                  h(KeyForm, {
-                    t,
-                    suffix: provider.id,
-                    onSave: (key) => save(provider.id, key),
-                    busy,
-                    accountUrl: provider.accountUrl,
-                    onEdit: edited,
-                  }),
-                ),
-            provider.linked && provider.writable !== false
-              ? h(
-                  'div',
-                  { style: S.row },
-                  h(
-                    'button',
-                    { type: 'button', style: S.ghost, disabled: busy, 'data-generate-remove': provider.id, onClick: () => askRemove(provider.id) },
-                    t('remove.action'),
-                  ),
-                )
-              : null,
-            h(
-              'div',
-              { style: S.hint, 'data-generate-provider-workflows': provider.id },
-              provider.workflows === 0
-                ? t('settings.workflows.none')
-                : provider.workflows === null
-                  ? t('settings.workflows.unknown')
-                  : provider.workflows + ' ' + (provider.workflows === 1 ? t('settings.workflows.one') : t('settings.workflows.many')),
-            ),
+        h('h2', { style: S.settingsTitle }, t('settings.title')),
+        h('p', { style: S.settingsIntro }, t('settings.body')),
+        providers.length === 0 ? h('p', { style: S.settingsIntro }, t('pane.noProviders')) : null,
+        h(
+          'ul',
+          { style: S.rows },
+          providers.map((provider) =>
+            h(ProviderRow, {
+              key: provider.id,
+              t,
+              provider,
+              open: openId === provider.id,
+              busy,
+              onToggle: () => setChosen(openId === provider.id ? null : provider.id),
+              onSave: (key) => save(provider.id, key),
+              onRemove: () => askRemove(provider.id),
+              onEdit: edited,
+            }),
           ),
         ),
       )

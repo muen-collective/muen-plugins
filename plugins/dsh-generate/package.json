@@ -1,7 +1,7 @@
 {
   "name": "@muen/dsh-generate",
   "version": "0.1.0-dev",
-  "description": "The Generate space for DeepSeek Harness: one provider-neutral plugin that holds several providers (RunningHub today; Krea and Comfy Cloud later), each with its own key and its own workflows, all opened as surfaces inside the one Generate pane. Epic 61 — the install flow, the provider registry, the one settings page and the pane as a hub are built; the payload gate and the run (S5), and the pane's one-field install form, are still owed.",
+  "description": "The Generate space for DeepSeek Harness: one provider-neutral plugin that holds several providers — Krea and Magnific (image), RunningHub and Comfy Cloud (workflows), registered 2026-09-23 — each with its own key and its own workflows, opened as surfaces inside the one Generate pane. The provider registry and the Models-shaped settings page (a row per provider, one open editor card, the API key as the primary field) are built; the payload gate and the run (S5) are still owed.",
   "license": "MIT",
   "repository": {
     "type": "git",

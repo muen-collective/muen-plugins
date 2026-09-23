@@ -339,16 +339,68 @@ const PROVIDERS_API = '/plugins/generate/providers'
 const KEY_PATH = PROVIDERS_API + '/' + PROVIDER + '/key'
 const WORKFLOWS_PATH = PROVIDERS_API + '/' + PROVIDER + '/workflows'
 
-/** One provider row, as the host builds it: key state plus what it has installed. */
-const row = (status) => ({ id: PROVIDER, label: 'RunningHub', workflows: 0, ...status })
-/** The list route's body: the one provider this build ships. */
-const list = (status) => ({ providers: [row(status)] })
-
-const UNLINKED = { linked: false, writable: true, source: null, account: null, error: null, accountUrl: ACCOUNT_URL }
+/** One provider row, as the host builds it: identity, key state, workflow count. */
+const RUNNINGHUB = {
+  id: PROVIDER,
+  label: 'RunningHub',
+  kind: 'workflow',
+  keyPageLabel: 'API → Keys',
+  keyUrl: ACCOUNT_URL,
+  accountUrl: 'https://www.runninghub.ai/call-api/bill-task',
+  addPrompt: 'add this RunningHub workflow <app link>',
+}
+/**
+ * The other three providers, as the host builds them (2026-09-23). They are in the
+ * list because the settings page and the pane now draw every provider, and the
+ * first-run posture (the first UNLINKED provider opens its own card) is a behaviour
+ * these cases have to account for rather than a fixture they can ignore.
+ */
+const OTHERS = [
+  {
+    id: 'krea',
+    label: 'Krea',
+    kind: 'image',
+    keyPageLabel: 'API tokens',
+    keyUrl: 'https://www.krea.ai/settings/api-tokens',
+    accountUrl: 'https://www.krea.ai/app/api',
+    addPrompt: 'add this Krea model <model name>',
+  },
+  {
+    id: 'magnific',
+    label: 'Magnific',
+    kind: 'image',
+    keyPageLabel: 'API keys',
+    keyUrl: 'https://www.magnific.com/user/organization/api-keys',
+    accountUrl: null,
+    addPrompt: 'add this Magnific tool <tool name>',
+  },
+  {
+    id: 'comfycloud',
+    label: 'Comfy Cloud',
+    kind: 'workflow',
+    keyPageLabel: 'API keys',
+    keyUrl: 'https://platform.comfy.org/profile/api-keys',
+    accountUrl: 'https://platform.comfy.org',
+    addPrompt: 'add this Comfy Cloud workflow <workflow file>',
+  },
+]
+const UNLINKED = { linked: false, verified: false, writable: true, source: null, account: null, note: null, error: null }
 // `source: 'file'` is the seam's own word for the store it manages, which is what
 // the live route reports after a paste (read from the running app 2026-09-22).
-const LINKED = { linked: true, writable: true, source: 'file', account: { coins: 8600, money: 27.473, currency: 'USD', running: 0 }, error: null, accountUrl: ACCOUNT_URL }
-const REFUSED = { linked: false, writable: true, source: null, account: null, error: 'invalid-key', accountUrl: ACCOUNT_URL }
+const LINKED = {
+  linked: true,
+  verified: true,
+  writable: true,
+  source: 'file',
+  account: { coins: 8600, money: 27.473, currency: 'USD', running: 0 },
+  note: null,
+  error: null,
+}
+const REFUSED = { linked: false, verified: false, writable: true, source: null, account: null, note: null, error: 'invalid-key' }
+
+const row = (status) => ({ ...RUNNINGHUB, workflows: 0, ...status })
+/** The list route's body: the RunningHub row this case is about, plus the other three. */
+const list = (status) => ({ providers: [row(status), ...OTHERS.map((provider) => ({ ...provider, workflows: 0, ...UNLINKED }))] })
 
 /**
  * A stub host. A route may name a `url` and is then matched exactly; one without a
@@ -401,11 +453,32 @@ if (pane && settings) {
   const DIALOG_TITLE = EN['saved.title']
   check(
     'every line the dialog shows has copy in both languages',
-    ['saved.title', 'saved.close', 'saved.intro', 'saved.keyOk', 'saved.walletOk', 'saved.walletOkBare', 'saved.where', 'saved.dismiss'].every(
-      (key) => !!EN[key] && !!ZH[key],
-    ),
+    [
+      'saved.title',
+      'saved.titlePlain',
+      'saved.unverifiedTitle',
+      'saved.close',
+      'saved.intro',
+      'saved.introPlain',
+      'saved.unverifiedIntro',
+      'saved.keyOk',
+      'saved.keyOkPlain',
+      'saved.walletOk',
+      'saved.unverified',
+      'saved.where',
+      'saved.dismiss',
+    ].every((key) => !!EN[key] && !!ZH[key]),
     DIALOG_TITLE,
   )
+  // The RunningHub card is not open on the first frame any more: the settings page
+  // opens the first UNLINKED provider (the Models first-run posture), so a case about
+  // a linked provider opens that card the way a person does.
+  const openCard = async (tree, id, key) => {
+    const toggle = nodesOf(tree).find((node) => node.props && node.props['data-generate-provider-toggle'] === id)
+    if (!toggle) return tree
+    toggle.props.onClick()
+    return settle(settings.component, { t }, key)
+  }
 
   // 1. the pane: the first-run field, a save that works
   {
@@ -498,10 +571,11 @@ if (pane && settings) {
 
   // 3. the settings page: changing a key on a linked wallet
   {
-    const { tree } = await render(settings.component, [
+    const { tree: first } = await render(settings.component, [
       { method: 'GET', body: list(LINKED) },
       { method: 'POST', body: row(LINKED) },
     ], 'settings-change')
+    const tree = await openCard(first, PROVIDER, 'settings-change')
     const input = firstOf(tree, 'input')
     check('the settings page offers the field for a linked wallet', !!input, textOf(tree).join(' | ').slice(0, 160))
     input.props.onChange({ target: { value: 'rh-a-second-key' } })
@@ -531,7 +605,8 @@ if (pane && settings) {
 
   // 5. the settings page: a wallet that cannot be written to offers no field at all
   {
-    const { tree } = await render(settings.component, [{ method: 'GET', body: list({ ...LINKED, writable: false, source: 'env' }) }], 'settings-readonly')
+    const { tree: first } = await render(settings.component, [{ method: 'GET', body: list({ ...LINKED, writable: false, source: 'env' }) }], 'settings-readonly')
+    const tree = await openCard(first, PROVIDER, 'settings-readonly')
     const text = textOf(tree).join(' ')
     check('a read-only key shows the reason instead of a field', !firstOf(tree, 'input') && text.includes(EN['settings.readOnly']), text.slice(0, 200))
     check('a read-only key opens no dialog', !nodesOf(tree).some((node) => node.props && node.props['data-stub'] === 'modal'), text.slice(0, 200))
@@ -544,10 +619,11 @@ if (pane && settings) {
 
   // 6. removing the key: rotation's other half, and the way back to a first-run field
   {
-    const { tree, stub } = await render(settings.component, [
+    const { tree: first, stub } = await render(settings.component, [
       { method: 'GET', body: list(LINKED) },
       { method: 'DELETE', body: row(UNLINKED) },
     ], 'settings-remove')
+    const tree = await openCard(first, PROVIDER, 'settings-remove')
     check(
       'a linked wallet says the field replaces the stored key',
       textOf(tree).join(' ').includes(EN['wallet.replace.hint']),
@@ -621,10 +697,11 @@ if (pane && settings) {
 
   // 7. declining the removal question leaves the key alone
   {
-    const { tree, stub } = await render(settings.component, [
+    const { tree: first, stub } = await render(settings.component, [
       { method: 'GET', body: list(LINKED) },
       { method: 'DELETE', body: row(UNLINKED) },
     ], 'settings-cancel-remove')
+    const tree = await openCard(first, PROVIDER, 'settings-cancel-remove')
     const remove = nodesOf(tree).find((node) => node.props && typeof node.props['data-generate-remove'] === 'string')
     remove.props.onClick()
     const asked = await settle(settings.component, { t }, 'settings-cancel-remove')
@@ -653,6 +730,10 @@ if (pane && settings) {
   }
 
   // 8. the strip says where the key really came from, in the seam's own vocabulary
+  //
+  // The strip is the PANE's (the settings page shows a credential dot and a sentence
+  // per row instead), so these cases render the pane, which is where a person meets
+  // the note.
   {
     const noteOf = (tree) => {
       const note = nodesOf(tree).find((node) => node.props && 'data-generate-source' in node.props)
@@ -680,9 +761,9 @@ if (pane && settings) {
     ]
     for (const item of sources) {
       const { tree } = await render(
-        settings.component,
-        [{ method: 'GET', body: list({ ...LINKED, writable: item.writable, source: item.source }) }],
-        'settings-source-' + item.source,
+        pane.component,
+        [NO_WORKFLOWS, { method: 'GET', body: list({ ...LINKED, writable: item.writable, source: item.source }) }],
+        'pane-source-' + item.source,
       )
       const note = noteOf(tree)
       check(
@@ -692,9 +773,9 @@ if (pane && settings) {
       )
     }
     const unknown = await render(
-      settings.component,
-      [{ method: 'GET', body: list({ ...LINKED, source: 'mystery' }) }],
-      'settings-source-unknown',
+      pane.component,
+      [NO_WORKFLOWS, { method: 'GET', body: list({ ...LINKED, source: 'mystery' }) }],
+      'pane-source-unknown',
     )
     const unknownNote = noteOf(unknown.tree)
     check(
@@ -861,6 +942,11 @@ if (pane && settings) {
     const stub = stubFetch([{ method: 'GET', body: list(LINKED) }, { method: 'POST', body: row(LINKED) }])
     globalThis.fetch = stub.fetch
     const zhSettings = zhSeen.slots.find((slot) => slot.options.name === 'settings.section').component
+    const zhFrame = await settle(zhSettings, { t: zhT }, 'settings-zh')
+    // The RunningHub card has to be opened, the same click the English cases make:
+    // the page opens the first unlinked provider by itself, which is Krea.
+    const zhToggle = nodesOf(zhFrame).find((node) => node.props && node.props['data-generate-provider-toggle'] === PROVIDER)
+    if (zhToggle) zhToggle.props.onClick()
     const tree = await settle(zhSettings, { t: zhT }, 'settings-zh')
     firstOf(tree, 'input').props.onChange({ target: { value: 'rh-zh-key' } })
     const typed = firstOf(await settle(zhSettings, { t: zhT }, 'settings-zh'), 'form')

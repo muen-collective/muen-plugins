@@ -22,7 +22,7 @@ and the run are not faked here.
 | `/plugins/generate/providers/<id>/key` | one provider's key: `GET` its state, `POST` to link or replace, `DELETE` to unlink |
 | `/plugins/generate/providers/<id>/workflows` | one provider's installed workflows — one disk read, no key, no network |
 | `/plugins/generate/providers/<id>/workflow?name=` | one workflow, whole: the doors, labels, bounds and `ui.order` a surface renders |
-| `settings.section` | exactly ONE settings page, id `generate`, listing every provider — the Models → Providers shape |
+| `settings.section` | exactly ONE settings page, id `generate`, listing every provider in the Models → Providers shape: a row per provider with a credential dot and its key state, one open editor card at a time, the API key as the primary field, and the install prompt where Models puts a model list |
 | the client locale registry | namespace `generate`, en + zh |
 | `ctx.tools` | `rh_workflow_graph` (read an app's doors) and `rh_adapter_validate` (check a written adapter) |
 | `ctx.skills` | `add-rh-workflow`, read from `skills/add-rh-workflow/SKILL.md` at apply time |
@@ -34,10 +34,34 @@ and the run are not faked here.
 > "we need to rethink the generate plugin to be able to use different providers, it should work like the
 > providers settings" … "we should only have 1 generate settings with the different adapters."
 
-A provider is one object in `lib/providers.js`: its id and label, the credential reference its key lives under,
-the account page a person manages that key at, how to read the account a key opens (which is how a key is
-validated before it is stored), where its data lives under the plugin root, and how to list and read its
-workflows. RunningHub is the first; Krea and Comfy Cloud are the reason the file exists.
+A provider is one object in `lib/providers.js`: its id and label, the family it belongs to (`kind`), the
+credential reference its key lives under, the page that issues that key and what that page is called, the page
+a person manages the account at, the sentence that installs one of its workflows, how to read the account a key
+opens (which is how a key is validated before it is stored), where its data lives under the plugin root, and how
+to list and read its workflows.
+
+**Four are registered, in the order the surfaces show them — image providers first (founder, 2026-09-23:
+*"add image provider, then RunningHub … I have accounts at Krea API and I can make account Magnific for 1 month
+to test … I also have account Comfy Cloud"*):**
+
+| Provider | Family | Host | Key check | Key page |
+|---|---|---|---|---|
+| Krea | image | `api.krea.ai` | `GET /jobs`, `Authorization: Bearer` | krea.ai/settings/api-tokens |
+| Magnific | image | `api.magnific.com` | `GET /v1/creations/recent?per_page=1`, `x-magnific-api-key` | magnific.com/user/organization/api-keys |
+| RunningHub | workflow | `www.runninghub.ai` | `POST /uc/openapi/accountStatus`, `Authorization: Bearer` | runninghub.ai/call-api/bill-task?tab=keys |
+| Comfy Cloud | workflow | `cloud.comfy.org` | `GET /api/user`, `X-API-Key` | platform.comfy.org/profile/api-keys |
+
+Each check was researched on 2026-09-23 against the provider's own docs and OpenAPI, and the citations live on
+the provider object. Two facts shaped the contract:
+
+- **Only RunningHub can report a balance.** Krea, Magnific and Comfy Cloud publish no account endpoint at all —
+  Krea's docs say outright that balance *"cannot be read programmatically"* — so a row for those says `Key saved`
+  rather than showing an empty wallet;
+- **a provider can answer about a key without accepting it.** Comfy Cloud answers `429` for a key whose
+  subscription is inactive, which means the key is real; Magnific answers `403` with a response component its own
+  spec never defines. Neither is thrown away (founder: *"store it and mark it unverified"*): the key is stored,
+  `verified` is false for the Magnific case, and the row carries the reason (`note`). A `401` is a bad key
+  everywhere, and a network failure is never reported as one.
 
 **Why not a plugin per provider.** Two measured facts:
 
@@ -52,10 +76,44 @@ workflows. RunningHub is the first; Krea and Comfy Cloud are the reason the file
 provider's own files — its adapters today, its uploads later — stay together under its own name, and the row id
 (`generate`) never names a provider.
 
+## The settings page, in the Models shape
+
+**Decided by the founder on 2026-09-23:**
+
+> "use the models settings design for generate settings … it should be analogous to models except we don't
+> fetch the model, we add the workflow using prompt."
+
+So `Settings → Generate` is the Models → Providers page, with the shipped page's own measurements read out of
+`ModelsSection.module.css` and applied inline (a bundle's client half is one script and carries no stylesheet):
+a 720px column, a 16px title over a 14px intro, 8px between rows, a 16px-radius card per provider with a
+12/14px padding, an 8px credential dot, a 4px-radius family tag, and a 12px-radius editor card on the platform
+module background with a 32px input.
+
+| State | Dot | What the row says |
+|---|---|---|
+| linked and answered | green | the balance, when the provider has one — otherwise `Key saved` |
+| linked, unverified | amber | why: no active subscription, or an access check the provider never confirms |
+| stored but refused | red | the key is no longer accepted; link a new one |
+| no key yet | hollow | `No key linked` |
+
+One card is open at a time, and with nothing linked the page opens the first unlinked provider's card by itself
+— the posture Models gives a provider with no key anywhere. The open card carries the key field (labelled
+`Krea API key`, `RunningHub API key`, …), the account link, Remove key, and the workflow block: what is
+installed, by title and input count, then the install sentence and a **Copy** control.
+
+**The one thing this page cannot copy from Models:** a model list is fetched from the provider over its API, and
+a workflow is installed by the agent from a link the user gives it. So where Models has *Fetch available
+models*, this page has the sentence `add this RunningHub workflow <app link>` and a Copy button — a plugin
+cannot type into the composer and a slash command cannot start a turn (both measured 2026-09-22). The trigger
+stays English in both dictionaries for the same reason it does in the pane: it is the phrase the skill answers
+to.
+
 ## The pane links; Settings manages
 
-A fresh install lands on the pane, and the pane links the first provider's key: the first-run state is one
-field, validated before it is stored. What the pane cannot do is change or remove a key — that page is the owner — so the pane
+A fresh install lands on the pane, and the pane links a key for the first **workflow** provider that has none —
+RunningHub or Comfy Cloud, whichever comes first in the registry — because the pane is where workflows run and
+an image provider has nothing for it to open. The first-run state is one field, validated before it is stored.
+What the pane cannot do is change or remove a key — that page is the owner — so the pane
 names it, twice, because a person who meets the field here would otherwise never learn where the key is
 managed: *"You can change or remove this key later in Settings → Generate. The Settings menu is at the bottom of
   the left sidebar."* on the
@@ -84,18 +142,22 @@ it would produce a sentence the user types and nothing picks up; a user may of c
 language. The line carries the same info glyph as the key directions and is read off its own node
 (`data-generate-add-hint`) by the verify, so it is held by placement rather than by matching a phrase.
 
-## The wallet (S2)
+## The key (S2, now per provider)
+
+S2 shipped one wallet route for one provider. The provider registry replaced it with one key route per
+provider, so every sentence below holds for all four:
 
 | Route | What |
 |---|---|
-| `GET /plugins/generate/wallet` | the wallet status — `linked`, `writable`, `source`, the account (`coins`, `money`, `currency`, `running`), an error code, and `accountUrl`. Never the key |
-| `POST /plugins/generate/wallet` | `{ key }`: validated against `POST /uc/openapi/accountStatus`, then stored. Nothing is stored on a key RunningHub refuses |
-| `DELETE /plugins/generate/wallet` | unlink |
+| `GET /plugins/generate/providers/<id>/key` | that provider's key state — `linked`, `verified`, `writable`, `source`, the account (RunningHub: `coins`, `money`, `currency`, `running`), a `note` when the provider answered with a caveat, an error code, and the provider's `keyUrl` / `accountUrl`. Never the key |
+| `POST /plugins/generate/providers/<id>/key` | `{ key }`: checked against that provider's own endpoint (above), then stored. Nothing is stored on a key the provider refuses; a key it will not check is stored and marked unverified |
+| `DELETE /plugins/generate/providers/<id>/key` | unlink that provider |
 
-`accountUrl` is `https://www.runninghub.ai/call-api/bill-task?tab=keys` — the page that issues keys and shows
-the balance. It is not linked from anywhere obvious in RunningHub's product (the founder had to search for it,
-2026-09-22), so the field's hint and the strip both carry the link rather than directions.
-`verify/wallet.mjs` pins it.
+RunningHub's `keyUrl` is `https://www.runninghub.ai/call-api/bill-task?tab=keys` — the page that issues keys and
+shows the balance. It is not linked from anywhere obvious in RunningHub's product (the founder had to search for
+it, 2026-09-22), so the field's hint and the strip both carry the link rather than directions.
+`verify/wallet.mjs` pins it, and pins every other provider's key page as an absolute URL that is not a site
+root.
 
 No `type` parameter, deliberately: that page has three key types (Consumer-Membership, Enterprise-Shared,
 Enterprise-Dedicated) and `type` selects one, so pinning a type would pin a capability a consumer-only account
@@ -108,7 +170,8 @@ The founder's page is labelled *Enterprise Shared* on his Creator Pro tier, and 
 API-keys page is unverified — epic 61 D23. If it turns out to be tier-specific, the parameterless
 `/call-api/bill-task?tab=keys` is the first thing to try.
 
-The key lives in the harness `credentials` seam as a `CredentialRef` named `RH_API_KEY`, so the value goes to
+The key lives in the harness `credentials` seam as a `CredentialRef` named per provider — `RH_API_KEY`,
+`KREA_API_KEY`, `MAGNIFIC_API_KEY`, `COMFY_CLOUD_API_KEY` — so the value goes to
 the provider's own writable store while an existing env file keeps working as the fallback. `source` is the
 seam's own word for where the value came from, and it has four values, not two: `file` is the provider-managed
 store (what a key pasted here becomes), `env` is the inherited process environment (`writable: false`), and
@@ -122,24 +185,28 @@ judge a key by itself — it asks the host, and the host answers with the accoun
 stops working is reported as revoked, which is a different fact from a bad entry and has a different fix.
 
 A save that worked opens the harness's own centered dialog (`Modal` from
-`@deepseek-ai/dsh-client-ui-primitives`, the same one the workspace dialogs use). It says the three things a
-saved key on its own does not: the key works, because RunningHub validated it before it was stored; the
-wallet answered, with the balance the read returned (`8,600 coins · USD 27.473`); and where that balance now
-lives — at the top left of the panel, beside the Top up link. The last line is the point. The strip had always
+`@deepseek-ai/dsh-client-ui-primitives`, the same one the workspace dialogs use). It says the things a
+saved key on its own does not: the key works, because the provider validated it before it was stored, and — for
+a provider that has one — that the account answered, with the balance the read returned (`8,600 coins ·
+USD 27.473`), and where that balance now lives, at the top left of the panel beside the Account link. The last
+line is the point. The strip had always
 shown the balance, but it sits above the fold and the person who just pressed Save is looking at the button
 (founder, 2026-09-22: the key linked, the strip showed the account, and he missed it). `Modal` portals to the
 document body, so the confirmation is centered on the screen rather than confined to the pane it came from.
 The dialog is opened by the surface, not by the field: a successful first link replaces the field with the
 wallet view, so a message kept inside `KeyForm` would unmount with it. Escape, the mask, `Got it` and the next
-keystroke all close it.
+keystroke all close it. A save the provider would not check opens the same dialog with the unverified title and
+the reason, rather than claiming a validation that did not happen.
 
 ## Changing and removing the key
 
-Creating a new key on RunningHub is a normal act, not an edge case, so the settings page carries both halves of
+Creating a new key on a provider's own site is a normal act, not an edge case, so the open settings card
+carries both halves of
 rotation rather than only the first link. Pasting a key into the field **replaces** whatever is stored — the
-hint above the field says so — and the save ends in the same confirmation dialog with the new balance. The
+hint above the field says so — and the save ends in the same confirmation dialog with the new balance or with
+the unverified note. The
 other half is **Remove key**, under the field: it asks first (*Remove the stored key?*), says in the question
-that the key itself survives on RunningHub so the same one can be pasted again, deletes nothing until the
+that the key itself survives at the provider, deletes nothing until the
 destructive action is confirmed, and then turns into the receipt in the same dialog (*Key removed.*). Every
 way out — Escape, the mask, Cancel, `Got it` — leaves the key alone unless the destructive button was pressed.
 A key that came from a read-only source offers neither control, because a change there could only appear to

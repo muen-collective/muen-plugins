@@ -352,6 +352,42 @@ const KREA_FILE = {
   },
 }
 
+/**
+ * The host stub. The provider list is the real four (2026-09-23): RunningHub carries
+ * this case's key state and installed units, and the other three are unlinked with
+ * nothing installed — which is what makes the settings page's first-run posture
+ * (the first UNLINKED provider opens its own card) a thing these cases can see.
+ */
+const OTHER_PROVIDERS = [
+  {
+    id: 'krea',
+    label: 'Krea',
+    kind: 'image',
+    keyPageLabel: 'API tokens',
+    keyUrl: 'https://www.krea.ai/settings/api-tokens',
+    accountUrl: 'https://www.krea.ai/app/api',
+    addPrompt: 'add this Krea model <model name>',
+  },
+  {
+    id: 'magnific',
+    label: 'Magnific',
+    kind: 'image',
+    keyPageLabel: 'API keys',
+    keyUrl: 'https://www.magnific.com/user/organization/api-keys',
+    accountUrl: null,
+    addPrompt: 'add this Magnific tool <tool name>',
+  },
+  {
+    id: 'comfycloud',
+    label: 'Comfy Cloud',
+    kind: 'workflow',
+    keyPageLabel: 'API keys',
+    keyUrl: 'https://platform.comfy.org/profile/api-keys',
+    accountUrl: 'https://platform.comfy.org',
+    addPrompt: 'add this Comfy Cloud workflow <workflow file>',
+  },
+]
+
 function stubHost({ units = [], file = null, failList = false, linked = true } = {}) {
   const calls = []
   const ok = (body) => ({ ok: true, status: 200, json: async () => body })
@@ -360,24 +396,55 @@ function stubHost({ units = [], file = null, failList = false, linked = true } =
     fetch: async (url, init = {}) => {
       calls.push({ url, method: (init.method || 'GET').toUpperCase() })
       if (url === PROVIDERS_API) {
+        // The registry's own order: krea, magnific, runninghub, comfycloud.
+        const unlinked = (provider) => ({
+          ...provider,
+          linked: false,
+          verified: false,
+          writable: true,
+          source: null,
+          account: null,
+          note: null,
+          error: null,
+          workflows: 0,
+        })
         return ok({
           providers: [
+            unlinked(OTHER_PROVIDERS[0]),
+            unlinked(OTHER_PROVIDERS[1]),
             {
               id: PROVIDER,
               label: 'RunningHub',
+              kind: 'workflow',
+              keyPageLabel: 'API → Keys',
+              keyUrl: ACCOUNT_URL,
+              accountUrl: ACCOUNT_URL,
+              addPrompt: 'add this RunningHub workflow <app link>',
               linked,
+              verified: linked,
               writable: true,
               source: linked ? 'file' : null,
               account: linked ? { coins: 8600, money: 27.473, currency: 'USD', running: 0 } : null,
+              note: null,
               error: null,
-              accountUrl: ACCOUNT_URL,
               workflows: units.length,
             },
+            unlinked(OTHER_PROVIDERS[2]),
           ],
         })
       }
-      if (url === providerUrl('workflows')) {
-        return failList ? { ok: false, status: 500, json: async () => ({ error: 'unreadable' }) } : ok({ entries: units, skipped: [] })
+      // Every provider's workflow route answers, because the pane and the open card
+      // read one list per provider: RunningHub carries the units, the rest are empty.
+      // A failure case fails them all, which is what "the list could not be read"
+      // means once there is more than one provider. The path is split rather than
+      // matched with a regex: the client runs in a VM, and a cross-realm string does
+      // not answer the outer realm's `RegExp` here (measured 2026-09-23).
+      const parts = String(url).split('/')
+      const workflowOwner =
+        parts.length === 6 && parts[1] === 'plugins' && parts[2] === 'generate' && parts[3] === 'providers' && parts[5] === 'workflows' ? parts[4] : null
+      if (workflowOwner !== null) {
+        if (failList) return { ok: false, status: 500, json: async () => ({ error: 'unreadable' }) }
+        return ok({ entries: workflowOwner === PROVIDER ? units : [], skipped: [] })
       }
       if (String(url).startsWith(providerUrl('workflow'))) {
         const name = decodeURIComponent(String(url).split('name=')[1] || '')
@@ -424,7 +491,13 @@ check(
   JSON.stringify(settingsSlots.map((slot) => slot.options.id)),
 )
 
-// ── the one settings page, listing providers ────────────────────────────────
+// ── the one settings page, in the Models → Providers shape ──────────────────
+//
+// One row per provider with a credential dot, a family tag and a sentence; one open
+// card at a time, with the API key as its primary field and the install prompt where
+// Models puts a model list. Image providers lead, workflow providers follow, and the
+// order is the registry's own (founder, 2026-09-23: *"add image provider, then
+// RunningHub"*).
 
 {
   const settings = settingsSlots[0]
@@ -432,40 +505,106 @@ check(
   const real = globalThis.fetch
   globalThis.fetch = stub.fetch
   let tree
+  let opened
   try {
     tree = await settle(settings.component, { t }, 'settings')
+    const toggle = byAttr(tree, 'data-generate-provider-toggle', PROVIDER)
+    check(
+      'a row carries the control that opens its own card',
+      !!toggle && typeof toggle.props.onClick === 'function',
+      toggle ? 'control present' : 'no toggle on the RunningHub row',
+    )
+    if (toggle) {
+      toggle.props.onClick()
+      opened = await settle(settings.component, { t }, 'settings')
+    }
   } finally {
     globalThis.fetch = real
   }
+
+  const cardIds = nodesOf(tree)
+    .filter((node) => node.props && node.props['data-generate-provider-card'])
+    .map((node) => node.props['data-generate-provider-card'])
   check(
-    'the one settings page draws a row per provider, with its own key state',
+    'the one settings page draws a row per provider, image providers first',
+    cardIds.join(',') === 'krea,magnific,runninghub,comfycloud',
+    JSON.stringify(cardIds),
+  )
+  const dots = nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-dot'])
+  check(
+    'every row carries a credential dot that says which state it is in',
+    dots.length === 4 && dots.map((node) => node.props['data-generate-provider-dot']).join(',') === 'none,none,ok,none',
+    JSON.stringify(dots.map((node) => node.props['data-generate-provider-dot'])),
+  )
+  check(
+    'every row carries its family, so the two kinds are tellable apart',
+    textIn(tree).includes(EN['settings.kind.image']) && textIn(tree).includes(EN['settings.kind.workflow']),
+    JSON.stringify([EN['settings.kind.image'], EN['settings.kind.workflow']]),
+  )
+  check(
+    'a linked provider says its balance and an unlinked one says it has no key',
     (() => {
-      const cards = nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-card'])
-      return cards.length === 1 && cards[0].props['data-generate-provider-card'] === PROVIDER && textIn(cards[0]).includes('RunningHub')
+      const runninghub = byAttr(tree, 'data-generate-provider-summary', PROVIDER)
+      const krea = byAttr(tree, 'data-generate-provider-summary', 'krea')
+      return !!runninghub && !!krea && textIn(runninghub).includes('8,600') && textIn(krea).includes(EN['wallet.notLinked'])
     })(),
-    JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-card']).map((node) => node.props['data-generate-provider-card'])),
+    JSON.stringify(
+      nodesOf(tree)
+        .filter((node) => node.props && node.props['data-generate-provider-summary'])
+        .map((node) => textIn(node)),
+    ),
   )
   check(
-    'a provider row carries its own key field, and the field is named per provider',
-    (() => {
-      const field = nodesOf(tree).find((node) => node.props && node.props.id === 'generate-key-' + PROVIDER)
-      return !!field && field.type === 'input'
-    })(),
-    JSON.stringify(nodesOf(tree).filter((node) => node.type === 'input').map((node) => node.props.id)),
+    'the first-run posture opens the first unlinked card by itself',
+    !!byAttr(tree, 'data-generate-provider-editor', 'krea') && !byAttr(tree, 'data-generate-provider-editor', PROVIDER),
+    JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-editor']).map((node) => node.props['data-generate-provider-editor'])),
   )
-  check(
-    'a provider row says how many workflows it has installed',
-    (() => {
-      const line = byAttr(tree, 'data-generate-provider-workflows', PROVIDER)
-      return !!line && textIn(line).includes('1 ') && textIn(line).includes('workflow installed')
-    })(),
-    byAttr(tree, 'data-generate-provider-workflows', PROVIDER) ? textIn(byAttr(tree, 'data-generate-provider-workflows', PROVIDER)) : 'no count',
-  )
-  check(
-    'the remove control names the provider it would unlink',
-    !!byAttr(tree, 'data-generate-remove', PROVIDER),
-    JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-remove']).map((node) => node.props['data-generate-remove'])),
-  )
+
+  if (opened) {
+    check(
+      'opening a row swaps the open card: one card at a time',
+      !!byAttr(opened, 'data-generate-provider-editor', PROVIDER) && !byAttr(opened, 'data-generate-provider-editor', 'krea'),
+      JSON.stringify(nodesOf(opened).filter((node) => node.props && node.props['data-generate-provider-editor']).map((node) => node.props['data-generate-provider-editor'])),
+    )
+    check(
+      'the open card carries the key field, named after its provider',
+      (() => {
+        const field = nodesOf(opened).find((node) => node.props && node.props.id === 'generate-key-' + PROVIDER)
+        return !!field && field.type === 'input'
+      })(),
+      JSON.stringify(nodesOf(opened).filter((node) => node.type === 'input').map((node) => node.props.id)),
+    )
+    check(
+      'the open card says how many workflows it has installed',
+      (() => {
+        const block = byAttr(opened, 'data-generate-provider-workflows', PROVIDER)
+        return !!block && textIn(block).includes('1 ') && textIn(block).includes(EN['settings.workflows.one'])
+      })(),
+      byAttr(opened, 'data-generate-provider-workflows', PROVIDER) ? textIn(byAttr(opened, 'data-generate-provider-workflows', PROVIDER)) : 'no count',
+    )
+    check(
+      'the open card lists the installed workflows by their own titles',
+      (() => {
+        const block = byAttr(opened, 'data-generate-provider-workflows', PROVIDER)
+        return !!block && textIn(block).includes(KREA.title)
+      })(),
+      byAttr(opened, 'data-generate-provider-workflows', PROVIDER) ? textIn(byAttr(opened, 'data-generate-provider-workflows', PROVIDER)) : 'no list',
+    )
+    check(
+      'the open card carries the install prompt, because a workflow is added by asking',
+      (() => {
+        const prompt = byAttr(opened, 'data-generate-add-prompt', PROVIDER)
+        return !!prompt && textIn(prompt).includes('add this RunningHub workflow') && !!byAttr(opened, 'data-generate-copy-prompt', PROVIDER)
+      })(),
+      byAttr(opened, 'data-generate-add-prompt', PROVIDER) ? textIn(byAttr(opened, 'data-generate-add-prompt', PROVIDER)) : 'no prompt',
+    )
+    check(
+      'the remove control names the provider it would unlink',
+      !!byAttr(opened, 'data-generate-remove', PROVIDER),
+      JSON.stringify(nodesOf(opened).filter((node) => node.props && node.props['data-generate-remove']).map((node) => node.props['data-generate-remove'])),
+    )
+  }
+
   check(
     'the page itself is one page, whatever the provider count',
     settingsSlots.length === 1,
