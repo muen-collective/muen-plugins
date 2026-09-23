@@ -1,31 +1,35 @@
 /**
- * verify:start — Epic 61 S4's first half, asserted rather than intended.
+ * verify:start — the Generate pane as the hub (founder, 2026-09-22).
  *
- *   "Installing the plugin adds one card to the harness's own start page, beside
- *    'Workspace files', 'New terminal' and 'Browser' … a categorized flyout that
- *    dispatches … it degrades to one entry, and that is a supported install …
- *    selecting a leaf opens that unit's UI" — §10.
+ * THE UX DECISION THIS FILE PINS, in the founder's words:
+ *
+ *   "the UX is incorrect on the start page revert to Generate with RunningHub,
+ *    then on this screen we need cards to launch the workflow UI/surface. So I
+ *    think this surface needs to hold all wf surfaces inside this one RH plugin
+ *    surface." … "we should only have 1 generate settings with the different
+ *    adapters."
+ *
+ * So the claims are: the start-page card is the harness's own standard card saying
+ * "Generate with RunningHub" (no custom renderer, no degrade to one app's title);
+ * the pane's first screen is the cards; a card opens that workflow's surface IN the
+ * pane; and this plugin registers exactly one settings page.
  *
  * WHAT THIS PROVES, AND WHAT IT DOES NOT. `lib/client.js` is loaded in the same
  * stubbed loader verify/mount.mjs and verify/save-confirmation.mjs use, `apply(ctx)`
- * runs against a recording ctx, and the card renderer is then rendered against a
- * stubbed `/plugins/generate/adapters` — so the claim here is source-level: the
- * registration exists under our id, and the card draws the shape §10 describes for
- * each install (none, one, several, grouped, community, unreachable host). It does
- * NOT prove the bytes are on the running page: a `link:`-installed client bundle is
- * served from the copy captured at activation, so this reaches the page on the next
- * app start, and `verify/mount.mjs`'s live layer is the one that reads the real DOM.
+ * runs against a recording ctx, and the pane is rendered against a stubbed host —
+ * so the claim is source-level: the registrations and the shapes are what the
+ * decision says. It does NOT prove the bytes are on the running page: a
+ * `link:`-installed client bundle is served from the copy captured at activation,
+ * so this reaches the page on the next app start.
  *
- * THE HOST HALF IS DRIVEN TOO. `listAdapters` is exercised over a temp directory,
- * because "an entry appears only after rh_adapter_validate passes" (§10) is a rule
- * about what gets listed, and a rule that is only intended is the defect class this
- * plugin's verifies exist to catch. The real profile directory is listed as well
- * when it exists, so the file the install flow wrote is read back once.
+ * The host half is driven for real: `listAdapters` (what may be listed) and
+ * `readAdapter` (what a surface may open, including the file-name check that stops
+ * `?name=../…`), over temp directories.
  *
  * Nothing here spends coins, calls RunningHub, or writes an adapter.
  *
  *   node verify/start.mjs
- *   node verify/start.mjs --show   # print each case's card title and flyout rows
+ *   node verify/start.mjs --show   # print each rendered screen's lines
  */
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
@@ -33,17 +37,18 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 
-import { ADAPTER_SCHEMA, listAdapters } from '../lib/adapter.js'
+import { ADAPTER_SCHEMA, listAdapters, readAdapter } from '../lib/adapter.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
 const PKG_NAME = '@muen/dsh-runninghub'
-const GENERATE_ID = '@muen/dsh-runninghub'
+const WALLET_API = '/plugins/generate/wallet'
 const ADAPTERS_API = '/plugins/generate/adapters'
+const ADAPTER_API = '/plugins/generate/adapter'
 const argv = process.argv.slice(2)
 const SHOW = argv.includes('--show')
 
-// ── the reporter (the same shape as this plugin's other four) ────────────────
+// ── the reporter (the same shape as this plugin's other verifies) ────────────
 
 const rows = []
 const check = (label, ok, detail) => rows.push({ label, status: ok ? 'pass' : 'fail', detail: detail == null ? '' : String(detail) })
@@ -52,7 +57,7 @@ const skip = (label, why) => rows.push({ label, status: 'skip', detail: why })
 
 function finish() {
   let failed = 0
-  process.stdout.write('\nverify:start — Epic 61 S4 (the card on the start page)\n')
+  process.stdout.write('\nverify:start — the Generate pane, as the hub\n')
   for (const row of rows) {
     if (row.status === 'pass') continue
     if (row.status === 'note') {
@@ -74,11 +79,12 @@ function finish() {
 
 // ── React, stood in for ─────────────────────────────────────────────────────
 //
-// The card is a component, not a string, so a text search would prove nothing. The
-// shim models the two things the card depends on: state that survives a re-render
-// (the flyout's open flag) and an effect that runs after the first frame (the list
-// read). Instance identity is the element's path in the tree, the same positional
-// reconciliation React does with unkeyed children.
+// The pane is a component tree, not a string, so a text search would prove nothing.
+// The shim models what the pane depends on: state that survives a re-render (the
+// open unit, the disclosure, the door values) and effects INCLUDING their
+// dependency arrays — the surface fills its doors from defaults when the adapter
+// arrives, which is a later render, and a shim that ran every effect once would
+// never see the form at all.
 
 const FRAGMENT = Symbol('Fragment')
 const instances = new Map()
@@ -125,11 +131,12 @@ const REACT = {
     if (!(index in instance.hooks)) instance.hooks[index] = [fn]
     return instance.hooks[index][0]
   },
-  useEffect: (fn) => {
+  useEffect: (fn, deps) => {
     const instance = current
     const index = instance.cursor++
-    if (index in instance.hooks) return
-    instance.hooks[index] = [true]
+    const seen = instance.hooks[index]
+    if (seen && deps !== undefined && JSON.stringify(seen[0]) === JSON.stringify(deps)) return
+    instance.hooks[index] = [deps === undefined ? null : deps, true]
     pendingEffects.push(fn)
   },
   useMemo: (fn) => fn(),
@@ -141,14 +148,7 @@ const REACT = {
   },
 }
 
-/**
- * The harness's own primitives, stood in for.
- *
- * `Menu` keeps its `items` and its `onSelect` on the node rather than inventing a
- * DOM for them: the claim under test is which rows the card offers and what
- * selecting one does, and both are props. `Button` renders a real button so the
- * card's two clicks can be told apart and fired.
- */
+/** The harness's own primitives, stood in for. Only what this half requires. */
 const PRIMITIVES = {
   IconSparkle16: (props) => REACT.createElement('svg', { 'data-stub': 'sparkle', ...props }),
   IconWarningOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'warning', ...props }),
@@ -156,27 +156,6 @@ const PRIMITIVES = {
   IconRefreshOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'refresh', ...props }),
   IconCheckOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'check', ...props }),
   IconInfoOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'info', ...props }),
-  IconChevronDownOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'chevron', ...props }),
-  Button: (props) =>
-    REACT.createElement(
-      'button',
-      {
-        type: 'button',
-        'data-stub': 'button',
-        variant: props.variant,
-        style: props.style,
-        'aria-label': props['aria-label'],
-        'aria-expanded': props['aria-expanded'],
-        onClick: props.onClick,
-      },
-      props.children,
-    ),
-  Menu: (props) =>
-    REACT.createElement(
-      'div',
-      { 'data-stub': 'menu', menuItems: props.items, menuSelect: props.onSelect, menuOpen: props.open },
-      props.anchor,
-    ),
   Modal: () => null,
 }
 
@@ -213,7 +192,7 @@ function walk(node, key) {
   return { type, props: node.props || {}, children: flattened }
 }
 
-/** Render, then let the list read land — the fetch settles on a later microtask. */
+/** Render, then let effects and the promises they start settle. */
 async function settle(component, props, key, { max = 20 } = {}) {
   let tree = null
   for (let pass = 0; pass < max; pass += 1) {
@@ -245,14 +224,20 @@ const textOf = (tree) => {
   return tree.children.flatMap(textOf)
 }
 const textIn = (tree) => textOf(tree).join(' ')
-const menuOf = (tree) => nodesOf(tree).find((node) => node.props && node.props['data-stub'] === 'menu') || null
-const cardOf = (tree) => nodesOf(tree).find((node) => node.props && node.props['data-generate-card']) || null
-const buttonsOf = (tree) => nodesOf(tree).filter((node) => node.props && node.props['data-stub'] === 'button')
-/** The card's main button is the wide one; the chevron cell is the narrow one. */
-const mainButtonOf = (tree) => buttonsOf(tree).find((node) => node.props.style && node.props.style.flex === 1) || null
-/** One flyout row's label, or null when the row is a separator. */
-const rowLabel = (row) => (typeof row.label === 'string' ? row.label : null)
-const labelsOf = (items) => items.map(rowLabel)
+const byAttr = (tree, attr, value) =>
+  nodesOf(tree).find((node) => node.props && (value === undefined ? node.props[attr] !== undefined : node.props[attr] === value)) || null
+const linesOf = (tree, out = []) => {
+  if (tree === null || typeof tree === 'string') return out
+  if (Array.isArray(tree)) {
+    tree.forEach((child) => linesOf(child, out))
+    return out
+  }
+  tree.children.forEach((child) => {
+    if (typeof child === 'string') out.push(child)
+    else linesOf(child, out)
+  })
+  return out
+}
 
 // ── the shipped client half, loaded the way the browser loads it ─────────────
 
@@ -290,9 +275,8 @@ function recordingCtx(locale = 'en') {
           dicts.set(ns, table)
           return () => {}
         },
+        // Resolved at call time: `apply` binds the translator before it registers.
         bind: (ns) => (key) => {
-          // Resolved at call time, not at bind time: `apply` binds the translator
-          // before it registers the dictionary, which is what the harness does too.
           const table = dicts.get(ns) || {}
           const dict = table[locale] || table.en || {}
           return Object.prototype.hasOwnProperty.call(dict, key) ? dict[key] : key
@@ -314,46 +298,82 @@ function recordingCtx(locale = 'en') {
   }
 }
 
-// ── the stubbed host route ───────────────────────────────────────────────────
+// ── the stubbed host ─────────────────────────────────────────────────────────
 
-const ADAPTER = {
+const ACCOUNT_URL = 'https://www.runninghub.ai/call-api/bill-task?tab=keys'
+const LINKED = {
+  linked: true,
+  writable: true,
+  source: 'file',
+  account: { coins: 8600, money: 27.473, currency: 'USD', running: 0 },
+  error: null,
+  accountUrl: ACCOUNT_URL,
+}
+
+const KREA = {
   name: 'krea2-raw-turbo-claire',
   title: 'Krea 2 Raw/Turbo Dual Mining',
   blurb: 'Text to image, with aspect ratio, megapixels and an upscale pass.',
+  cover: '',
+  origin: 'mine',
+  runLabel: 'Generate image',
+  doorCount: 7,
+}
+const QWEN = { ...KREA, name: 'qwen-edit', title: 'Qwen 2.1 Edit', origin: 'community', doorCount: 3 }
+
+/** The file the one-workflow route hands back, in the shape `readAdapter` builds. */
+const KREA_FILE = {
+  name: KREA.name,
+  title: KREA.title,
+  blurb: KREA.blurb,
   group: '',
   variant: '',
   cover: '',
   origin: 'mine',
-  appId: '2090951249314521089',
-  webappName: 'krea2 raw turbo dual mining 2 Claire',
   runLabel: 'Generate image',
-  doorCount: 7,
+  expect: '',
+  order: ['value', 'aspectRatio', 'megapixels', 'scaleBy', 'steps', 'cfg', 'denoise'],
+  doors: {
+    value: { nodeId: '63', fieldName: 'value', type: 'text', label: 'Prompt', primary: true, multiline: true },
+    aspectRatio: {
+      nodeId: '49',
+      fieldName: 'aspect_ratio',
+      type: 'select',
+      label: 'Aspect ratio',
+      options: ['1:1 (Square)', '2:3 (Portrait Photo)'],
+      default: '1:1 (Square)',
+      hint: 'The aspect ratio for the output dimensions.',
+    },
+    megapixels: { nodeId: '49', fieldName: 'megapixels', type: 'number', label: 'Megapixels', min: 0.1, max: 16, step: 0.1, default: 1 },
+    scaleBy: { nodeId: '95', fieldName: 'scale_by', type: 'number', label: 'Upscale factor', min: 0.01, max: 8, step: 0.01, default: 1 },
+    steps: { nodeId: '53', fieldName: 'steps', type: 'number', label: 'Steps', advanced: true, min: 1, max: 10000, default: 20 },
+    cfg: { nodeId: '53', fieldName: 'cfg', type: 'number', label: 'CFG scale', advanced: true, min: 0, max: 100, step: 0.1, default: 8 },
+    denoise: { nodeId: '53', fieldName: 'denoise', type: 'number', label: 'Denoise', advanced: true, min: 0, max: 1, step: 0.01, default: 1 },
+  },
 }
-const COMMUNITY = {
-  ...ADAPTER,
-  name: 'qwen-edit',
-  title: 'Qwen 2.1 Edit',
-  origin: 'community',
-}
-const UPSCALE_A = { ...ADAPTER, name: 'upscale-a', title: 'Upscale A', group: 'Upscale', variant: 'v1', doorCount: 2 }
-const UPSCALE_B = { ...ADAPTER, name: 'upscale-b', title: 'Upscale A', group: 'Upscale', variant: 'v2', doorCount: 2 }
-const DIGITAL_HUMAN = { ...ADAPTER, name: 'dh-krea', title: 'Krea 2 Raw dual mining', group: 'Generate digital human', doorCount: 5 }
-const DIGITAL_HUMAN_2 = { ...ADAPTER, name: 'dh-qwen', title: 'Qwen 2.1 digital human', group: 'Generate digital human', doorCount: 4 }
 
-function stubFetch(route) {
+function stubHost({ units = [], file = null, failList = false } = {}) {
   const calls = []
+  const ok = (body) => ({ ok: true, status: 200, json: async () => body })
   return {
     calls,
     fetch: async (url, init = {}) => {
       calls.push({ url, method: (init.method || 'GET').toUpperCase() })
-      if (route === 'fail') return { ok: false, status: 500, json: async () => ({ error: 'unreadable' }) }
-      if (route === 'throw') throw new Error('the host is not there')
-      return { ok: true, status: 200, json: async () => ({ entries: route, skipped: [] }) }
+      if (url === WALLET_API) return ok(LINKED)
+      if (url === ADAPTERS_API) {
+        return failList ? { ok: false, status: 500, json: async () => ({ error: 'unreadable' }) } : ok({ entries: units, skipped: [] })
+      }
+      if (String(url).startsWith(ADAPTER_API)) {
+        const name = decodeURIComponent(String(url).split('name=')[1] || '')
+        if (file && file.name === name) return ok(file)
+        return { ok: false, status: 404, json: async () => ({ error: 'not-found' }) }
+      }
+      throw new Error('no stub for ' + url)
     },
   }
 }
 
-// ── the cases ────────────────────────────────────────────────────────────────
+// ── the registrations ────────────────────────────────────────────────────────
 
 const module = await loadClient()
 const { ctx, seen } = recordingCtx('en')
@@ -364,271 +384,285 @@ const EN = copy ? copy.table.en : {}
 const ZH = copy ? copy.table.zh : {}
 const t = ctx.locale.bind('generate')
 const type = seen.types[0]
+const paneSlot = seen.slots.find((slot) => slot.options.name === 'sidebar.right.pane.tab')
+const titleSlot = seen.slots.find((slot) => slot.options.name === 'sidebar.right.pane.tab.title')
+const settingsSlots = seen.slots.filter((slot) => slot.options.name === 'settings.section')
+const guideCardSlots = seen.slots.filter((slot) => slot.options.name === 'sidebar.right.tab.guide.entry')
 
-const cardSlot = seen.slots.find((slot) => slot.options.name === 'sidebar.right.tab.guide.entry')
-
+check('the pane body registers under our id', !!paneSlot && paneSlot.options.key === PKG_NAME, paneSlot && String(paneSlot.options.key))
+check('the chip registers beside it', !!titleSlot && titleSlot.options.key === PKG_NAME, titleSlot && String(titleSlot.options.key))
 check(
-  'the card renderer registers at sidebar.right.tab.guide.entry',
-  !!cardSlot,
-  seen.slots.map((slot) => slot.options.name).join(', '),
+  "the guide card is the harness's own standard card, and the copy names the provider",
+  !!type && type.guide.length === 1 && type.guide[0].title() === 'Generate with RunningHub',
+  type && type.guide[0].title(),
 )
 check(
-  'the card registers under the type id, which is the key the guide dispatches',
-  !!cardSlot && cardSlot.options.key === GENERATE_ID,
-  cardSlot && String(cardSlot.options.key),
+  'no card renderer is registered: the card says what it opens',
+  guideCardSlots.length === 0,
+  guideCardSlots.map((slot) => String(slot.options.key)).join(', '),
 )
+check('the tab chip stays short, so the card can carry the provider', type.title() === 'Generate', type.title())
 check(
-  'the card takes this package\'s own copy',
-  !!cardSlot && cardSlot.options.locale === 'generate',
-  cardSlot && String(cardSlot.options.locale),
-)
-check(
-  'the card does not replace the type registration',
-  !!type && type.kind === 'generate' && Array.isArray(type.guide) && type.guide.length === 1,
-  type && JSON.stringify({ kind: type.kind, guide: (type.guide || []).map((entry) => entry.id) }),
-)
-check(
-  'the type still owns the standard card as the fallback',
-  !!type && type.guide[0].id === 'open' && typeof type.guide[0].icon === 'function',
-  type && String(type.guide[0].id),
+  'ONE Generate settings page, never one per workflow (settings.section is a list)',
+  settingsSlots.length === 1 && settingsSlots[0].options.id === 'runninghub-wallet' && settingsSlots[0].options.label() === 'Generate',
+  JSON.stringify(settingsSlots.map((slot) => slot.options.id)),
 )
 
-const GUIDE_TITLE = type.guide[0].title()
-const GUIDE_DESCRIPTION = type.guide[0].description()
+// ── the pane's first screen: cards ───────────────────────────────────────────
 
-/** Render the card for one host answer, and hand back what a click can reach. */
-async function card(entries, { fail = false, key = 'card' } = {}) {
-  const stub = stubFetch(fail ? 'fail' : entries)
+async function pane(state, { params, key = 'pane' } = {}) {
+  const stub = stubHost(state)
   const real = globalThis.fetch
   globalThis.fetch = stub.fetch
-  const opened = []
   try {
-    const tree = await settle(
-      cardSlot.component,
-      {
-        t,
-        entryId: 'open',
-        kind: 'generate',
-        title: GUIDE_TITLE,
-        description: GUIDE_DESCRIPTION,
-        useTabInfo: () => ({ tab: { actions: { openTab: (kind, options) => opened.push({ kind, options }) } } }),
-      },
-      key,
-    )
-    return { tree, opened, calls: stub.calls }
+    const props = { t }
+    if (params !== undefined) props.useTabInfo = () => ({ tab: { navigation: { params, revision: 1 } } })
+    const tree = await settle(paneSlot.component, props, key)
+    return { tree, calls: stub.calls }
   } finally {
     globalThis.fetch = real
   }
 }
 
-const ONE = await card([ADAPTER], { key: 'one' })
-const MANY = await card([ADAPTER, COMMUNITY, UPSCALE_A, UPSCALE_B, DIGITAL_HUMAN, DIGITAL_HUMAN_2], { key: 'many' })
-const NONE = await card([], { key: 'none' })
-const BROKEN = await card([], { fail: true, key: 'broken' })
+// Each case renders under its own key: the shim keeps hook state per tree path,
+// exactly as React's positional reconciliation does, so two cases sharing a key
+// would share their state and the second would render the first's data.
+const home = await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })
+const empty = await pane({ units: [] }, { key: 'pane-empty' })
+const failed = await pane({ units: [], failList: true }, { key: 'pane-failed' })
+const opened = await pane({ units: [KREA], file: KREA_FILE }, { params: { unit: KREA.name }, key: 'pane-opened' })
 
 if (SHOW) {
-  /** One row, with its submenu written out, so the hierarchy is readable in a terminal. */
-  const rowText = (item) => {
-    if (item.type === 'separator') return '---'
-    if (!Array.isArray(item.submenu)) return item.label
-    return item.label + ' ▸ ' + item.submenu.map(rowText).join(' / ')
+  for (const [name, state] of [['home', home], ['empty', empty], ['failed', failed], ['opened', opened]]) {
+    note(name + ': ' + JSON.stringify(linesOf(state.tree).slice(0, 12)))
   }
-  for (const [name, state] of [['one', ONE], ['many', MANY], ['none', NONE], ['broken', BROKEN]]) {
-    const menu = menuOf(state.tree)
-    const items = menu ? menu.props.menuItems : []
-    note(
-      name + ': title=' + JSON.stringify((cardOf(state.tree) && textIn(mainButtonOf(state.tree))) || '') +
-        ' rows=' + JSON.stringify(items.map(rowText)),
+}
+
+const homeRoot = byAttr(home.tree, 'data-generate-pane')
+check(
+  'the linked pane opens on its home screen',
+  !!homeRoot && homeRoot.props['data-generate-pane'] === 'home',
+  homeRoot && homeRoot.props['data-generate-pane'],
+)
+const cardsOf = (tree) => nodesOf(tree).filter((node) => node.props && node.props['data-generate-unit'] && !node.props['data-generate-door'])
+check(
+  'the home screen carries one card per installed workflow',
+  (() => {
+    const cards = nodesOf(home.tree).filter((node) => node.props && node.props['data-generate-unit'])
+    return cards.length === 2 && cards.map((card) => card.props['data-generate-unit']).join(',') === KREA.name + ',' + QWEN.name
+  })(),
+  JSON.stringify(cardsOf(home.tree).map((node) => node.props['data-generate-unit'])),
+)
+check(
+  "a card carries the workflow's own title and blurb",
+  (() => {
+    const card = byAttr(home.tree, 'data-generate-unit', KREA.name)
+    const text = card ? textIn(card) : ''
+    return text.includes(KREA.title) && text.includes(KREA.blurb)
+  })(),
+  byAttr(home.tree, 'data-generate-unit', KREA.name) ? textIn(byAttr(home.tree, 'data-generate-unit', KREA.name)) : 'no card',
+)
+check(
+  'a community app says whose work it is',
+  textIn(byAttr(home.tree, 'data-generate-unit', QWEN.name)).includes(EN['card.community']),
+  textIn(byAttr(home.tree, 'data-generate-unit', QWEN.name)),
+)
+check(
+  'the home screen asks the host for the list, once',
+  home.calls.filter((call) => call.url === ADAPTERS_API).length === 1,
+  JSON.stringify(home.calls),
+)
+check(
+  'the cards are a view of this pane: opening one does not open a tab',
+  (() => {
+    const card = byAttr(home.tree, 'data-generate-unit', KREA.name)
+    if (!card || typeof card.props.onClick !== 'function') return false
+    card.props.onClick()
+    return !nodesOf(home.tree).some((node) => node.props && node.props['data-generate-surface'])
+  })(),
+  'the card switches the pane over to the surface; the list route is the only host read on home',
+)
+check(
+  'the tab kind is still the only thing an opener names — no per-workflow tab',
+  seen.types.length === 1 && seen.types[0].multiple === undefined,
+  JSON.stringify(seen.types.map((definition) => ({ kind: definition.kind, multiple: definition.multiple }))),
+)
+
+// ── a workflow's surface, inside the pane ───────────────────────────────────
+
+const surface = byAttr(opened.tree, 'data-generate-surface')
+check('a unit opens its surface inside the pane', !!surface && surface.props['data-generate-surface'] === 'ready', surface && surface.props['data-generate-surface'])
+check(
+  'the surface is the unit that was asked for',
+  !!byAttr(opened.tree, 'data-generate-unit', KREA.name) && !byAttr(opened.tree, 'data-generate-cards'),
+  String(byAttr(opened.tree, 'data-generate-unit') && byAttr(opened.tree, 'data-generate-unit').props['data-generate-unit']),
+)
+check(
+  'the pane knows which unit it is from params.unit, the seam an opener uses',
+  opened.calls.some((call) => String(call.url).startsWith(ADAPTER_API + '?name=' + KREA.name)),
+  JSON.stringify(opened.calls.map((call) => call.url)),
+)
+check('the surface has a way back to the list', !!byAttr(opened.tree, 'data-generate-back', 'yes'))
+
+const rowsRendered = (tree) =>
+  nodesOf(tree)
+    .filter((node) => node.props && node.props['data-generate-door-row'])
+    .map((node) => node.props['data-generate-door-row'])
+
+check(
+  "the doors render as controls, in the adapter's order, the primary door first",
+  rowsRendered(opened.tree).join(',') === 'value,aspectRatio,megapixels,scaleBy',
+  JSON.stringify(rowsRendered(opened.tree)),
+)
+check(
+  'an advanced door is behind the one disclosure, which counts them',
+  (() => {
+    const disclosure = byAttr(opened.tree, 'data-generate-advanced', 'closed')
+    return !!disclosure && textIn(disclosure).includes('(3)')
+  })(),
+  byAttr(opened.tree, 'data-generate-advanced') ? textIn(byAttr(opened.tree, 'data-generate-advanced')) : 'no disclosure',
+)
+check(
+  "a door control carries the app's own bounds and default",
+  (() => {
+    const megapixels = byAttr(opened.tree, 'data-generate-door', 'megapixels')
+    return (
+      !!megapixels &&
+      megapixels.props.type === 'number' &&
+      megapixels.props.value === 1 &&
+      megapixels.props.min === 0.1 &&
+      megapixels.props.max === 16 &&
+      megapixels.props.step === 0.1
     )
-  }
+  })(),
+  JSON.stringify(byAttr(opened.tree, 'data-generate-door', 'megapixels') && byAttr(opened.tree, 'data-generate-door', 'megapixels').props),
+)
+check(
+  "a select door offers the app's own options and starts on its default",
+  (() => {
+    const select = byAttr(opened.tree, 'data-generate-door', 'aspectRatio')
+    return !!select && select.props.value === '1:1 (Square)' && textOf(select).join(',') === '1:1 (Square),2:3 (Portrait Photo)'
+  })(),
+  JSON.stringify(textOf(byAttr(opened.tree, 'data-generate-door', 'aspectRatio'))),
+)
+check(
+  'a multiline door is a text area, not a one-line field',
+  byAttr(opened.tree, 'data-generate-door', 'value') && byAttr(opened.tree, 'data-generate-door', 'value').type === 'textarea',
+  byAttr(opened.tree, 'data-generate-door', 'value') && byAttr(opened.tree, 'data-generate-door', 'value').type,
+)
+check(
+  "a door draws its label, and the app's tooltip under it",
+  (() => {
+    const row = byAttr(opened.tree, 'data-generate-door-row', 'aspectRatio')
+    const text = row ? textIn(row) : ''
+    return text.includes('Aspect ratio') && text.includes('The aspect ratio for the output dimensions.')
+  })(),
+  byAttr(opened.tree, 'data-generate-door-row', 'aspectRatio') && textIn(byAttr(opened.tree, 'data-generate-door-row', 'aspectRatio')),
+)
+check(
+  'NO node id and NO field name is drawn: those belong to the gate, as JSON to read',
+  (() => {
+    const text = textIn(opened.tree)
+    return !text.includes('aspect_ratio') && !text.includes('scale_by') && !/\bnode\b/i.test(text)
+  })(),
+  textIn(opened.tree).slice(0, 240),
+)
+check(
+  'the surface says running is not wired yet, rather than offering a dead button',
+  !!byAttr(opened.tree, 'data-generate-run-pending', 'yes') && !nodesOf(opened.tree).some((node) => textIn(node).trim() === KREA_FILE.runLabel),
+  '',
+)
+
+// The disclosure is a control: opening it must reveal the advanced doors.
+{
+  const disclosure = byAttr(opened.tree, 'data-generate-advanced', 'closed')
+  const before = rowsRendered(opened.tree).length
+  if (disclosure) disclosure.props.onClick()
+  const after = await settle(paneSlot.component, { t, useTabInfo: () => ({ tab: { navigation: { params: { unit: KREA.name }, revision: 1 } } }) }, 'pane-opened')
+  check(
+    'opening the disclosure adds the advanced doors, and they carry their own bounds',
+    before === 4 && rowsRendered(after).length === 7,
+    JSON.stringify({ before, after: rowsRendered(after) }),
+  )
 }
 
-// ── the card, one entry: the degrade, and it dispatches straight to the app ──
+// ── nothing installed, and a host that cannot answer ────────────────────────
 
 check(
-  'the card is drawn, and it is ours',
-  !!cardOf(ONE.tree) && cardOf(ONE.tree).props['data-sidebar-right-guide-entry'] === 'generate',
-  cardOf(ONE.tree) && String(cardOf(ONE.tree).props['data-sidebar-right-guide-entry']),
+  'nothing installed: the pane says so, in its own block',
+  !!byAttr(empty.tree, 'data-generate-none', 'yes') && textIn(byAttr(empty.tree, 'data-generate-none', 'yes')).includes(EN['pane.empty.title']),
+  byAttr(empty.tree, 'data-generate-none', 'yes') ? textIn(byAttr(empty.tree, 'data-generate-none', 'yes')) : 'no empty block',
 )
 check(
-  'one installed workflow: the card is that workflow, not the type',
-  !!mainButtonOf(ONE.tree) && textIn(mainButtonOf(ONE.tree)).includes(ADAPTER.title),
-  mainButtonOf(ONE.tree) && textIn(mainButtonOf(ONE.tree)),
+  'nothing installed: both notes are still there, below that block',
+  !!byAttr(empty.tree, 'data-generate-manage-hint', 'yes') && !!byAttr(empty.tree, 'data-generate-add-hint', 'yes'),
+  '',
 )
 check(
-  'one installed workflow: its blurb is the second line',
-  !!mainButtonOf(ONE.tree) && textIn(mainButtonOf(ONE.tree)).includes(ADAPTER.blurb),
-  mainButtonOf(ONE.tree) && textIn(mainButtonOf(ONE.tree)),
+  'a host that cannot answer says so, instead of looking like an empty install',
+  !!byAttr(failed.tree, 'data-generate-list-failed', 'yes') &&
+    !byAttr(failed.tree, 'data-generate-none', 'yes') &&
+    !!byAttr(failed.tree, 'data-generate-pane') &&
+    byAttr(failed.tree, 'data-generate-pane').props['data-generate-pane'] === 'home',
+  textIn(failed.tree).slice(0, 160),
 )
 check(
-  'one installed workflow: no flyout at all, because there is nothing to categorize',
-  menuOf(ONE.tree) === null,
-  menuOf(ONE.tree) ? 'a flyout was drawn' : '',
-)
-// The row is a real control: fire the card and see where it goes.
-mainButtonOf(ONE.tree).props.onClick()
-check(
-  'one installed workflow: clicking the card opens that unit',
-  ONE.opened.length === 1 && ONE.opened[0].kind === 'generate' && ONE.opened[0].options.params.unit === ADAPTER.name,
-  JSON.stringify(ONE.opened),
-)
-check(
-  'the card asked the host for the installed list',
-  ONE.calls.length === 1 && ONE.calls[0].url === ADAPTERS_API,
-  JSON.stringify(ONE.calls),
-)
-
-// ── the card, several entries: the categorized flyout ───────────────────────
-
-const manyMenu = menuOf(MANY.tree)
-const manyItems = manyMenu ? manyMenu.props.menuItems : []
-check(
-  'several installed workflows: the card keeps the type\'s own label',
-  !!mainButtonOf(MANY.tree) && textIn(mainButtonOf(MANY.tree)).includes(GUIDE_TITLE),
-  mainButtonOf(MANY.tree) && textIn(mainButtonOf(MANY.tree)),
-)
-check('several installed workflows: a flyout is drawn', !!manyMenu)
-check(
-  'the flyout lists every installed workflow',
-  [ADAPTER.title, COMMUNITY.title, DIGITAL_HUMAN.title].every((title) => JSON.stringify(manyItems).includes(title)),
-  JSON.stringify(labelsOf(manyItems)),
-)
-check(
-  'a capability is a submenu, not a flat row',
-  (() => {
-    const group = manyItems.find((item) => item.id === 'group:Generate digital human')
-    if (!group || !Array.isArray(group.submenu)) return false
-    const ids = group.submenu.map((item) => item.id)
-    return ids.join(',') === DIGITAL_HUMAN.name + ',' + DIGITAL_HUMAN_2.name
-      && !manyItems.some((item) => item.id === DIGITAL_HUMAN.name)
-  })(),
-  JSON.stringify(manyItems.map((item) => item.id)),
-)
-check(
-  'several variants of one workflow are a third level, labelled by the variant',
-  (() => {
-    const group = manyItems.find((item) => item.id === 'group:Upscale')
-    if (!group || !Array.isArray(group.submenu)) return false
-    return group.submenu.length === 1 && group.submenu[0].submenu.map((item) => item.label).join(',') === 'v1,v2'
-  })(),
-  JSON.stringify(labelsOf(manyItems)),
-)
-check(
-  'two variants are one row with two children, never the same row twice',
-  (() => {
-    const ids = manyItems.flatMap((item) => [item.id, ...(item.submenu || []).map((child) => child.id)])
-    return new Set(ids).size === ids.length
-  })(),
-  JSON.stringify(manyItems.map((item) => item.id)),
-)
-check(
-  'the last row is the way to add another workflow',
-  manyItems.length > 0 && manyItems[manyItems.length - 1].label === EN['guide.flyout.add'],
-  JSON.stringify(labelsOf(manyItems)),
-)
-check(
-  'the ways to add are set apart from the installed workflows',
-  manyItems.some((item) => item.type === 'separator') && manyItems[manyItems.length - 2].type === 'separator',
-  JSON.stringify(manyItems.map((item) => item.type || item.id)),
-)
-check(
-  'a community app is marked as someone else\'s work',
-  JSON.stringify(manyItems).includes(COMMUNITY.title + ' · ' + EN['guide.community']),
-  JSON.stringify(labelsOf(manyItems)),
-)
-
-if (manyMenu) {
-  manyMenu.props.menuSelect(ADAPTER.name)
-  manyMenu.props.menuSelect('add-a-workflow')
-}
-check(
-  'selecting a leaf opens that unit, and selecting the add row opens the pane',
-  MANY.opened.length === 2 &&
-    MANY.opened[0].options.params.unit === ADAPTER.name &&
-    MANY.opened[1].options.params === undefined,
-  JSON.stringify(MANY.opened),
-)
-check(
-  'every open replaces the pane\'s tab rather than stacking a second one',
-  [...ONE.opened, ...MANY.opened].every((call) => call.options.replaceTab === true),
-  JSON.stringify([...ONE.opened, ...MANY.opened]),
-)
-
-// ── the card, nothing installed: the correct empty state ────────────────────
-
-const noneMenu = menuOf(NONE.tree)
-const noneItems = noneMenu ? noneMenu.props.menuItems : []
-check(
-  'nothing installed: the card is the type\'s, not an empty workflow',
-  !!mainButtonOf(NONE.tree) && textIn(mainButtonOf(NONE.tree)).includes(GUIDE_TITLE),
-  mainButtonOf(NONE.tree) && textIn(mainButtonOf(NONE.tree)),
-)
-check(
-  'nothing installed: the flyout offers the add row and nothing else',
-  noneItems.length === 1 && noneItems[0].label === EN['guide.flyout.add'] && noneItems[0].type === undefined,
-  JSON.stringify(noneItems.map((item) => item.type || item.label)),
-)
-check(
-  'nothing installed: no separator between an add row and nothing',
-  !noneItems.some((item) => item.type === 'separator'),
-  JSON.stringify(noneItems),
-)
-mainButtonOf(NONE.tree).props.onClick()
-check(
-  'nothing installed: the card opens the pane, which is where adding is explained',
-  NONE.opened.length === 1 && NONE.opened[0].kind === 'generate' && NONE.opened[0].options.params === undefined,
-  JSON.stringify(NONE.opened),
-)
-
-// ── the card, host unreachable: said out loud, not drawn as empty ───────────
-
-const brokenMenu = menuOf(BROKEN.tree)
-check(
-  'an unreachable host says so instead of looking like an empty install',
-  !!brokenMenu && brokenMenu.props.menuItems[0].label === EN['guide.flyout.failed'] && brokenMenu.props.menuItems[0].disabled === true,
-  brokenMenu && JSON.stringify(brokenMenu.props.menuItems.map((item) => item.label)),
-)
-check(
-  'an unreachable host still offers the add row, so the card is never a dead end',
-  !!brokenMenu && brokenMenu.props.menuItems[brokenMenu.props.menuItems.length - 1].label === EN['guide.flyout.add'],
-  brokenMenu && JSON.stringify(brokenMenu.props.menuItems.map((item) => item.label)),
+  'one failed read does not take the wallet strip with it',
+  !!byAttr(failed.tree, 'data-generate-source'),
+  '',
 )
 
 // ── the copy, in both languages ─────────────────────────────────────────────
 
-for (const key of ['guide.flyout.label', 'guide.flyout.loading', 'guide.flyout.failed', 'guide.flyout.add', 'guide.community']) {
+for (const key of [
+  'guide.title',
+  'guide.description',
+  'surface.back',
+  'surface.loading',
+  'surface.failed',
+  'surface.advanced',
+  'surface.advanced.hide',
+  'surface.pending',
+  'card.community',
+  'surface.image.choose',
+]) {
   check('the copy has ' + key + ' in English', typeof EN[key] === 'string' && EN[key] !== '', String(EN[key]))
   check('the copy has ' + key + ' in Chinese', typeof ZH[key] === 'string' && ZH[key] !== '', String(ZH[key]))
 }
 
-// ── the host half: what may be listed, and what is reported instead ─────────
+// ── the host half: what may be listed, and what may be opened ───────────────
+
+const VALID = {
+  schema: ADAPTER_SCHEMA,
+  name: 'good',
+  title: 'A good adapter',
+  blurb: 'one line',
+  group: 'Capability',
+  variant: 'v1',
+  origin: 'mine',
+  source: { kind: 'webapp', appId: '1', webappName: 'Good', url: '' },
+  doors: {
+    a: { nodeId: '1', fieldName: 'a', type: 'text', label: 'A' },
+    b: { nodeId: '2', fieldName: 'b', type: 'text', label: 'B' },
+  },
+  ui: { runLabel: 'Run it', order: ['a', 'b'] },
+  provenance: { checkedAgainst: 'apiCallDemo', dryRun: 'ok' },
+}
 
 const dir = await mkdtemp(join(tmpdir(), 'rh-adapters-'))
 try {
-  const valid = {
-    schema: ADAPTER_SCHEMA,
-    name: 'good',
-    title: 'A good adapter',
-    blurb: 'one line',
-    group: 'Capability',
-    variant: 'v1',
-    origin: 'mine',
-    source: { kind: 'webapp', appId: '1', webappName: 'Good', url: '' },
-    doors: { a: { nodeId: '1', fieldName: 'a', type: 'text', label: 'A' }, b: { nodeId: '2', fieldName: 'b', type: 'text', label: 'B' } },
-    ui: { runLabel: 'Run it', order: ['a', 'b'] },
-    provenance: { checkedAgainst: 'apiCallDemo', dryRun: 'ok' },
-  }
-  await writeFile(join(dir, 'good.json'), JSON.stringify(valid))
+  await writeFile(join(dir, 'good.json'), JSON.stringify(VALID))
   await writeFile(join(dir, 'broken.json'), '{ this is not json')
-  await writeFile(join(dir, 'unvalidated.json'), JSON.stringify({ ...valid, name: 'unvalidated', provenance: { checkedAgainst: 'apiCallDemo', dryRun: '' } }))
-  await writeFile(join(dir, 'anonymous.json'), JSON.stringify({ ...valid, name: 'anonymous', origin: '' }))
-  await writeFile(join(dir, 'future.json'), JSON.stringify({ ...valid, name: 'future', schema: 'muen-rh-adapter/v2' }))
+  await writeFile(join(dir, 'unvalidated.json'), JSON.stringify({ ...VALID, name: 'unvalidated', provenance: { checkedAgainst: 'apiCallDemo', dryRun: '' } }))
+  await writeFile(join(dir, 'anonymous.json'), JSON.stringify({ ...VALID, name: 'anonymous', origin: '' }))
+  await writeFile(join(dir, 'future.json'), JSON.stringify({ ...VALID, name: 'future', schema: 'muen-rh-adapter/v2' }))
+  await writeFile(join(dir, 'other.json'), JSON.stringify({ ...VALID, name: 'good' }))
   await writeFile(join(dir, 'notes.txt'), 'not an adapter')
 
   const listed = await listAdapters(dir)
   check(
     'an adapter that was validated and attributed is listed',
-    listed.entries.length === 1 && listed.entries[0].name === 'good',
+    listed.entries.length === 2 && listed.entries.map((entry) => entry.name).join(',') === 'good,good',
     JSON.stringify(listed.entries.map((entry) => entry.name)),
   )
   check(
@@ -641,7 +675,8 @@ try {
         entry.variant === 'v1' &&
         entry.origin === 'mine' &&
         entry.runLabel === 'Run it' &&
-        entry.doorCount === 2
+        entry.doorCount === 2 &&
+        entry.doors === undefined
       )
     })(),
     JSON.stringify(listed.entries[0]),
@@ -661,6 +696,44 @@ try {
 
   const missing = await listAdapters(join(dir, 'no-such-directory'))
   check('no adapters directory is an empty install, not an error', missing.entries.length === 0 && missing.skipped.length === 0)
+
+  const one = await readAdapter(dir, 'good')
+  check(
+    'one workflow comes back with its doors and order, and without source or provenance',
+    (() => {
+      const adapter = one.adapter
+      return (
+        !!adapter &&
+        adapter.title === 'A good adapter' &&
+        adapter.runLabel === 'Run it' &&
+        adapter.order.join(',') === 'a,b' &&
+        Object.keys(adapter.doors).join(',') === 'a,b' &&
+        adapter.source === undefined &&
+        adapter.provenance === undefined
+      )
+    })(),
+    JSON.stringify(one).slice(0, 200),
+  )
+  check(
+    'a name that is not a file name is refused before anything is opened',
+    (await readAdapter(dir, '../mitsu')).error === 'bad-name' &&
+      (await readAdapter(dir, 'good/../good')).error === 'bad-name' &&
+      (await readAdapter(dir, '')).error === 'bad-name',
+    JSON.stringify(await readAdapter(dir, '../mitsu')),
+  )
+  check('an unknown workflow is not-found, not an error', (await readAdapter(dir, 'nope')).error === 'not-found')
+  check(
+    'a file whose own name differs from the one asked for is refused',
+    (await readAdapter(dir, 'other')).error === 'name-mismatch',
+    JSON.stringify(await readAdapter(dir, 'other')),
+  )
+  check(
+    'a file that may not be listed may not be opened either',
+    (await readAdapter(dir, 'unvalidated')).error === 'not-validated' &&
+      (await readAdapter(dir, 'anonymous')).error === 'origin-missing' &&
+      (await readAdapter(dir, 'future')).error === 'schema',
+    '',
+  )
 } finally {
   await rm(dir, { recursive: true, force: true })
 }
@@ -672,16 +745,13 @@ const installed = await listAdapters(profile).catch(() => null)
 if (installed === null || installed.entries.length === 0) {
   skip('the installed profile lists at least one workflow', 'nothing installed at ' + profile)
 } else {
+  const openedFiles = await Promise.all(installed.entries.map((entry) => readAdapter(profile, entry.name)))
   check(
-    'the installed profile lists what the install flow wrote',
-    installed.entries.every((entry) => entry.name !== '' && entry.title !== '' && entry.doorCount > 0),
-    JSON.stringify(installed.entries.map((entry) => entry.name + ' → ' + entry.title + ' (' + entry.doorCount + ' doors)')),
+    'the installed profile lists what the install flow wrote, and every one of them opens',
+    openedFiles.every((read) => read.adapter && Object.keys(read.adapter.doors).length > 0),
+    JSON.stringify(installed.entries.map((entry) => entry.name + ' → ' + entry.title)),
   )
-  check(
-    'every installed adapter is one the card can open',
-    installed.skipped.length === 0,
-    JSON.stringify(installed.skipped),
-  )
+  check('every installed adapter is one the pane can open', installed.skipped.length === 0, JSON.stringify(installed.skipped))
 }
 
 finish()

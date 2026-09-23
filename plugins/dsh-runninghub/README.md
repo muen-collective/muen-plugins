@@ -3,9 +3,10 @@
 The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a
 workflow by pasting its app link, and run it in the right panel. Epic 61.
 
-**This is S1 + S2 + S3, and S4's card: the plugin installs, the surface mounts, a RunningHub key can be
-linked, a workflow can be added from its app link, and the start-page card lists what is installed and opens
-one.** The pane's one-field install form and the run view (S5) are not faked here.
+**This is S1 + S2 + S3, plus the pane as a hub: the plugin installs, the surface mounts, a RunningHub key
+can be linked, a workflow can be added from its app link, and the pane opens on one card per installed
+workflow, each card opening that workflow's surface inside the same pane.** The pane's one-field install form,
+the payload gate and the run are not faked here.
 
 ## What it registers
 
@@ -14,10 +15,10 @@ one.** The pane's one-field install form and the run view (S5) are not faked her
 | `ctx.sidebarRightTabs` | a `generate` page type, id `@muen/dsh-runninghub`, priority `extension` |
 | `sidebar.right.pane.tab` | the pane body, keyed by the same id |
 | `sidebar.right.pane.tab.title` | the tab chip's live text |
-| the type's `guide[]` | one entry, which puts the **Generate** card on the right panel's start page |
-| `sidebar.right.tab.guide.entry` | the card renderer, under the same id: the installed list and its flyout (S4) |
-| `/plugins/generate/adapters` | the host route the card reads that list from — a disk read, no key, no network |
-| `settings.section` | one settings page, `runninghub-wallet`, where the key is changed or unlinked |
+| the type's `guide[]` | one entry, which puts the **Generate with RunningHub** card on the right panel's start page — the harness's own standard card, with no renderer of ours |
+| `/plugins/generate/adapters` | the host route the pane's cards read: the installed workflows, as one disk read, with no key and no network |
+| `/plugins/generate/adapter?name=` | the host route one workflow's surface reads: its doors, labels, bounds and `ui.order` |
+| `settings.section` | exactly ONE settings page, `runninghub-wallet`, where the key is changed or unlinked |
 | the client locale registry | namespace `generate`, en + zh |
 | `ctx.tools` | `rh_workflow_graph` (read an app's doors) and `rh_adapter_validate` (check a written adapter) |
 | `ctx.skills` | `add-rh-workflow`, read from `skills/add-rh-workflow/SKILL.md` at apply time |
@@ -129,44 +130,43 @@ class in its stylesheet, Terminal's card is a black rect — so Generate carries
 or photo glyph in the set; a picture-specific mark would mean hand-authoring one the way Terminal
 (`TerminalGuideIcon`) and Files (`FolderSheetGlyph`) do.
 
-## The card (S4)
+## The pane is the hub
 
-The type's own `guide[]` entry is what puts a card on the start page beside
-"Workspace files", "New terminal" and "Browser". The card renderer registered at
-`sidebar.right.tab.guide.entry` under the same id is what makes that card list what
-is installed: the host reads `<profile>/runninghub/adapters/` and answers
-`/plugins/generate/adapters`, and the card draws one row per workflow.
+**Decided by the founder on 2026-09-22**, after seeing the first cut take the card
+over:
 
-It draws three shapes, and all three are supported installs:
+> "the UX is incorrect on the start page revert to Generate with RunningHub, then on
+> this screen we need cards to launch the workflow UI/surface. So I think this
+> surface needs to hold all wf surfaces inside this one RH plugin surface." …
+> "we should only have 1 generate settings with the different adapters."
 
-| Installed | The card |
+So the start-page card is the harness's own standard card, titled with the provider
+(**Generate with RunningHub** — the next provider plugin will say its own name), and
+the pane holds everything else:
+
+| Screen | What it is |
 |---|---|
-| none | the type's own label, and a flyout whose only row is **Add a workflow…** |
-| one | that workflow's title and blurb, no chevron — the card IS the app, and clicking it opens it |
-| several | the type's label, and a flyout of **capability → workflow → variant**, with Add a workflow… last |
+| home | the wallet strip, then **one card per installed workflow** (cover, title, blurb, whose app it is), then the key directions, then how to add another |
+| a workflow | its surface, in the same pane: **doors as controls** in `ui.order` with the primary door first, the app's tooltip under each, `advanced` doors behind one disclosure, the app's own bounds/options/defaults on every control, and a way back to the list |
+| nothing installed | the empty state, which says how to add one |
+| the host did not answer | that, said plainly — not a false "nothing installed" |
 
-A level of the flyout is drawn only when it has something to hold: a group with one
-member and no variants becomes that row, not a parent with a single child; two
-adapters sharing a title are that workflow's variants. A community app is marked as
-someone else's work, because the API cannot say whose app it is and the adapter is
-where a person said so.
+**No node id and no field name is ever drawn** (E7's acceptance gate): those belong
+to the payload gate, as JSON to read, which is the next slice with the run strip and
+the result. The surface says so at its foot rather than offering a button that lies.
+
+Opening a workflow can also be driven by an opener: the tab kind takes
+`params.unit` and the body opens that unit directly. The card carries no params, so
+the ordinary path is the list.
+
+`multiple` is still absent on purpose: one pane holds the surfaces, so a second tab
+of the same kind would only duplicate the hub.
 
 An entry is listed only if it could be opened: the schema is this version,
 `provenance.dryRun` is `ok` (which is what "only after `rh_adapter_validate` passes"
-means in a file), and `origin` is set. A file that fails one of those is **reported**
-in the route's `skipped` list rather than dropped silently, because "I installed it
-and it is not there" has to have an answer.
-
-Selecting a workflow opens the `generate` kind with `params.unit` — the seam S5
-reads to know which adapter a tab is for. The run form does not exist yet, so the tab
-it opens is today's pane.
-
-`multiple` is absent on purpose: with it, the param-less card would open a new tab on
-every click. One page per pane is right until a tab carries a unit's params (S5, D17).
-
-`Add a workflow…` opens the pane, which is where the install sentence lives today.
-S4's one-field install form takes that destination over when it lands; until then the
-row is a signpost, not a second install path.
+means in a file), and `origin` is set. `readAdapter` applies the same three rules plus
+a file-name check, so `?name=../…` is refused before any file is opened, and the file
+must carry the name it was asked for.
 
 ## The install (S3)
 
@@ -244,7 +244,7 @@ node verify/wallet.mjs           # the wallet routes, driven against fakes (+ li
 node verify/save-confirmation.mjs # a save that worked, and one that was refused
 node verify/adapter.mjs          # the install: doors read, adapters written and refused
 node verify/skill.mjs            # the skill's order, and that the plugin has no write path
-node verify/start.mjs            # the card: every install shape, and what may be listed
+node verify/start.mjs            # the hub: the cards, the surface, one settings page, and what may be listed
 node verify/mount.mjs --static   # registration only
 ```
 

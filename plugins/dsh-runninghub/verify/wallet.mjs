@@ -211,14 +211,20 @@ function mount(credentials) {
 // 1. the route itself
 {
   const { server } = mount(fakeCredentials({}))
-  // Two routes, and they are two questions: the wallet is one account, the list is
-  // one directory. S4's card reads the list, which needs no key and no network.
-  check('exactly two routes are registered', server.routes.length === 2, server.routes.length + ' routes')
+  // Three routes, and they are three questions: the wallet is one account, the list
+  // is one directory, and a workflow is one file. None of them needs a key except
+  // the wallet's own writes.
+  check('exactly three routes are registered', server.routes.length === 3, server.routes.length + ' routes')
   const route = server.routes.find((candidate) => candidate.path === WALLET_PATH)
   check("the route is an exact '" + WALLET_PATH + "'", !!route && route.kind === 'exact' && route.path === WALLET_PATH, route && route.kind + ' ' + route.path)
   check(
     'the installed list is its own exact route',
     server.routes.some((candidate) => candidate.kind === 'exact' && candidate.path === '/plugins/generate/adapters'),
+    server.routes.map((candidate) => candidate.kind + ' ' + candidate.path).join(', '),
+  )
+  check(
+    'one workflow is its own exact route',
+    server.routes.some((candidate) => candidate.kind === 'exact' && candidate.path === '/plugins/generate/adapter'),
     server.routes.map((candidate) => candidate.kind + ' ' + candidate.path).join(', '),
   )
   try {

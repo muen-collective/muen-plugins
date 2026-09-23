@@ -293,25 +293,18 @@ export async function listAdapters(dir, { readDirectory = readdir, readText = re
   const entries = []
   const skipped = []
   for (const file of names.filter((name) => name.endsWith('.json')).sort()) {
-    let adapter
+    let parsed
     try {
-      adapter = JSON.parse(await readText(join(dir, file), 'utf8'))
+      parsed = JSON.parse(await readText(join(dir, file), 'utf8'))
     } catch {
       skipped.push({ file, reason: 'invalid-json' })
       continue
     }
-    const read = adapter && typeof adapter === 'object' && !Array.isArray(adapter) ? adapter : null
+    const read = shape(parsed)
     const name = str(read && read.name) || file.slice(0, -'.json'.length)
-    if (!read || read.schema !== ADAPTER_SCHEMA) {
-      skipped.push({ file, reason: 'schema' })
-      continue
-    }
-    if (!read.provenance || read.provenance.dryRun !== 'ok') {
-      skipped.push({ file, reason: 'not-validated' })
-      continue
-    }
-    if (!ORIGINS.includes(read.origin)) {
-      skipped.push({ file, reason: 'origin-missing' })
+    const refused = refusal(read)
+    if (refused !== null) {
+      skipped.push({ file, reason: refused })
       continue
     }
     entries.push({
@@ -331,6 +324,82 @@ export async function listAdapters(dir, { readDirectory = readdir, readText = re
 
   entries.sort((a, b) => order(a.title, b.title) || order(a.variant, b.variant) || order(a.name, b.name))
   return { entries, skipped }
+}
+
+/** A parsed file, when it is an object at all. Anything else is not an adapter. */
+function shape(parsed) {
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+}
+
+/**
+ * Why this adapter may not be shown, or `null` when it may.
+ *
+ * ONE ANSWER, TWO CALLERS. The list route and the surface route both ask this, so a
+ * file that is listed is exactly a file that can be opened — the card and the
+ * surface cannot disagree about whether a workflow exists.
+ */
+function refusal(read) {
+  if (read === null || read.schema !== ADAPTER_SCHEMA) return 'schema'
+  if (!read.provenance || read.provenance.dryRun !== 'ok') return 'not-validated'
+  if (!ORIGINS.includes(read.origin)) return 'origin-missing'
+  return null
+}
+
+/**
+ * One adapter, whole, for the surface that renders its doors.
+ *
+ * The list route answers with what a card draws; this answers with what a form
+ * needs — the doors, their labels, bounds and defaults, and `ui.order`. `source` and
+ * `provenance` are not sent to the page: the surface draws doors, and nothing in the
+ * browser half needs to know which app id or when it was read. The payload gate
+ * (next slice) will want `appId` and `revision`, and it can ask for them then.
+ *
+ * THE NAME IS A FILE NAME, AND IT IS CHECKED BEFORE IT IS JOINED. It arrives from
+ * the page, so `../` in it would read a file this plugin has no business reading;
+ * the same rule the validator puts on `name` is applied here, and the file must
+ * also carry that name, so `?name=x` cannot open `y.json`.
+ *
+ * @param {string} dir - `<profile>/runninghub/adapters`
+ * @param {string} name - the adapter's name, as the list reported it
+ * @returns {Promise<{ adapter: object } | { error: string, detail?: string }>}
+ */
+export async function readAdapter(dir, name, { readText = readFile } = {}) {
+  const wanted = str(name)
+  if (wanted === null || !/^[a-z0-9][a-z0-9._-]*$/.test(wanted)) {
+    return { error: 'bad-name', detail: 'a workflow is named by its file: lower case letters, digits, dot, dash or underscore' }
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(await readText(join(dir, wanted + '.json'), 'utf8'))
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return { error: 'not-found', detail: 'no adapter named "' + wanted + '"' }
+    return { error: 'unreadable', detail: String((error && error.message) || error) }
+  }
+
+  const read = shape(parsed)
+  const refused = refusal(read)
+  if (refused !== null) return { error: refused, detail: 'the file is not one this surface may open' }
+  if ((str(read.name) || wanted) !== wanted) {
+    return { error: 'name-mismatch', detail: 'the file carries a different name than the one asked for' }
+  }
+
+  const order = Array.isArray(read.ui && read.ui.order) ? read.ui.order.filter((key) => typeof key === 'string') : []
+  return {
+    adapter: {
+      name: wanted,
+      title: str(read.title) || wanted,
+      blurb: str(read.blurb) || '',
+      group: str(read.group) || '',
+      variant: str(read.variant) || '',
+      cover: str(read.cover) || '',
+      origin: read.origin,
+      runLabel: str(read.ui && read.ui.runLabel) || '',
+      expect: str(read.ui && read.ui.expect) || '',
+      order,
+      doors: read.doors,
+    },
+  }
 }
 
 /** Plain code-unit order: one answer on every machine, unlike a locale-aware sort. */

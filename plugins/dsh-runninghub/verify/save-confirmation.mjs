@@ -340,18 +340,30 @@ const UNLINKED = { linked: false, writable: true, source: null, account: null, e
 const LINKED = { linked: true, writable: true, source: 'file', account: { coins: 8600, money: 27.473, currency: 'USD', running: 0 }, error: null, accountUrl: ACCOUNT_URL }
 const REFUSED = { linked: false, writable: true, source: null, account: null, error: 'invalid-key', accountUrl: ACCOUNT_URL }
 
+/**
+ * A stub host. A route may name a `url` and is then matched exactly; one without a
+ * url answers any call of its method, which is how the wallet routes are written
+ * here (GET · POST · DELETE). The pane also reads the installed-workflow list, so a
+ * case that renders the pane names that url or the read fails as "no stub".
+ */
 function stubFetch(routes) {
   const calls = []
   return {
     calls,
     fetch: async (url, init = {}) => {
-      calls.push({ url, method: (init.method || 'GET').toUpperCase(), body: init.body })
-      const route = routes.find((candidate) => candidate.method === (init.method || 'GET').toUpperCase())
-      if (!route) throw new Error('no stub for ' + (init.method || 'GET') + ' ' + url)
+      const method = (init.method || 'GET').toUpperCase()
+      calls.push({ url, method, body: init.body })
+      const route =
+        routes.find((candidate) => candidate.url === url && candidate.method === method) ||
+        routes.find((candidate) => candidate.url === undefined && candidate.method === method)
+      if (!route) throw new Error('no stub for ' + method + ' ' + url)
       return { ok: route.ok !== false, status: route.status || (route.ok === false ? 400 : 200), json: async () => route.body }
     },
   }
 }
+
+/** What the installed-workflow list answers when a case is about the wallet. */
+const NO_WORKFLOWS = { method: 'GET', url: '/plugins/generate/adapters', body: { entries: [], skipped: [] } }
 
 // ── the cases ────────────────────────────────────────────────────────────────
 
@@ -388,6 +400,7 @@ if (pane && settings) {
   // 1. the pane: the first-run field, a save that works
   {
     const { tree } = await render(pane.component, [
+      NO_WORKFLOWS,
       { method: 'GET', body: UNLINKED },
       { method: 'POST', body: LINKED },
     ], 'pane-linked')
@@ -459,6 +472,7 @@ if (pane && settings) {
   // 2. the pane: a save that is refused confirms nothing
   {
     const { tree } = await render(pane.component, [
+      NO_WORKFLOWS,
       { method: 'GET', body: UNLINKED },
       { method: 'POST', body: REFUSED, ok: false, status: 400 },
     ], 'pane-refused')
@@ -689,6 +703,7 @@ if (pane && settings) {
   // screen a fresh install lands on.
   {
     const fresh = await render(pane.component, [
+      NO_WORKFLOWS,
       { method: 'GET', body: UNLINKED },
       { method: 'POST', body: LINKED },
     ], 'pane-guidance')
@@ -710,7 +725,7 @@ if (pane && settings) {
       'an unmarked sentence reads as one more instruction',
     )
 
-    const linked = await render(pane.component, [{ method: 'GET', body: LINKED }], 'pane-guidance-linked')
+    const linked = await render(pane.component, [NO_WORKFLOWS, { method: 'GET', body: LINKED }], 'pane-guidance-linked')
     const linkedText = textOf(linked.tree).join(' ')
     if (SHOW) panePreview.push({ label: 'once linked, the same pane', lines: linesOf(linked.tree) })
     check(
@@ -718,16 +733,18 @@ if (pane && settings) {
       linkedText.includes(EN['pane.linked.manage']) && EN['pane.linked.manage'].includes('Settings → Generate'),
       linkedText.slice(0, 240),
     )
-    // The deepest node holding both the empty-state body and the note must be the
-    // empty-state block itself: it carries that block's title and not the wallet
-    // strip's balance. Anything looser passes when the note sits at the top of the
-    // pane, because the pane root contains both texts.
-    const noteBlock = blockWith(linked.tree, [EN['pane.empty.body'], EN['pane.linked.manage']])
-    const noteBlockText = noteBlock ? textOf(noteBlock).join(' ') : ''
+    // The home screen's own block holds the directions, and the block does not
+    // carry the wallet strip's balance: a note beside the strip is a different
+    // claim, and anything looser passes when the note sits at the top of the pane,
+    // because the pane root contains every text on it.
+    const homeRoot = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-pane'] === 'home')
+    const noteHolder = homeRoot
+      ? homeRoot.children.find((child) => textOf(child).join(' ').includes(EN['pane.linked.manage']))
+      : null
     check(
-      'the linked directions sit under the empty-state body, not at the top of the pane',
-      !!noteBlock && noteBlockText.includes(EN['pane.empty.title']) && !noteBlockText.includes('8,600'),
-      noteBlock ? noteBlockText.slice(0, 200) : 'no block carries both lines',
+      'the linked directions sit in their own block below the screen they explain',
+      !!noteHolder && textOf(noteHolder).join(' ').includes(EN['pane.add.hint']) && !textOf(noteHolder).join(' ').includes('8,600'),
+      noteHolder ? textOf(noteHolder).join(' ').slice(0, 200) : 'no block holds the note',
     )
     check(
       'the linked directions carry the shipped info glyph',
@@ -735,16 +752,16 @@ if (pane && settings) {
       'an unmarked sentence reads as one more instruction',
     )
     check(
-      'exactly the empty-state block holds the note, not the pane itself',
+      'the notes come after the screen they explain, and the wallet strip comes first',
       (() => {
-        const root = nodesOf(linked.tree).find(
-          (node) => node.props && node.props['data-generate-pane'] === 'empty',
-        )
-        if (!root) return false
-        const holders = root.children.filter((child) => textOf(child).join(' ').includes(EN['pane.linked.manage']))
-        return holders.length === 1 && textOf(holders[0]).join(' ').includes(EN['pane.empty.title'])
+        if (!homeRoot) return false
+        const inOrder = nodesOf(homeRoot)
+        const stripAt = inOrder.findIndex((node) => node.props && node.props['data-generate-source'])
+        const emptyAt = inOrder.findIndex((node) => node.props && node.props['data-generate-none'] === 'yes')
+        const manageAt = inOrder.findIndex((node) => node.props && node.props['data-generate-manage-hint'] === 'yes')
+        return stripAt !== -1 && emptyAt !== -1 && manageAt !== -1 && stripAt < emptyAt && emptyAt < manageAt
       })(),
-      'a direct child of the pane holds it, so it is not the empty state',
+      'strip · screen · notes is the order the pane owes',
     )
     check(
       'the directions name both halves of the path, not a vague place',
@@ -806,13 +823,19 @@ if (pane && settings) {
         })(),
         'the note node must carry the copy itself',
       )
-      // Both notes belong to the empty state, not to the pane root: the strip's
-      // balance sits above them, and a note beside the strip is a different claim.
-      const bothNotes = blockWith(linked.tree, [EN['pane.linked.manage'], EN['pane.add.hint']])
+      // Both notes belong to the home screen's own block, not to the pane root: the
+      // strip's balance sits above them, and a note beside the strip is a different
+      // claim.
+      const bothNotes = homeRoot
+        ? homeRoot.children.find((child) => textOf(child).join(' ').includes(EN['pane.add.hint']))
+        : null
       const bothText = bothNotes ? textOf(bothNotes).join(' ') : ''
       check(
-        'both notes live in the empty-state block, under its own line',
-        !!bothNotes && bothText.includes(EN['pane.empty.body']) && !bothText.includes('8,600'),
+        'both notes live in one block of their own, with no balance in it',
+        !!bothNotes &&
+          bothText.includes(EN['pane.linked.manage']) &&
+          bothText.includes(EN['pane.add.hint']) &&
+          !bothText.includes('8,600'),
         bothNotes ? bothText.slice(0, 240) : 'no block carries both notes',
       )
     }

@@ -59,7 +59,7 @@ import { dirname } from 'node:path'
 
 import { parseAppRef, readAppDoors } from './doors.js'
 import { loadHouse } from './house.js'
-import { ADAPTER_SCHEMA, adapterFromDoors, listAdapters, validateAdapter } from './adapter.js'
+import { ADAPTER_SCHEMA, adapterFromDoors, listAdapters, readAdapter, validateAdapter } from './adapter.js'
 import { dataPaths, resolveDataRoot } from './paths.js'
 
 /** Matches the row id in cordis.patch.yml. */
@@ -69,13 +69,23 @@ export const name = 'runninghub'
 const WALLET_PATH = '/plugins/generate/wallet'
 
 /**
- * The installed-adapter list, read by the guide card.
+ * The installed-workflow list, read by the pane's cards.
  *
  * A second route rather than a query on the wallet route: the wallet is one
  * account and the list is one directory, and a route that answered two unrelated
  * questions would have to be told apart by its caller.
  */
 const ADAPTERS_PATH = '/plugins/generate/adapters'
+
+/**
+ * One workflow, whole.
+ *
+ * A third route and not a fatter list: a surface needs one file's doors, and a list
+ * that carried every door of every workflow would send all of them to draw a screen
+ * of titles. `?name=<adapter>` is checked against the file-name rule before it is
+ * joined to a directory (see `readAdapter`).
+ */
+const ADAPTER_PATH = '/plugins/generate/adapter'
 
 /**
  * The credential reference. A `CredentialRef` is the environment-variable-name
@@ -688,10 +698,34 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  /**
+   * One workflow, as the surface that renders it needs it.
+   *
+   * The name arrives in the query string, so it is validated before any file is
+   * opened and the answer says which failure it was: a bad name is the caller's
+   * mistake, a missing file is an empty slot, and a file that is not a listable
+   * adapter is neither.
+   */
+  const adapter = async (req, res) => {
+    if ((req.method || 'GET').toUpperCase() !== 'GET') {
+      methodNotAllowed(res, 'GET')
+      return
+    }
+    const url = new URL(req.url || '/', 'http://127.0.0.1')
+    const read = await readAdapter(paths.adapters, url.searchParams.get('name'))
+    if (read.error) {
+      const status = read.error === 'not-found' ? 404 : read.error === 'bad-name' ? 400 : 500
+      send(res, status, { error: read.error, detail: read.detail || null })
+      return
+    }
+    send(res, 200, read.adapter)
+  }
+
   const mount = (server) => {
     if (!server || typeof server.register !== 'function') return
     ctx.effect(() => server.register({ kind: 'exact', path: WALLET_PATH, handler: wallet }), 'runninghub: wallet')
     ctx.effect(() => server.register({ kind: 'exact', path: ADAPTERS_PATH, handler: adapters }), 'runninghub: adapters')
+    ctx.effect(() => server.register({ kind: 'exact', path: ADAPTER_PATH, handler: adapter }), 'runninghub: adapter')
   }
 
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined

@@ -1,7 +1,7 @@
 {
   "name": "@muen/dsh-runninghub",
   "version": "0.1.0-dev",
-  "description": "The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a workflow by pasting its app link, and run it in the right panel. Epic 61 — S1–S2 accepted; S3 is the install flow (rh_workflow_graph, rh_adapter_validate, the add-rh-workflow skill); S4's first half is the guide card that lists the installed workflows and opens one; the run view (S5) and the pane's one-field install form are still owed.",
+  "description": "The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a workflow by pasting its app link, and open each installed workflow as a surface inside the one Generate pane. Epic 61 — S1–S2 accepted; S3 is the install flow (rh_workflow_graph, rh_adapter_validate, the add-rh-workflow skill); the pane is the hub, with a card per workflow and its doors as controls; the payload gate and the run (S5), and the pane's one-field install form, are still owed.",
   "license": "MIT",
   "repository": {
     "type": "git",

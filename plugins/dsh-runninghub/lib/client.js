@@ -53,9 +53,6 @@ window.__ModuleLoader__.load({
       IconRefreshOutline16,
       IconCheckOutline16,
       IconInfoOutline14,
-      IconChevronDownOutline14,
-      Button,
-      Menu,
       Modal,
     } = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
@@ -66,20 +63,36 @@ window.__ModuleLoader__.load({
     const GENERATE_KIND = 'generate'
     /** This package's namespace in the client locale registry. */
     const NS = 'generate'
-    /** The host's wallet route. One of the two endpoints this half talks to. */
+    /** The host's wallet route. One of the three endpoints this half talks to. */
     const WALLET_API = '/plugins/generate/wallet'
     /**
-     * The host's installed-workflow list. A disk read on the host, so the card
-     * draws what is installed without a key, a network call or a coin.
+     * The host's installed-workflow list. A disk read on the host, so the pane's
+     * cards draw what is installed without a key, a network call or a coin.
      */
     const ADAPTERS_API = '/plugins/generate/adapters'
-    /** The flyout row that is not a workflow. It cannot collide with an adapter name. */
-    const ADD_ROW = 'add-a-workflow'
+    /**
+     * One workflow, whole. The list carries what a card draws; the surface needs the
+     * doors, their bounds and `ui.order`, so it reads the file by name.
+     */
+    const ADAPTER_API = '/plugins/generate/adapter'
 
     const EN = {
       'type.label': 'Generate',
-      'guide.title': 'Generate',
-      'guide.description': 'The RunningHub apps you add, each in its own tab',
+      'guide.title': 'Generate with RunningHub',
+      'guide.description': 'Run your RunningHub workflows here',
+      // The pane is the HUB (founder, 2026-09-22): the start-page card is a plain
+      // door, and every workflow surface lives inside this one pane. So the pane's
+      // first screen is its card grid, and a card opens that workflow's surface.
+      'surface.back': 'All workflows',
+      'surface.loading': 'Reading the workflow…',
+      'surface.failed': 'That workflow could not be read.',
+      'surface.advanced': 'Advanced',
+      'surface.advanced.hide': 'Hide advanced',
+      // Said where the run will be, because the form is real and nothing submits:
+      // the payload gate, the run strip and the result are the next slice (§10).
+      'surface.pending': 'Running comes next: the payload gate and the run strip are not built yet.',
+      'card.community': 'someone else\'s app',
+      'surface.image.choose': 'Choose an image',
       'pane.loading': 'Checking your wallet…',
       'pane.first.title': 'Link your RunningHub account',
       'pane.first.body': 'Paste your API key. It is checked now, and it stays on this machine.',
@@ -102,19 +115,10 @@ window.__ModuleLoader__.load({
       // say it in their own language; what must not move is the sentence we show.
       'pane.add.hint': 'To add a workflow, ask the agent in chat: “add this RunningHub workflow <app link>”.',
       'pane.empty.title': 'Nothing installed yet',
-      'pane.empty.body': 'RunningHub apps you add open here, one tab each.',
-      // The card on the start page, and the flyout under it (§10). The card is the
-      // front door; the flyout is what a user with more than one workflow picks
-      // from. Its rows are the installed apps' own titles, so nothing here names a
-      // workflow — only the furniture around them.
-      'guide.flyout.label': 'Choose a workflow',
-      'guide.flyout.loading': 'Reading installed workflows…',
-      'guide.flyout.failed': 'The installed list could not be read.',
-      // The one thing the flyout offers when nothing is installed. It opens the
-      // pane, which is where the install sentence lives today; S4's one-field form
-      // takes that destination over when it lands.
-      'guide.flyout.add': 'Add a workflow…',
-      'guide.community': 'community',
+      'pane.empty.body': 'RunningHub apps you add open here, one card each.',
+      // A host that did not answer is not an empty install, and saying so is the
+      // difference between "add a workflow" and "something is wrong".
+      'pane.list.failed': 'The installed workflows could not be read.',
       'wallet.key.label': 'RunningHub API key',
       'wallet.key.placeholder': 'Paste your key',
       'wallet.key.hint': 'Your key is on your RunningHub account page, under',
@@ -174,8 +178,16 @@ window.__ModuleLoader__.load({
 
     const ZH = {
       'type.label': '生成',
-      'guide.title': '生成',
-      'guide.description': '你添加的 RunningHub 应用，各自独立标签页',
+      'guide.title': '使用 RunningHub 生成',
+      'guide.description': '在这里运行你的 RunningHub 工作流',
+      'surface.back': '全部工作流',
+      'surface.loading': '正在读取工作流…',
+      'surface.failed': '无法读取该工作流。',
+      'surface.advanced': '高级',
+      'surface.advanced.hide': '收起高级选项',
+      'surface.pending': '运行功能稍后提供：付费前的载荷确认与运行状态尚未构建。',
+      'card.community': '他人的应用',
+      'surface.image.choose': '选择图片',
       'pane.loading': '正在检查钱包…',
       'pane.first.title': '连接你的 RunningHub 账户',
       'pane.first.body': '粘贴你的 API 密钥。现在就会校验，并且只保存在这台机器上。',
@@ -184,12 +196,8 @@ window.__ModuleLoader__.load({
       // 引号内的指令保持英文：它就是技能 whenToUse 里写的那句，翻译会让这行失去作用。
       'pane.add.hint': '要添加工作流，在对话里对智能体说：「add this RunningHub workflow <app link>」。',
       'pane.empty.title': '还没有安装应用',
-      'pane.empty.body': '你添加的 RunningHub 应用会在这里打开，每个应用一个标签页。',
-      'guide.flyout.label': '选择工作流',
-      'guide.flyout.loading': '正在读取已安装的工作流…',
-      'guide.flyout.failed': '无法读取已安装列表。',
-      'guide.flyout.add': '添加工作流…',
-      'guide.community': '社区',
+      'pane.empty.body': '你添加的 RunningHub 应用会在这里打开，每个应用一张卡片。',
+      'pane.list.failed': '无法读取已安装的工作流。',
       'wallet.key.label': 'RunningHub API 密钥',
       'wallet.key.placeholder': '粘贴你的密钥',
       'wallet.key.hint': '密钥在你的 RunningHub 账户页面里：',
@@ -479,73 +487,120 @@ window.__ModuleLoader__.load({
         color: 'var(--dsw-alias-state-warn-primary)',
       },
       /**
-       * The guide card (§10). The terminal's card is the shape to sit beside — a
-       * capsule with the glyph and two lines of text, and a chevron cell on the
-       * right — so the geometry below is the harness's own card geometry, written
-       * as inline style because this bundle carries no stylesheet. The values are
-       * the terminal card's, so the two cards line up on the start page.
+       * The hub: one card per installed workflow, inside the pane (founder,
+       * 2026-09-22 — "this surface needs to hold all wf surfaces inside this one RH
+       * plugin surface"). The card is a button, so the whole card is the target.
        */
+      cards: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        padding: '14px 12px 2px',
+      },
       card: {
-        boxSizing: 'border-box',
         display: 'flex',
         alignItems: 'stretch',
+        gap: 0,
         width: '100%',
+        padding: 0,
         overflow: 'hidden',
-        background: 'var(--dsw-alias-bg-layer-1)',
-        border: '.5px solid var(--dsw-alias-border-l4)',
-        borderRadius: 24,
-      },
-      cardMain: {
-        flex: 1,
-        minWidth: 0,
-        height: 'auto',
-        minHeight: 56,
-        padding: '14px 20px',
-        justifyContent: 'flex-start',
-        gap: 14,
         textAlign: 'left',
-        borderRadius: '24px 0 0 24px',
+        font: 'inherit',
+        color: 'inherit',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '1px solid var(--dsw-alias-border-l1)',
+        borderRadius: 10,
+        cursor: 'pointer',
       },
-      /** The glyph must not be squeezed when the title beside it is long. */
-      cardIcon: {
+      cardCover: {
         flex: 'none',
-        display: 'inline-flex',
+        display: 'block',
+        width: 72,
+        height: 72,
+        objectFit: 'cover',
+        background: 'var(--dsw-alias-bg-layer-2)',
       },
-      cardText: {
+      cardBody: {
         display: 'flex',
         flexDirection: 'column',
         gap: 3,
         minWidth: 0,
+        padding: '10px 12px',
       },
       cardTitle: {
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        fontSize: 15,
+        fontSize: 13,
+        fontWeight: 600,
         lineHeight: 1.4,
         color: 'var(--dsw-alias-label-primary)',
       },
-      cardDescription: {
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        fontSize: 13,
+      cardBlurb: {
+        fontSize: 11,
+        lineHeight: 1.45,
+        color: 'var(--dsw-alias-label-secondary)',
+      },
+      cardMark: {
+        marginTop: 2,
+        fontSize: 10,
         lineHeight: 1.4,
-        color: 'var(--dsw-alias-label-caption)',
+        color: 'var(--dsw-alias-label-tertiary)',
       },
-      /** The chevron cell: its own half of the capsule, so the two clicks are far apart. */
-      cardTrigger: {
-        flex: 'none',
-        alignSelf: 'stretch',
-        width: 44,
-        height: 'auto',
-        padding: 0,
-        borderRadius: '0 24px 24px 0',
+      /** One workflow's surface: the form column, inside the pane, under the strip. */
+      surface: {
+        padding: '10px 12px 24px',
       },
-      cardMenu: {
-        flex: 'none',
-        alignSelf: 'stretch',
+      surfaceHead: {
         display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+      },
+      /** A door's control. Same field as the key form, tighter under its own label. */
+      input: {
+        display: 'block',
+        width: '100%',
+        boxSizing: 'border-box',
+        marginTop: 6,
+        padding: '7px 9px',
+        fontSize: 12,
+        fontFamily: 'inherit',
+        color: 'var(--dsw-alias-label-primary)',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '1px solid var(--dsw-alias-border-l1)',
+        borderRadius: 6,
+        outline: 'none',
+      },
+      multiline: {
+        minHeight: 84,
+        resize: 'vertical',
+        lineHeight: 1.5,
+      },
+      /** A door the app exposes as an image slot. Uploading lands with the run path. */
+      imageBox: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 6,
+        padding: '10px 12px',
+        fontSize: 11,
+        color: 'var(--dsw-alias-label-tertiary)',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '1px dashed var(--dsw-alias-border-l2)',
+        borderRadius: 6,
+        cursor: 'pointer',
+      },
+      /** The one disclosure that hides the parameter-ish doors (§10). */
+      disclosure: {
+        display: 'block',
+        width: '100%',
+        marginTop: 18,
+        padding: '8px 10px',
+        textAlign: 'left',
+        font: 'inherit',
+        fontSize: 11,
+        color: 'var(--dsw-alias-label-secondary)',
+        background: 'transparent',
+        border: '1px solid var(--dsw-alias-border-l1)',
+        borderRadius: 6,
+        cursor: 'pointer',
       },
     }
 
@@ -656,38 +711,39 @@ window.__ModuleLoader__.load({
     function useAdapters() {
       const [state, setState] = React.useState({ phase: 'loading', entries: [], skipped: [] })
 
-      React.useEffect(() => {
-        let live = true
-        const read = async () => {
+      const load = React.useCallback(async (apply) => {
+        try {
+          const response = await fetch(ADAPTERS_API, { headers: { accept: 'application/json' } })
+          let body = null
           try {
-            const response = await fetch(ADAPTERS_API, { headers: { accept: 'application/json' } })
-            let body = null
-            try {
-              body = await response.json()
-            } catch {
-              body = null
-            }
-            if (!live) return
-            if (!response.ok || !body || !Array.isArray(body.entries)) {
-              setState({ phase: 'failed', entries: [], skipped: [] })
-              return
-            }
-            setState({
-              phase: 'ready',
-              entries: body.entries,
-              skipped: Array.isArray(body.skipped) ? body.skipped : [],
-            })
+            body = await response.json()
           } catch {
-            if (live) setState({ phase: 'failed', entries: [], skipped: [] })
+            body = null
           }
-        }
-        read()
-        return () => {
-          live = false
+          if (!response.ok || !body || !Array.isArray(body.entries)) {
+            apply({ phase: 'failed', entries: [], skipped: [] })
+            return
+          }
+          apply({ phase: 'ready', entries: body.entries, skipped: Array.isArray(body.skipped) ? body.skipped : [] })
+        } catch {
+          apply({ phase: 'failed', entries: [], skipped: [] })
         }
       }, [])
 
-      return state
+      React.useEffect(() => {
+        let live = true
+        load((next) => {
+          if (live) setState(next)
+        })
+        return () => {
+          live = false
+        }
+      }, [load])
+
+      // The same read again, for Refresh: a host that did not answer is a state the
+      // user can leave, not one they are stuck in.
+      const reload = React.useCallback(() => load(setState), [load])
+      return { ...state, reload }
     }
 
     /** A quiet placeholder glyph — the surface's own, not the guide's cube. */
@@ -919,10 +975,223 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /**
+     * One workflow, whole, for the surface that renders its doors.
+     *
+     * The pane mounts this per open unit, keyed by name, so switching units mounts
+     * a fresh reader rather than reusing the previous file's state.
+     */
+    function useAdapter(name) {
+      const [state, setState] = React.useState({ phase: 'loading', adapter: null })
+
+      React.useEffect(() => {
+        let live = true
+        const read = async () => {
+          try {
+            const response = await fetch(ADAPTER_API + '?name=' + encodeURIComponent(name), { headers: { accept: 'application/json' } })
+            let body = null
+            try {
+              body = await response.json()
+            } catch {
+              body = null
+            }
+            if (!live) return
+            if (!response.ok || !body || !body.doors) {
+              setState({ phase: 'failed', adapter: null })
+              return
+            }
+            setState({ phase: 'ready', adapter: body })
+          } catch {
+            if (live) setState({ phase: 'failed', adapter: null })
+          }
+        }
+        read()
+        return () => {
+          live = false
+        }
+      }, [])
+
+      return state
+    }
+
+    /**
+     * The doors in the order the surface draws them.
+     *
+     * `ui.order` is the author's order; the primary door leads, because that is the
+     * one the user came to fill in; anything the file left out of its order is
+     * appended rather than dropped, since a door the app exposes is a door the run
+     * will send.
+     */
+    function doorsInOrder(adapter) {
+      const doors = adapter.doors || {}
+      const keys = Object.keys(doors)
+      const declared = (Array.isArray(adapter.order) ? adapter.order : []).filter((key) => keys.includes(key))
+      const all = declared.concat(keys.filter((key) => !declared.includes(key)))
+      const primary = all.find((key) => doors[key].primary === true)
+      if (primary === undefined) return all
+      return [primary].concat(all.filter((key) => key !== primary))
+    }
+
+    /** What a door starts at: the app's default, or the first option, or nothing. */
+    function defaultFor(door) {
+      if (door.default !== undefined) return door.default
+      if (door.type === 'select') return Array.isArray(door.options) && door.options.length > 0 ? door.options[0] : ''
+      if (door.type === 'number') return door.min !== undefined ? door.min : ''
+      return ''
+    }
+
+    /** One card on the pane's first screen: the whole card opens that workflow. */
+    function UnitCard({ t, unit, onOpen }) {
+      return h(
+        'button',
+        {
+          type: 'button',
+          style: S.card,
+          'data-generate-unit': unit.name,
+          onClick: () => onOpen(unit.name),
+        },
+        unit.cover ? h('img', { src: unit.cover, alt: '', style: S.cardCover }) : null,
+        h(
+          'span',
+          { style: S.cardBody },
+          h('span', { style: S.cardTitle }, unit.title),
+          unit.blurb ? h('span', { style: S.cardBlurb }, unit.blurb) : null,
+          // Whose app it is. The API cannot say, so the adapter is where a person
+          // said it, and this is where a reader is told (§2).
+          unit.origin === 'community' ? h('span', { style: S.cardMark }, t('card.community')) : null,
+        ),
+      )
+    }
+
+    /**
+     * One workflow's surface, inside the pane.
+     *
+     * §10's "doors as controls in `ui.order`, `primary` first": `label` is the
+     * visible name, the app's own tooltip sits under the control, `advanced` doors
+     * sit behind one disclosure, and NO node id and no field name is ever drawn —
+     * those belong to the payload gate, as JSON to read.
+     *
+     * THE FORM IS REAL AND NOTHING SUBMITS. Every control carries the app's own
+     * bounds, options and default, and holds what the user types; the payload gate,
+     * the run strip and the result are the next slice (§10, S5), and the line at the
+     * foot says so rather than leaving a button that lies.
+     */
+    function WorkflowSurface({ t, name, onBack }) {
+      const { phase, adapter } = useAdapter(name)
+      const [values, setValues] = React.useState({})
+      const [showAdvanced, setShowAdvanced] = React.useState(false)
+
+      // Depends on the adapter arriving: the doors are what the defaults come from.
+      React.useEffect(() => {
+        if (phase !== 'ready' || !adapter) return
+        const start = {}
+        for (const key of Object.keys(adapter.doors)) start[key] = defaultFor(adapter.doors[key])
+        setValues(start)
+      }, [phase])
+
+      const set = (key) => (event) => {
+        const next = event.target.value
+        setValues((current) => ({ ...current, [key]: next }))
+      }
+
+      const head = h(
+        'div',
+        { style: S.surfaceHead },
+        h('button', { type: 'button', style: S.ghost, 'data-generate-back': 'yes', onClick: onBack }, t('surface.back')),
+      )
+
+      if (phase !== 'ready' || !adapter) {
+        return h(
+          'div',
+          { style: S.surface, 'data-generate-surface': phase },
+          head,
+          h('div', { style: S.hint }, phase === 'failed' ? t('surface.failed') : t('surface.loading')),
+        )
+      }
+
+      const keys = doorsInOrder(adapter)
+      const main = keys.filter((key) => adapter.doors[key].advanced !== true)
+      const advanced = keys.filter((key) => adapter.doors[key].advanced === true)
+
+      const control = (key) => {
+        const door = adapter.doors[key]
+        const value = values[key] === undefined ? defaultFor(door) : values[key]
+        const shared = { style: S.input, id: 'generate-door-' + key, 'data-generate-door': key, onChange: set(key) }
+        if (door.type === 'select') {
+          return h(
+            'select',
+            { ...shared, value },
+            (door.options || []).map((option) => h('option', { key: option, value: option }, option)),
+          )
+        }
+        if (door.type === 'number') {
+          return h('input', { ...shared, type: 'number', value, min: door.min, max: door.max, step: door.step })
+        }
+        if (door.type === 'image') {
+          // Closing an image door is local state until the run path uploads it:
+          // `POST /task/openapi/upload` is part of that slice, and a picker that
+          // pretended to have sent something would be worse than one that does not.
+          return h(
+            'label',
+            { style: S.imageBox, htmlFor: 'generate-door-' + key },
+            h(IconSparkle16, { size: 12 }),
+            h('span', null, t('surface.image.choose')),
+            h('input', { id: 'generate-door-' + key, 'data-generate-door': key, type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: set(key) }),
+          )
+        }
+        return door.multiline === true
+          ? h('textarea', { ...shared, style: { ...S.input, ...S.multiline }, rows: 4, value })
+          : h('input', { ...shared, type: 'text', value })
+      }
+
+      const doorRow = (key) =>
+        h(
+          'div',
+          { key, 'data-generate-door-row': key },
+          h('label', { style: S.label, htmlFor: 'generate-door-' + key }, adapter.doors[key].label),
+          control(key),
+          adapter.doors[key].hint ? h('div', { style: S.hint }, adapter.doors[key].hint) : null,
+        )
+
+      return h(
+        'div',
+        { style: S.surface, 'data-generate-surface': 'ready', 'data-generate-unit': adapter.name },
+        head,
+        h('div', { style: S.title }, adapter.title),
+        adapter.blurb ? h('div', { style: S.body }, adapter.blurb) : null,
+        ...main.map(doorRow),
+        advanced.length > 0
+          ? h(
+              'button',
+              {
+                type: 'button',
+                style: S.disclosure,
+                'data-generate-advanced': showAdvanced ? 'open' : 'closed',
+                onClick: () => setShowAdvanced((open) => !open),
+              },
+              (showAdvanced ? t('surface.advanced.hide') : t('surface.advanced')) + ' (' + advanced.length + ')',
+            )
+          : null,
+        showAdvanced ? advanced.map(doorRow) : null,
+        h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
+      )
+    }
+
     /** Stage two: the body, under the type's own id. */
     function GeneratePane(props) {
       const t = translatorOf(props)
       const { wallet, busy, load, save, confirmed, forget } = useWallet()
+      const units = useAdapters()
+      const [chosen, setChosen] = React.useState(null)
+
+      // A tab may be opened at a unit by an opener that passed `params.unit`; the
+      // card carries no params, so the first screen is normally the list. `null`
+      // means "the user has not chosen yet".
+      const tab = typeof props.useTabInfo === 'function' ? props.useTabInfo() : null
+      const requested = tab && tab.tab && tab.tab.navigation ? tab.tab.navigation.params : null
+      const asked = requested && typeof requested.unit === 'string' ? requested.unit : null
+      const installed = units.entries.some((entry) => entry.name === asked)
+      const active = chosen === null ? (installed ? asked : null) : chosen || null
 
       if (wallet === null) {
         return h('div', { style: S.root, 'data-generate-pane': 'loading' }, h('div', { style: S.empty }, h('div', { style: S.body }, t('pane.loading'))))
@@ -958,11 +1227,11 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { style: S.root, 'data-generate-pane': 'empty' },
+        { style: S.root, 'data-generate-pane': active === null ? 'home' : 'unit' },
         // The link just happened. The dialog says the key works, that the wallet
         // answered, and where the balance went; the strip below it is the thing
         // the dialog is pointing at.
-        confirmed ? h(SaveDialog, { t, wallet, onClose: forget }) : null,
+        confirmed && active === null ? h(SaveDialog, { t, wallet, onClose: forget }) : null,
         h(WalletStrip, { t, wallet }),
         wallet.error
           ? h(
@@ -974,37 +1243,74 @@ window.__ModuleLoader__.load({
               h('span', null, wallet.error === 'invalid-key' ? t('error.storedKeyRejected') : errorText(t, wallet.error)),
             )
           : null,
-        h(
-          'div',
-          { style: S.empty },
-          h(GenerateMark, null),
-          h('div', { style: S.title }, t('pane.empty.title')),
-          h('div', { style: S.body }, t('pane.empty.body')),
-          // The directions sit under the line they explain, not at the top of the
-          // pane: this is the surface a person returns to when they rotate the key.
-          h(Note, {
-            text: t('pane.linked.manage'),
-            attrs: { 'data-generate-manage-hint': 'yes' },
-          }),
-          // And under those, how to add an app. This is the screen a person lands on
-          // with a linked wallet and nothing installed, so the one action that fills
-          // it has to be on it, in words they can repeat into the chat.
-          h(Note, {
-            text: t('pane.add.hint'),
-            attrs: { 'data-generate-add-hint': 'yes' },
-          }),
-        ),
-        h(
-          'div',
-          { style: { ...S.row, justifyContent: 'center', paddingBottom: 20 } },
-          h(
-            'button',
-            { type: 'button', style: S.ghost, onClick: load, disabled: busy, title: t('wallet.refresh') },
-            h(IconRefreshOutline16, { size: 12 }),
-            ' ',
-            t('wallet.refresh'),
-          ),
-        ),
+        // ONE PANE HOLDS EVERY WORKFLOW SURFACE (founder, 2026-09-22). The first
+        // screen is the cards; a card opens that workflow's surface in place, and the
+        // way back is the surface's own first control.
+        active === null
+          ? units.entries.length > 0
+            ? h(
+                'div',
+                { style: S.cards, 'data-generate-cards': String(units.entries.length) },
+                units.entries.map((unit) => h(UnitCard, { key: unit.name, t, unit, onOpen: setChosen })),
+              )
+            : units.phase === 'failed'
+              ? h(
+                  'div',
+                  { style: S.empty, 'data-generate-list-failed': 'yes' },
+                  h(GenerateMark, null),
+                  h('div', { style: S.title }, t('pane.list.failed')),
+                )
+              : h(
+                  'div',
+                  { style: S.empty, 'data-generate-none': 'yes' },
+                  h(GenerateMark, null),
+                  h('div', { style: S.title }, t('pane.empty.title')),
+                  h('div', { style: S.body }, t('pane.empty.body')),
+                )
+          : h(WorkflowSurface, { key: active, t, name: active, onBack: () => setChosen('') }),
+        active === null
+          ? h(
+              'div',
+              { style: S.cards },
+              // The directions sit under the screen they explain, not at the top of
+              // the pane: this is the surface a person returns to when they rotate
+              // the key.
+              h(Note, {
+                text: t('pane.linked.manage'),
+                attrs: { 'data-generate-manage-hint': 'yes' },
+              }),
+              // And under those, how to add an app: this is the screen a person
+              // lands on with a linked wallet, so the one action that fills it has
+              // to be on it, in words they can repeat into the chat.
+              h(Note, {
+                text: t('pane.add.hint'),
+                attrs: { 'data-generate-add-hint': 'yes' },
+              }),
+            )
+          : null,
+        active === null
+          ? h(
+              'div',
+              { style: { ...S.row, justifyContent: 'center', paddingBottom: 20 } },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  style: S.ghost,
+                  // Both reads again: the wallet and the installed list.
+                  onClick: () => {
+                    load()
+                    units.reload()
+                  },
+                  disabled: busy,
+                  title: t('wallet.refresh'),
+                },
+                h(IconRefreshOutline16, { size: 12 }),
+                ' ',
+                t('wallet.refresh'),
+              ),
+            )
+          : null,
       )
     }
 
@@ -1170,178 +1476,6 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /**
-     * The flyout's rows, from the installed list (§10).
-     *
-     * Three levels, and each one is optional: capability (`group`) → workflow
-     * (`title`) → variant. A level is drawn only when it has something to hold,
-     * which is what keeps a one-workflow install from showing an empty hierarchy:
-     *
-     *   - several adapters sharing a title are that workflow's variants, each row
-     *     labelled with its own `variant`;
-     *   - a group becomes a capability submenu — unless it holds exactly one
-     *     workflow with no variants, in which case the group's name IS that row
-     *     (the "Upscale" case in §10);
-     *   - everything else is a leaf, labelled with the adapter's own title.
-     *
-     * Row ids are adapter names, because that is what the opener passes on. The two
-     * parent kinds are prefixed (`group:` / `title:`), which an adapter name cannot
-     * contain — `rh_adapter_validate` allows only lower case letters, digits, dot,
-     * dash and underscore — so a parent id can never be mistaken for a leaf.
-     *
-     * @param {readonly object[]} entries - from the host, in host order
-     * @param {(key: string) => string} t
-     * @returns {object[]} rows for the primitives `Menu`
-     */
-    function flyoutRows(entries, t) {
-      const byTitle = new Map()
-      for (const entry of entries) {
-        if (!byTitle.has(entry.title)) byTitle.set(entry.title, [])
-        byTitle.get(entry.title).push(entry)
-      }
-      /** A community app is marked as someone else's work wherever it is listed (§2). */
-      const mark = (text, entry) => (entry.origin === 'community' ? text + ' · ' + t('guide.community') : text)
-      /**
-       * One row per distinct title, in first-seen order. Collapsing happens HERE
-       * rather than per member, because two variants of one workflow are one row
-       * with two children — mapping each member would draw that row twice.
-       */
-      const rowsFor = (list) => {
-        const titles = []
-        for (const entry of list) if (!titles.includes(entry.title)) titles.push(entry.title)
-        return titles.map((title) => {
-          const same = byTitle.get(title)
-          if (same.length === 1) return { id: same[0].name, label: mark(title, same[0]) }
-          return {
-            id: 'title:' + title,
-            label: title,
-            submenu: same.map((variant) => ({ id: variant.name, label: mark(variant.variant || variant.title, variant) })),
-          }
-        })
-      }
-
-      const rows = []
-      const groups = new Map()
-      for (const entry of entries) {
-        if (entry.group === '') {
-          rows.push({ kind: 'entry', entry })
-          continue
-        }
-        if (!groups.has(entry.group)) {
-          const row = { kind: 'group', label: entry.group, members: [] }
-          groups.set(entry.group, row)
-          rows.push(row)
-        }
-        groups.get(entry.group).members.push(entry)
-      }
-
-      return rows.map((row) => {
-        if (row.kind === 'entry') return rowsFor([row.entry])[0]
-        const inner = rowsFor(row.members)
-        // One workflow, no variants: there is no hierarchy to show, so the group's
-        // own name is that row ("Upscale" in §10) rather than a parent with one child.
-        if (inner.length === 1 && inner[0].submenu === undefined) return { id: inner[0].id, label: row.label }
-        return { id: 'group:' + row.label, label: row.label, submenu: inner }
-      })
-    }
-
-    /**
-     * The guide card (§10): our door on the harness's own start page, beside
-     * "Workspace files", "New terminal" and "Browser".
-     *
-     * The type's own guide entry is what puts a card there at all; this renderer,
-     * registered at `sidebar.right.tab.guide.entry` under the same id, is what makes
-     * it list what is installed instead of being a second "open the pane" button.
-     *
-     * It DEGRADES TO ONE ENTRY, and that is a supported install (§10): a user with
-     * exactly one workflow sees that workflow's own label and no chevron, and the
-     * card opens it. A user with none sees the plain card, which opens the pane —
-     * the screen that says how an app is added. Between those two, the card is a
-     * categorized flyout.
-     *
-     * Selecting a workflow opens the `generate` kind with `params.unit`. That param
-     * is the seam S5 reads: it is what tells the tab which adapter it is for. The
-     * kind takes no `multiple` yet, so one pane holds one unit for now — `multiple`
-     * arrives with the run view, because a tab that carries no unit would duplicate
-     * itself on every click (§4).
-     */
-    function GenerateGuide(props) {
-      const t = translatorOf(props)
-      const { tab } = props.useTabInfo()
-      const { phase, entries } = useAdapters()
-      const [open, setOpen] = React.useState(false)
-      /** The degrade case: one installed workflow is the card, with no flyout. */
-      const single = entries.length === 1 ? entries[0] : null
-
-      const openUnit = React.useCallback((name) => tab.actions.openTab(GENERATE_KIND, { replaceTab: true, params: { unit: name } }), [tab])
-      const openPane = React.useCallback(() => tab.actions.openTab(GENERATE_KIND, { replaceTab: true }), [tab])
-
-      const items = []
-      if (phase === 'loading') items.push({ id: 'loading', label: t('guide.flyout.loading'), disabled: true })
-      else if (phase === 'failed') items.push({ id: 'failed', label: t('guide.flyout.failed'), disabled: true })
-      else if (entries.length > 0) {
-        items.push(...flyoutRows(entries, t))
-        items.push({ type: 'separator', id: 'guide-add-separator' })
-      }
-      // Last, always: the row that adds another workflow. It opens the pane, which
-      // is where the install sentence lives today; S4's one-field form takes that
-      // destination over when it lands.
-      items.push({ id: ADD_ROW, label: t('guide.flyout.add') })
-
-      const title = single ? single.title : props.title
-      const description = single ? single.blurb || props.description : props.description
-
-      return h(
-        'div',
-        { style: S.card, 'data-sidebar-right-guide-entry': props.kind, 'data-generate-card': phase },
-        h(
-          Button,
-          { variant: 'ghost', style: S.cardMain, onClick: () => (single ? openUnit(single.name) : openPane()) },
-          h('span', { style: S.cardIcon }, h(GenerateGuideIcon, { size: description === undefined ? 22 : 26 })),
-          h(
-            'span',
-            { style: S.cardText },
-            h('span', { style: S.cardTitle }, title),
-            description === undefined ? null : h('span', { style: S.cardDescription }, description),
-          ),
-        ),
-        // The chevron cell is absent when there is nothing to choose from. One
-        // workflow, one variant: there is no hierarchy, so none is shown.
-        entries.length === 1
-          ? null
-          : h(Menu, {
-              open,
-              portal: true,
-              autoFocus: true,
-              align: 'end',
-              className: S.cardMenu,
-              items,
-              onClose: () => setOpen(false),
-              onSelect: (id) => {
-                setOpen(false)
-                if (id === ADD_ROW) {
-                  openPane()
-                  return
-                }
-                const picked = entries.find((entry) => entry.name === id)
-                if (picked) openUnit(picked.name)
-              },
-              anchor: h(
-                Button,
-                {
-                  variant: 'ghost',
-                  style: S.cardTrigger,
-                  'aria-label': t('guide.flyout.label'),
-                  'aria-haspopup': 'menu',
-                  'aria-expanded': open,
-                  onClick: () => setOpen((value) => !value),
-                },
-                h(IconChevronDownOutline14, {}),
-              ),
-            }),
-      )
-    }
-
     /** Stage one: what a `generate` page IS. */
     function generateDefinition(t) {
       return {
@@ -1396,21 +1530,14 @@ window.__ModuleLoader__.load({
           ),
         'runninghub.title',
       )
-      // The card (§10). The type's guide entry above is what puts a "Generate" card
-      // on the start page at all; this renderer, under the same id, is what turns it
-      // into the installed list with its flyout. REGISTERING NOTHING HERE IS A
-      // SUPPORTED FALLBACK: the guide draws its standard card, which opens the pane,
-      // so a host that never dispatches this key loses the flyout and nothing else.
-      ctx.effect(
-        () =>
-          ctx.slots.inject('sidebar.right.tab.guide.entry', () =>
-            ctx.slots.register(
-              { name: 'sidebar.right.tab.guide.entry', key: GENERATE_ID, locale: NS },
-              GenerateGuide,
-            ),
-          ),
-        'runninghub.card',
-      )
+      // THE GUIDE CARD IS THE HARNESS'S OWN (founder, 2026-09-22). An earlier cut of
+      // this slice registered a renderer at `sidebar.right.tab.guide.entry` that
+      // turned the card into the installed list with a flyout. That was wrong twice
+      // over: the card stopped saying what it opens (with one workflow installed it
+      // became that workflow's own title), and the list belongs INSIDE the surface,
+      // not on the door. So nothing is registered here, the guide draws its standard
+      // card from the type's `guide[]` entry, and the pane below holds every
+      // workflow surface.
       // The key is changed or unlinked here once the pane is in use (§9).
       ctx.effect(
         () =>
