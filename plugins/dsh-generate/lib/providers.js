@@ -73,6 +73,39 @@ function num(value) {
 }
 
 /**
+ * Every space a paste can carry, the Unicode ones included: a browser clipboard brings
+ * back a non-breaking space or a zero-width space often enough that the field has met
+ * one. No API key contains a space, so these are removed rather than refused.
+ */
+const PASTE_SPACE = /[\s\u00a0\u1680\u2000-\u200b\u2028\u2029\u202f\u205f\u3000\ufeff]/g
+
+/**
+ * What a pasted key has to be before it can be sent at all.
+ *
+ * MEASURED 2026-09-23 in the app's own runtime: `fetch` THROWS on a header value that
+ * carries a line break or a character above U+00FF — a key copied out of a chat
+ * message, with a smart quote in it, is enough. The throw was caught and reported as
+ * `unreachable`, so the pane blamed the network for a key that never left the
+ * machine. So the value is settled before it is sent: the spaces and line breaks a
+ * paste drags along are removed (no API key contains one, and a key wrapped over two
+ * lines is the real key once joined), and whatever is left that the wire cannot carry
+ * is refused by name instead of being sent. The same rule applies to every provider,
+ * because the header is the same everywhere.
+ *
+ * @returns {{ key: string } | { error: 'key-required' | 'key-characters' }}
+ */
+export function normalizeKey(raw) {
+  const stripped = String(raw === undefined || raw === null ? '' : raw).replace(PASTE_SPACE, '')
+  if (stripped === '') return { error: 'key-required' }
+  for (const character of stripped) {
+    const code = character.codePointAt(0)
+    const control = code < 0x20 || code === 0x7f
+    if (control || code > 0xff) return { error: 'key-characters' }
+  }
+  return { key: stripped }
+}
+
+/**
  * One authenticated GET, judged the same way for every provider.
  *
  * The two failures are kept apart on purpose: a network failure never masquerades as

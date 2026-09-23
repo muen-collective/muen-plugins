@@ -419,7 +419,17 @@ function stubFetch(routes) {
         routes.find((candidate) => candidate.url === url && candidate.method === method) ||
         routes.find((candidate) => candidate.url === undefined && candidate.method === method)
       if (!route) throw new Error('no stub for ' + method + ' ' + url)
-      return { ok: route.ok !== false, status: route.status || (route.ok === false ? 400 : 200), json: async () => route.body }
+      return {
+        ok: route.ok !== false,
+        status: route.status || (route.ok === false ? 400 : 200),
+        json: async () => {
+          // A route may stand in for the host answering something this page cannot
+          // read at all — an empty 404 body, the shape the harness itself returns for
+          // a route it never matched.
+          if (route.jsonThrows) throw new Error('not json')
+          return route.body
+        },
+      }
     },
   }
 }
@@ -567,6 +577,33 @@ if (pane && settings) {
     const text = textOf(failed).join(' ')
     check('a refused key opens no dialog', !nodesOf(failed).some((node) => node.props && node.props['data-stub'] === 'modal'), text.slice(0, 200))
     check('a refused key still fails at the field', text.includes(EN['error.invalidKey']), text.slice(0, 200))
+  }
+
+  // 2b. an answer this page cannot read is not a network failure
+  //
+  // The running app answered 404 with an empty body on 2026-09-23 — a route the
+  // harness never matched — and the pane said "The provider could not be reached.
+  // Check your connection and try again." The host HAD answered, so that copy sent
+  // the user to look at their network for a bug in this app. Two codes now: a thrown
+  // fetch is `unreachable`, an unreadable answer is the host's own error.
+  {
+    const { tree } = await render(pane.component, [
+      NO_WORKFLOWS,
+      { method: 'GET', body: list(UNLINKED) },
+      { method: 'POST', ok: false, status: 404, jsonThrows: true },
+    ], 'pane-host-error')
+    const input = firstOf(tree, 'input')
+    input.props.onChange({ target: { value: 'rh-a-key' } })
+    const typed = firstOf(await settle(pane.component, { t }, 'pane-host-error'), 'form')
+    await typed.props.onSubmit({ preventDefault() {} })
+    const failed = await settle(pane.component, { t }, 'pane-host-error')
+    const text = textOf(failed).join(' ')
+    check('an unreadable answer from the host is named as the host', text.includes(EN['error.host']), text.slice(0, 240))
+    check(
+      'and the user is not sent to check their connection for it',
+      !text.includes(EN['error.unreachable']),
+      text.slice(0, 240),
+    )
   }
 
   // 3. the settings page: changing a key on a linked wallet

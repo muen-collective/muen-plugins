@@ -71,7 +71,7 @@ import { dirname } from 'node:path'
 import { parseAppRef, readAppDoors } from './doors.js'
 import { loadHouse } from './house.js'
 import { ADAPTER_SCHEMA, adapterFromDoors, validateAdapter } from './adapter.js'
-import { PROVIDERS, providerById, runninghub } from './providers.js'
+import { PROVIDERS, normalizeKey, providerById, runninghub } from './providers.js'
 import { resolveDataRoot } from './paths.js'
 
 /** Matches the row id in cordis.patch.yml. */
@@ -81,10 +81,21 @@ export const name = 'generate'
  * The provider routes. One exact path answers the list, and the prefix owns
  * everything under `/providers/<id>/` — each provider's key and its workflows. A
  * distinct (kind, path) per registration is what the web server requires, and these
- * two are distinct.
+ * two are distinct entries in two tables.
+ *
+ * THE PREFIX CARRIES NO TRAILING SLASH, and that is a contract, not a style.
+ * Measured against the harness's own matcher on 2026-09-23
+ * (`@deepseek-ai/dsh-host-webserver`, `match()`): a prefix claims a request when
+ * `pathname === prefix` or `pathname.startsWith(prefix + '/')` — the matcher appends
+ * the slash itself. Register `'…/providers/'` and that second test becomes
+ * `startsWith('…/providers//')`, so ONLY the bare path ever matches: every
+ * `/providers/<id>/…` request falls through to the SPA fallback and comes back 404
+ * with an empty body. That is the failure the founder hit on Krea — "The provider
+ * could not be reached" for a request that never left the machine — and it broke
+ * every provider's key, workflow list and workflow read at once.
  */
 const PROVIDERS_PATH = '/plugins/generate/providers'
-const PROVIDERS_PREFIX = '/plugins/generate/providers/'
+const PROVIDERS_PREFIX = '/plugins/generate/providers'
 const TIMEOUT_MS = 15000
 
 /** Refuse a body past this — a key is tens of bytes, and the route is reachable. */
@@ -433,10 +444,12 @@ function mountSkill(ctx) {
  * Mount the provider routes.
  *
  * ONE ROUTER, ONE PREFIX. The plugin owns `/plugins/generate/` and answers everything
- * under `/plugins/generate/providers/`: the provider list, each provider's key, and
+ * under `/plugins/generate/providers`: the provider list, each provider's key, and
  * each provider's workflows. A route per provider per action would have been three
  * registrations per provider; a prefix route keeps the surface's own namespace ours
- * and puts the provider id in the path, which is where a reader expects it.
+ * and puts the provider id in the path, which is where a reader expects it. The
+ * prefix is registered WITHOUT a trailing slash — see `PROVIDERS_PREFIX` for the
+ * measured reason.
  *
  * `credentials` is read per request rather than captured, which is what the seam asks
  * for: resolution is per call, so a credential changed elsewhere reaches the next
@@ -558,11 +571,15 @@ export function apply(ctx, config = {}) {
         send(res, 400, { error: 'bad-request' })
         return
       }
-      const key = str(body.key)
-      if (!key) {
-        send(res, 400, { error: 'key-required' })
+      // A key the wire cannot carry is refused here, with its own reason: a pasted
+      // line break or smart quote used to come back as "the provider could not be
+      // reached", which blamed the network for a request that was never made.
+      const shape = normalizeKey(body.key)
+      if (shape.error) {
+        send(res, 400, { error: shape.error })
         return
       }
+      const key = shape.key
       const probe = await provider.account({ base: baseFor(provider), key })
       // A key the provider could not check is still the user's key: it is stored and
       // the row reports it unverified. A key the provider REFUSED is never stored —
@@ -684,7 +701,10 @@ export function apply(ctx, config = {}) {
   /** `/providers/<id>/<action>`, with the provider resolved before any work happens. */
   const route = async (req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1')
-    const tail = url.pathname.slice(PROVIDERS_PREFIX.length)
+    // The matcher hands over the tail WITH its leading slash: `/providers/krea/key`
+    // arrives here as `/krea/key`. Strip it, so the bare prefix (`''`) and the
+    // trailing-slash form (`/`) both mean "the list" instead of "provider ''".
+    const tail = url.pathname.slice(PROVIDERS_PREFIX.length).replace(/^\/+/, '')
     const [id, action] = tail.split('/')
 
     if (action === undefined || action === '') {

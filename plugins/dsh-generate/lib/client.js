@@ -220,10 +220,12 @@ window.__ModuleLoader__.load({
       'remove.failed': 'The key could not be removed.',
       'settings.readOnly': 'This key comes from your environment, so it cannot be changed or unlinked here.',
       'error.keyRequired': 'Paste a key first.',
+      'error.keyCharacters': 'That key has a line break or a character an API key cannot contain. Copy it again from the provider page.',
       'error.invalidKey': 'That key was not accepted.',
       'error.unreachable': 'The provider could not be reached. Check your connection and try again.',
       'error.timeout': 'The provider did not answer in time. Try again.',
       'error.unexpected': 'The provider answered in a way this plugin does not understand.',
+      'error.host': 'The Generate service did not answer this request. Restart the app and try again.',
       'error.readOnly': 'That key is fixed by your environment, so it cannot be changed here.',
       'error.noCredentials': 'This harness has no credential store, so the key cannot be saved.',
       'error.generic': 'The key could not be saved.',
@@ -312,23 +314,35 @@ window.__ModuleLoader__.load({
       'remove.failed': '密钥移除失败。',
       'settings.readOnly': '此密钥来自环境变量，无法在这里修改或解除。',
       'error.keyRequired': '请先粘贴密钥。',
+      'error.keyCharacters': '这个密钥里有换行，或 API 密钥不可能包含的字符。请回到服务商页面重新复制。',
       'error.invalidKey': '该密钥未被接受。',
       'error.unreachable': '无法连接服务商，请检查网络后重试。',
       'error.timeout': '服务商没有及时响应，请重试。',
       'error.unexpected': '服务商返回了本插件无法识别的响应。',
+      'error.host': 'Generate 服务没有回应这次请求。请重启应用后重试。',
       'error.readOnly': '该密钥由环境变量固定，无法在这里修改。',
       'error.noCredentials': '此环境没有凭据存储，密钥无法保存。',
       'error.generic': '密钥保存失败。',
       'error.storedKeyRejected': '已保存的密钥不再被接受。请在设置中连接新的密钥。',
     }
 
-    /** Host error codes → copy. An `http-<n>` or an unknown code falls to generic. */
+    /**
+     * Host error codes → copy. An `http-<n>` or an unknown code falls to generic.
+     *
+     * `unreachable` means the request itself failed — the page could not reach this
+     * app's own host. `host-error` is the other thing: the host answered, and the
+     * answer was not one this page can read (a 404 with no body, say). Keeping them
+     * apart is the fix for 2026-09-23, when a route the harness never matched came
+     * back 404 and the pane told the founder to check his connection.
+     */
     const ERROR_KEYS = {
       'key-required': 'error.keyRequired',
+      'key-characters': 'error.keyCharacters',
       'invalid-key': 'error.invalidKey',
       unreachable: 'error.unreachable',
       timeout: 'error.timeout',
       'unexpected-response': 'error.unexpected',
+      'host-error': 'error.host',
       'read-only': 'error.readOnly',
       'no-credentials': 'error.noCredentials',
       'credentials-unavailable': 'error.noCredentials',
@@ -999,7 +1013,10 @@ window.__ModuleLoader__.load({
             }
             if (body && body.id) replace(body)
             if (response.ok) setConfirmed(id)
-            return { ok: response.ok, error: response.ok ? null : (body && body.error) || 'unreachable' }
+            // The host answered, so this is not a network failure: a body this page
+            // cannot read (a 404 with no payload, say) is `host-error`, and only a
+            // thrown fetch is `unreachable`.
+            return { ok: response.ok, error: response.ok ? null : (body && body.error) || 'host-error' }
           } catch {
             return { ok: false, error: 'unreachable' }
           } finally {
@@ -1022,7 +1039,10 @@ window.__ModuleLoader__.load({
               body = null
             }
             if (body && response.ok && body.id) replace(body)
-            return { ok: response.ok, error: response.ok ? null : (body && body.error) || 'unreachable' }
+            // The host answered, so this is not a network failure: a body this page
+            // cannot read (a 404 with no payload, say) is `host-error`, and only a
+            // thrown fetch is `unreachable`.
+            return { ok: response.ok, error: response.ok ? null : (body && body.error) || 'host-error' }
           } catch {
             return { ok: false, error: 'unreachable' }
           } finally {

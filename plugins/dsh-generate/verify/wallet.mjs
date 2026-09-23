@@ -30,10 +30,12 @@ const ROOT = join(HERE, '..')
 const BASE = 'https://runninghub.test'
 const KEY_REF = 'RH_API_KEY'
 const PROVIDERS_PATH = '/plugins/generate/providers'
-const PROVIDERS_PREFIX = '/plugins/generate/providers/'
+const PROVIDERS_PREFIX = '/plugins/generate/providers'
 /** The one provider this build ships, and the key route the old wallet route became. */
 const PROVIDER = 'runninghub'
-const KEY_PATH = PROVIDERS_PREFIX + PROVIDER + '/key'
+/** `/providers/<id>/<action>` — the shape the harness matcher hands the handler. */
+const providerPath = (id, action) => PROVIDERS_PREFIX + '/' + id + '/' + action
+const KEY_PATH = providerPath(PROVIDER, 'key')
 /**
  * The account page that issues keys, from the founder's own address bar
  * (2026-09-22) after he had to search the web for it: nothing in the product
@@ -86,7 +88,17 @@ function finish() {
 
 // ── fakes ────────────────────────────────────────────────────────────────────
 
-/** A recording web server: what the plugin registers, and nothing else. */
+/**
+ * A recording web server: what the plugin registers, and the harness's own matcher.
+ *
+ * `match` IS COPIED FROM THE HARNESS (`@deepseek-ai/dsh-host-webserver`, `match()`):
+ * the exact table first, then longest prefix wins, and a prefix claims a request when
+ * `pathname === prefix` or `pathname.startsWith(prefix + '/')`. Because this suite
+ * calls handlers directly, it cannot see a prefix that no real request ever reaches —
+ * which is exactly how a trailing-slash prefix shipped on 2026-09-23 (every
+ * `/providers/<id>/…` request 404'd on the running app) while every case in this file
+ * passed. The stub now answers the same question the harness does.
+ */
 function fakeServer() {
   const routes = []
   return {
@@ -94,6 +106,17 @@ function fakeServer() {
     register(route) {
       routes.push(route)
       return () => {}
+    },
+    match(pathname) {
+      const exact = routes.find((route) => route.kind === 'exact' && route.path === pathname)
+      if (exact) return exact
+      let best
+      for (const route of routes) {
+        if (route.kind !== 'prefix') continue
+        if (pathname !== route.path && !pathname.startsWith(route.path + '/')) continue
+        if (!best || route.path.length > best.path.length) best = route
+      }
+      return best
     },
   }
 }
@@ -239,6 +262,31 @@ function mount(credentials) {
     server.routes.some((route) => route.kind === 'prefix' && route.path === PROVIDERS_PREFIX),
     server.routes.map((route) => route.kind + ' ' + route.path).join(', '),
   )
+  // The trailing slash is the whole bug of 2026-09-23. The harness builds its own
+  // `prefix + '/'`, so a registered prefix that already ends in one matches nothing
+  // but itself — the Krea key route answered 404 and the pane blamed the network.
+  check(
+    'the prefix carries no trailing slash, because the harness appends the slash itself',
+    !PROVIDERS_PREFIX.endsWith('/'),
+    JSON.stringify(PROVIDERS_PREFIX),
+  )
+  check(
+    'the harness matcher claims a real per-provider path',
+    !!server.match(PROVIDERS_PATH + '/krea/key'),
+    server.routes.map((route) => route.kind + ' ' + route.path).join(', '),
+  )
+  check(
+    'and it claims every route the pane and the agent call',
+    ['krea', 'magnific', 'runninghub', 'comfycloud'].every(
+      (id) =>
+        !!server.match(PROVIDERS_PATH + '/' + id + '/key') &&
+        !!server.match(PROVIDERS_PATH + '/' + id + '/workflows') &&
+        !!server.match(PROVIDERS_PATH + '/' + id + '/workflow'),
+    ),
+    ['krea', 'magnific', 'runninghub', 'comfycloud']
+      .map((id) => id + ':' + String(!!server.match(PROVIDERS_PATH + '/' + id + '/key')))
+      .join(' '),
+  )
   try {
     new URL(PROVIDERS_PATH, 'http://127.0.0.1')
     check('the route is a same-origin path (the pane fetches it directly)', true)
@@ -249,7 +297,8 @@ function mount(credentials) {
 
 // 1b. the provider list, which is what the settings page and the pane both read
 {
-  const { list } = mount(fakeCredentials({}))
+  const credentials = fakeCredentials({})
+  const { list, handler } = mount(credentials)
   const res = await call(list, 'GET')
   const body = json(res)
   check('the provider list answers 200', res.statusCode === 200, res.statusCode)
@@ -287,15 +336,23 @@ function mount(credentials) {
   )
   check(
     'the list read stores nothing',
-    true,
-    '',
+    !credentials.calls.some((c) => c[0] === 'set'),
+    JSON.stringify(credentials.calls.map((c) => c[0])),
+  )
+  // The other half of the trailing-slash contract: the bare prefix and the form with
+  // the slash both mean "the list", never a provider whose id is the empty string.
+  const trailing = await call(handler, 'GET', undefined, PROVIDERS_PREFIX + '/')
+  check(
+    'the trailing-slash form of the list answers the list, not a provider named ""',
+    trailing.statusCode === 200 && Array.isArray(json(trailing).providers),
+    trailing.statusCode + ' ' + trailing.body.slice(0, 120),
   )
 }
 
 // 1c. an unknown provider is a 404 that names what it did not find
 {
   const { handler } = mount(fakeCredentials({}))
-  const res = await call(handler, 'GET', undefined, PROVIDERS_PREFIX + 'comfy-cloud/key')
+  const res = await call(handler, 'GET', undefined, providerPath('comfy-cloud', 'key'))
   const body = json(res)
   check('an unknown provider answers 404', res.statusCode === 404, res.statusCode)
   check('and says which id it did not find', !!body && body.error === 'unknown-provider' && String(body.detail).includes('comfy-cloud'), JSON.stringify(body))
@@ -327,6 +384,52 @@ function mount(credentials) {
   check("POST with a key RunningHub refuses answers 400 'invalid-key'", res.statusCode === 400 && body && body.error === 'invalid-key', res.statusCode + ' ' + JSON.stringify(body))
   check('a rejected key is NOT stored', !credentials.calls.some((c) => c[0] === 'set'), JSON.stringify(credentials.calls.map((c) => c[0])))
   check('the rejection body carries no key', !res.body.includes(SECRET), res.body.slice(0, 120))
+}
+
+// 3b. a key the wire cannot carry is refused before any request is made
+//
+// MEASURED 2026-09-23 in the app's own runtime: `fetch` THROWS on a header value
+// carrying a line break or a character above U+00FF (a smart quote out of a pasted
+// message is enough). That throw was caught and reported as `unreachable`, so the pane
+// told the user to check their connection for a key that never left the machine.
+{
+  const cases = [
+    ['a smart quote from a pasted message', 'krea_ab\u2019cd'],
+    ['a NUL byte', 'krea_ab\u0000cd'],
+    ['a character above Latin-1', 'krea_ab\u4e2dcd'],
+  ]
+  for (const [name, key] of cases) {
+    fetchCalls.length = 0
+    const credentials = fakeCredentials({})
+    const { handler } = mount(credentials)
+    const res = await call(handler, 'POST', { key }, providerPath('krea', 'key'))
+    const body = json(res)
+    check(
+      name + ' is refused as key-characters, not blamed on the network',
+      res.statusCode === 400 && body && body.error === 'key-characters',
+      res.statusCode + ' ' + JSON.stringify(body),
+    )
+    check(name + ' never reaches the provider', fetchCalls.length === 0, JSON.stringify(fetchCalls.map((c) => c.url)))
+    check(name + ' stores nothing', !credentials.calls.some((c) => c[0] === 'set'), JSON.stringify(credentials.calls.map((c) => c[0])))
+  }
+
+  // A wrapped paste — the key broken over two lines, with the spaces a copy drags
+  // along — is joined rather than refused: the break is clipboard noise, and the key
+  // that survives is the real one. Before this, that value made `fetch` throw and the
+  // pane said the provider could not be reached.
+  fetchCalls.length = 0
+  respond = () => ({ ok: true, text: async () => JSON.stringify({ items: [] }) })
+  const credentials = fakeCredentials({})
+  const { handler } = mount(credentials)
+  const res = await call(handler, 'POST', { key: ' krea_abc\ndef\u00a0ghi\n' }, providerPath('krea', 'key'))
+  const sent = fetchCalls[0]
+  check(
+    'a key wrapped over two lines is joined and sent, not refused',
+    !!sent && String(sent.init.headers.Authorization) === 'Bearer krea_abcdefghi',
+    sent && String(sent.init.headers.Authorization),
+  )
+  check('and the joined key is what gets stored', credentials.held === 'krea_abcdefghi', String(credentials.held))
+  check('the accepted key answers 200', res.statusCode === 200, res.statusCode + ' ' + res.body.slice(0, 120))
 }
 
 // 4. an accepted key is stored, and the balance comes back
@@ -529,7 +632,7 @@ function mount(credentials) {
     respond = () => item.answer
     const credentials = fakeCredentials({})
     const { handler } = mount(credentials)
-    const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + item.id + '/key')
+    const res = await call(handler, 'POST', { key: SECRET }, providerPath(item.id, 'key'))
     const body = json(res)
     const sent = fetchCalls[0]
     const headers = (sent && sent.init && sent.init.headers) || {}
@@ -559,7 +662,7 @@ function mount(credentials) {
   respond = () => ({ ok: false, status: 403, text: async () => JSON.stringify({ message: 'Forbidden' }) })
   const credentials = fakeCredentials({})
   const { handler } = mount(credentials)
-  const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + 'magnific/key')
+  const res = await call(handler, 'POST', { key: SECRET }, providerPath('magnific', 'key'))
   const body = json(res)
   check('a Magnific 403 is stored rather than thrown away', res.statusCode === 200 && credentials.held === SECRET, res.statusCode + ' ' + JSON.stringify(credentials.calls))
   check('and the row reports it unverified, with the reason', body && body.linked === true && body.verified === false && body.note === 'not-entitled', JSON.stringify(body))
@@ -571,7 +674,7 @@ function mount(credentials) {
   respond = () => ({ ok: false, status: 429, text: async () => JSON.stringify({ code: 'rate_limited', message: 'inactive subscription' }) })
   const credentials = fakeCredentials({})
   const { handler } = mount(credentials)
-  const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + 'comfycloud/key')
+  const res = await call(handler, 'POST', { key: SECRET }, providerPath('comfycloud', 'key'))
   const body = json(res)
   check('a Comfy Cloud 429 is stored', res.statusCode === 200 && credentials.held === SECRET, res.statusCode + ' ' + JSON.stringify(credentials.calls))
   check('and the row names the subscription, not the key', body && body.verified === true && body.note === 'subscription-inactive', JSON.stringify(body))
@@ -584,7 +687,7 @@ function mount(credentials) {
     respond = () => ({ ok: false, status: 401, text: async () => JSON.stringify({ message: 'Unauthorized' }) })
     const credentials = fakeCredentials({})
     const { handler } = mount(credentials)
-    const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + id + '/key')
+    const res = await call(handler, 'POST', { key: SECRET }, providerPath(id, 'key'))
     const body = json(res)
     check(id + ': a 401 is invalid-key, not a network failure', res.statusCode === 400 && body && body.error === 'invalid-key', res.statusCode + ' ' + String(res.body).slice(0, 120))
     check(id + ': a 401 stores nothing', !credentials.calls.some((call) => call[0] === 'set'), JSON.stringify(credentials.calls))
@@ -597,7 +700,7 @@ function mount(credentials) {
   respond = () => new Error('network down')
   const credentials = fakeCredentials({})
   const { handler } = mount(credentials)
-  const res = await call(handler, 'POST', { key: SECRET }, PROVIDERS_PREFIX + 'krea/key')
+  const res = await call(handler, 'POST', { key: SECRET }, providerPath('krea', 'key'))
   const body = json(res)
   check('an unreachable provider answers 502 unreachable', res.statusCode === 502 && body && body.error === 'unreachable', res.statusCode + ' ' + JSON.stringify(body))
   check('and nothing is stored on a network failure', !credentials.calls.some((call) => call[0] === 'set'), JSON.stringify(credentials.calls))
@@ -609,7 +712,7 @@ function mount(credentials) {
   respond = () => ({ ok: false, status: 401, text: async () => JSON.stringify({ message: 'Unauthorized' }) })
   const credentials = fakeCredentials({ value: SECRET })
   const { handler } = mount(credentials)
-  const res = await call(handler, 'GET', undefined, PROVIDERS_PREFIX + 'krea/key')
+  const res = await call(handler, 'GET', undefined, providerPath('krea', 'key'))
   const body = json(res)
   check('a stored key the provider refuses comes back linked but unverified', body && body.linked === true && body.verified === false && body.error === 'invalid-key', JSON.stringify(body))
   check('and reading it stores nothing', !credentials.calls.some((call) => call[0] === 'set'), JSON.stringify(credentials.calls.map((call) => call[0])))
