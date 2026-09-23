@@ -184,7 +184,20 @@ const PRIMITIVES = {
           ),
       REACT.createElement('pre', { 'data-stub': 'code' }, props.code),
     ),
-  Modal: () => null,
+  /**
+   * The harness's dialog. The real one portals to `document.body` behind a mask; the stub
+   * keeps the props a check reads (title, description, close) and renders the body and the
+   * footer inline, so a gate's rows and its confirm/cancel controls are in the tree.
+   */
+  Modal: (props) =>
+    props.open === false
+      ? null
+      : REACT.createElement(
+          'div',
+          { 'data-stub': 'modal', role: 'dialog', title: props.title, description: props.description, onClose: props.onClose },
+          props.children,
+          props.footer,
+        ),
   /**
    * The harness's hover bubble. The real one clones its single child, positions a fixed
    * bubble and owns the hover/focus timing; the stub keeps the label and renders the
@@ -307,6 +320,9 @@ const linesOf = (tree, out = []) => {
 
 // ── the shipped client half, loaded the way the browser loads it ─────────────
 
+/** Every interval the client half registered, newest last. */
+const timers = []
+
 async function loadClient() {
   const source = await readFile(join(ROOT, 'lib/client.js'), 'utf8')
   let captured = null
@@ -314,6 +330,11 @@ async function loadClient() {
     window: { __ModuleLoader__: { load: (registration) => { captured = registration } } },
     console,
     fetch: (url, init) => globalThis.fetch(url, init),
+    // The run strip polls on an interval. The sandbox records the callbacks instead of
+    // running them, so a check drives exactly one poll (`timers.at(-1)()`) rather than
+    // waiting two real seconds for one.
+    setInterval: (fn) => timers.push(fn),
+    clearInterval: () => {},
   }
   vm.createContext(sandbox)
   vm.runInContext(source, sandbox, { filename: 'lib/client.js' })
@@ -431,6 +452,45 @@ const KREA_FILE = {
  * nothing installed — which is what makes the settings page's first-run posture
  * (the first UNLINKED provider opens its own card) a thing these cases can see.
  */
+/**
+ * The Krea model as the host hands it over (S5): the card a section draws, and the surface
+ * a run happens in. `runnable` is the one field that separates it from an adapter, and it
+ * is why this surface gets the run strip instead of the "not built yet" note.
+ */
+const MODEL_UNIT = {
+  name: 'krea-2-medium-turbo',
+  title: 'Krea 2 Medium Turbo',
+  blurb: 'Fastest Krea 2, at medium quality.',
+  group: 'Text to image',
+  variant: 'Turbo',
+  cover: '',
+  origin: 'krea',
+  runLabel: 'Generate',
+  doorCount: 5,
+}
+
+const MODEL = {
+  name: 'krea-2-medium-turbo',
+  title: 'Krea 2 Medium Turbo',
+  blurb: 'Fastest Krea 2, at medium quality.',
+  group: 'Text to image',
+  variant: 'Turbo',
+  cover: '',
+  origin: 'krea',
+  runLabel: 'Generate',
+  expect: '',
+  runnable: true,
+  order: ['prompt', 'aspect_ratio', 'resolution', 'creativity', 'intensity'],
+  defaults: {},
+  doors: {
+    prompt: { type: 'text', label: 'Prompt', multiline: true, primary: true, required: true },
+    aspect_ratio: { type: 'select', label: 'Aspect ratio', options: ['1:1', '16:9'], default: '1:1' },
+    resolution: { type: 'select', label: 'Resolution', options: ['1K'], default: '1K' },
+    creativity: { type: 'select', label: 'Creativity', options: ['raw', 'low', 'medium', 'high'], default: 'low' },
+    intensity: { type: 'number', label: 'Intensity', min: -100, max: 100, step: 1, default: 0, advanced: true },
+  },
+}
+
 const OTHER_PROVIDERS = [
   {
     id: 'krea',
@@ -464,13 +524,61 @@ const OTHER_PROVIDERS = [
   },
 ]
 
-function stubHost({ units = [], file = null, failList = false, linked = true, note = null, hidden = [] } = {}) {
+function stubHost({
+  units = [],
+  kreaUnits = [],
+  file = null,
+  failList = false,
+  linked = true,
+  note = null,
+  hidden = [],
+  jobStates = ['done'],
+  jobError = null,
+} = {}) {
   const calls = []
+  // The runs this stub was asked to start, and how many times a job was polled: the two
+  // facts the gate and the strip checks read.
+  const runs = []
+  let polls = 0
   const ok = (body) => ({ ok: true, status: 200, json: async () => body })
   return {
     calls,
+    runs,
+    get polls() {
+      return polls
+    },
     fetch: async (url, init = {}) => {
       calls.push({ url, method: (init.method || 'GET').toUpperCase() })
+      // The gate's preview. Built here the way the host builds it: the body is the values
+      // the surface holds, and a required door with nothing in it is `missing`.
+      if (String(url).endsWith('/payload')) {
+        const posted = JSON.parse((init && init.body) || '{}')
+        const values = posted.values || {}
+        return ok({
+          name: posted.name,
+          title: 'Krea 2 Medium Turbo',
+          model: 'image/krea/krea-2/medium-turbo',
+          endpoint: '/generate/image/krea/krea-2/medium-turbo',
+          body: values,
+          missing: String(values.prompt || '').trim() === '' ? ['prompt'] : [],
+          refused: [],
+        })
+      }
+      // Starting a run. The stub records the whole call, so a check can prove the confirm
+      // carried the person's own flag.
+      if (String(url).endsWith('/run') && (init.method || 'GET').toUpperCase() === 'POST') {
+        const posted = JSON.parse((init && init.body) || '{}')
+        runs.push(posted)
+        return ok({ jobId: 'job-1', status: 'queued' })
+      }
+      // One poll. `jobStates` is the script: the last entry answers every later poll.
+      if (String(url).includes('/run?job=')) {
+        polls += 1
+        const state = jobStates[Math.min(polls - 1, jobStates.length - 1)]
+        if (state === 'failed') return ok({ state: 'failed', status: 'failed', urls: [], error: jobError || { code: 'x', message: 'the model refused this prompt' } })
+        if (state === 'done') return ok({ state: 'done', status: 'completed', urls: ['https://gen.krea.ai/out.png'], error: null })
+        return ok({ state, status: state === 'queued' ? 'queued' : 'processing', urls: [], error: null })
+      }
       // The settings toggle: the host records what the page asked for, so a check can
       // prove the switch reached the route rather than only moving on screen.
       const hiddenParts = String(url).split('/')
@@ -528,9 +636,13 @@ function stubHost({ units = [], file = null, failList = false, linked = true, no
         parts.length === 6 && parts[1] === 'plugins' && parts[2] === 'generate' && parts[3] === 'providers' && parts[5] === 'workflows' ? parts[4] : null
       if (workflowOwner !== null) {
         if (failList) return { ok: false, status: 500, json: async () => ({ error: 'unreadable' }) }
+        if (workflowOwner === 'krea') return ok({ entries: kreaUnits, skipped: [] })
         return ok({ entries: workflowOwner === PROVIDER ? units : [], skipped: [] })
       }
-      if (String(url).startsWith(providerUrl('workflow'))) {
+      // One fixture per run of the suite, whichever provider asks: the surface route is
+      // provider-addressed, and the run cases open a Krea model while the rest open a
+      // RunningHub workflow.
+      if (String(url).includes('/workflow?name=')) {
         const name = decodeURIComponent(String(url).split('name=')[1] || '')
         if (file && file.name === name) return ok(file)
         return { ok: false, status: 404, json: async () => ({ error: 'not-found' }) }
@@ -1567,6 +1679,177 @@ check(
   !!byAttr(failed.tree, 'data-generate-source'),
   '',
 )
+
+// ── S5: the gate, the run and the result ────────────────────────────────────
+//
+// Founder, 2026-09-23: *"i want s5 for krea"*. A runnable surface offers the run; the
+// control opens the gate rather than submitting; nothing is posted without the person's
+// own confirm; and what comes back is drawn. The host's half of these rules is
+// verify/run.mjs — this is the half a person touches.
+{
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: MODEL_UNIT.name, provider: 'krea' }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['running', 'done'] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  let tree
+  let gate
+  try {
+    tree = await settle(paneSlot.component, props, 'pane-run')
+    const runButton = byAttr(tree, 'data-generate-run', MODEL_UNIT.name)
+    check(
+      'a surface that can run offers the run, labelled by the adapter itself',
+      !!runButton && textIn(runButton) === 'Generate',
+      runButton ? textIn(runButton) : 'no run control',
+    )
+    check('nothing is posted until that control is pressed', stub.runs.length === 0, JSON.stringify(stub.runs))
+
+    if (runButton) runButton.props.onClick()
+    gate = await settle(paneSlot.component, props, 'pane-run')
+    check(
+      'the run control opens the gate rather than submitting',
+      !!byAttr(gate, 'data-generate-gate', MODEL_UNIT.name) && stub.runs.length === 0,
+      JSON.stringify({ gate: !!byAttr(gate, 'data-generate-gate', MODEL_UNIT.name), runs: stub.runs.length }),
+    )
+    check(
+      'the gate names the model and where the request goes',
+      textIn(gate).includes('Krea 2 Medium Turbo') && textIn(gate).includes('/generate/image/krea/krea-2/medium-turbo'),
+      textIn(gate).slice(0, 200),
+    )
+    check(
+      'a required door that is still empty is named, and the confirm is blocked',
+      !!byAttr(gate, 'data-generate-gate-missing', 'prompt') &&
+        (byAttr(gate, 'data-generate-gate-confirm', 'yes') || { props: {} }).props.disabled === true,
+      JSON.stringify(byAttr(gate, 'data-generate-gate-missing', 'prompt') ? textIn(byAttr(gate, 'data-generate-gate-missing', 'prompt')) : 'no missing line'),
+    )
+    check(
+      'the request itself sits behind one disclosure, closed until it is asked for',
+      !nodesOf(gate).some((node) => node.props && node.props['data-generate-gate-code']) && !!byAttr(gate, 'data-generate-gate-request'),
+      'a gate that shows the JSON unasked is a wall of text',
+    )
+
+    // Cancel returns to the form with every value intact — the rule that makes the gate a
+    // gate rather than a trap.
+    const cancel = byAttr(gate, 'data-generate-gate-cancel', 'yes')
+    if (cancel) cancel.props.onClick()
+    const backAtForm = await settle(paneSlot.component, props, 'pane-run')
+    const promptDoor = nodesOf(backAtForm).find((node) => node.props && node.props['data-generate-door'] === 'prompt')
+    check(
+      'cancelling returns to the form, with the doors still there',
+      !byAttr(backAtForm, 'data-generate-gate', MODEL_UNIT.name) && !!promptDoor,
+      promptDoor ? 'the form is back' : 'no door after cancelling',
+    )
+    if (promptDoor) promptDoor.props.onChange({ target: { value: 'a cinematic glass cabin' } })
+
+    const typed = await settle(paneSlot.component, props, 'pane-run')
+    const again = byAttr(typed, 'data-generate-run', MODEL_UNIT.name)
+    if (again) again.props.onClick()
+    gate = await settle(paneSlot.component, props, 'pane-run')
+    check(
+      'with the required door filled the confirm is live, and not before',
+      !byAttr(gate, 'data-generate-gate-missing', 'prompt') &&
+        (byAttr(gate, 'data-generate-gate-confirm', 'yes') || { props: {} }).props.disabled !== true,
+      JSON.stringify((byAttr(gate, 'data-generate-gate-confirm', 'yes') || { props: {} }).props.disabled),
+    )
+
+    const showRequest = byAttr(gate, 'data-generate-gate-request')
+    if (showRequest) showRequest.props.onClick()
+    const disclosed = await settle(paneSlot.component, props, 'pane-run')
+    check(
+      'the disclosure shows the resolved request, as JSON to read',
+      (() => {
+        const block = nodesOf(disclosed).find((node) => node.props && node.props['data-generate-gate-code'] === MODEL_UNIT.name)
+        const code = block ? nodesOf(block).find((node) => node.props && node.props['data-stub'] === 'code') : null
+        return !!code && textIn(code).includes('"prompt"') && textIn(code).includes('a cinematic glass cabin')
+      })(),
+      'the gate must show what will leave the machine',
+    )
+
+    const confirm = byAttr(disclosed, 'data-generate-gate-confirm', 'yes')
+    if (confirm) confirm.props.onClick()
+    const started = await settle(paneSlot.component, props, 'pane-run')
+    check(
+      "confirming is what posts the run, with the person's own flag on it",
+      stub.runs.length === 1 && stub.runs[0].confirmed === true && stub.runs[0].name === MODEL_UNIT.name && stub.runs[0].values.prompt === 'a cinematic glass cabin',
+      JSON.stringify(stub.runs),
+    )
+    check(
+      'the strip says the run is in flight, with its job id beside the phase',
+      !!byAttr(started, 'data-generate-run-strip', 'running') && !!byAttr(started, 'data-generate-run-job', 'job-1'),
+      JSON.stringify(nodesOf(started).filter((node) => node.props && (node.props['data-generate-run-strip'] || node.props['data-generate-run-job'])).map((node) => node.props['data-generate-run-strip'] || node.props['data-generate-run-job'])),
+    )
+
+    // One poll by hand, which is what the interval would have done two seconds later.
+    const poll = timers[timers.length - 1]
+    if (poll) poll()
+    const done = await settle(paneSlot.component, props, 'pane-run')
+    check(
+      'the finished run is drawn: the image the provider returned, and a way to open it',
+      (() => {
+        const result = byAttr(done, 'data-generate-result', 'https://gen.krea.ai/out.png')
+        const image = result ? nodesOf(result).find((node) => node.type === 'img') : null
+        return !!result && !!image && image.props.src === 'https://gen.krea.ai/out.png' && !!byAttr(done, 'data-generate-result-url', 'https://gen.krea.ai/out.png')
+      })(),
+      JSON.stringify(nodesOf(done).filter((node) => node.props && node.props['data-generate-result']).map((node) => node.props['data-generate-result'])),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// A run that fails says whose words it is: the provider's message verbatim, plus the run
+// id, plus a way back to the form.
+{
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: MODEL_UNIT.name, provider: 'krea' }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['failed'], jobError: { code: 'content', message: 'the model refused this prompt' } })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let tree = await settle(paneSlot.component, props, 'pane-run-failed')
+    const door = nodesOf(tree).find((node) => node.props && node.props['data-generate-door'] === 'prompt')
+    if (door) door.props.onChange({ target: { value: 'something Krea will not draw' } })
+    const typed = await settle(paneSlot.component, props, 'pane-run-failed')
+    const runButton = byAttr(typed, 'data-generate-run', MODEL_UNIT.name)
+    if (runButton) runButton.props.onClick()
+    const gate = await settle(paneSlot.component, props, 'pane-run-failed')
+    const confirm = byAttr(gate, 'data-generate-gate-confirm', 'yes')
+    if (confirm) confirm.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-run-failed')
+    check(
+      "a failed run shows the provider's own message, not a sentence this plugin invented",
+      textIn(tree).includes('the model refused this prompt') && !!byAttr(tree, 'data-generate-run-failed', 'run-failed'),
+      textIn(tree).slice(0, 240),
+    )
+    check(
+      'and it keeps the run id, so the failure can be found again',
+      !!byAttr(tree, 'data-generate-run-job', 'job-1'),
+      'a failure without its id is not actionable',
+    )
+    check(
+      'and it offers the way back to the form',
+      !!byAttr(tree, 'data-generate-run-again', 'yes'),
+      'a failed run must not be a dead end',
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// A surface that cannot run still says so, and offers no control that would post a request
+// this plugin cannot build. That is RunningHub's state until its own run slice lands.
+{
+  const miss = await pane({ units: [KREA], file: KREA_FILE }, { params: { unit: KREA.name, provider: PROVIDER }, key: 'pane-run-pending' })
+  check(
+    'a surface that cannot run yet says so, and offers no run control',
+    !!byAttr(miss.tree, 'data-generate-run-pending', 'yes') && !byAttr(miss.tree, 'data-generate-run', KREA.name),
+    textIn(miss.tree).slice(0, 200),
+  )
+}
 
 // ── the copy, in both languages ─────────────────────────────────────────────
 

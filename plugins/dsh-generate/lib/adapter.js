@@ -444,6 +444,11 @@ export async function readAdapter(dir, name, { readText = readFile } = {}) {
       order,
       defaults,
       doors: read.doors,
+      // WHETHER THIS SURFACE CAN RUN (S5). A RunningHub adapter cannot yet: its payload is
+      // a workflow's node ids and every image door needs an upload first, and both are the
+      // next slice. The surface says so at its foot rather than offering a control that
+      // would post a request this plugin cannot build.
+      runnable: false,
     },
   }
 }

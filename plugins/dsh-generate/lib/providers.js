@@ -72,6 +72,7 @@
  */
 import { listAdapters, readAdapter } from './adapter.js'
 import { modelEntry, modelSurface, readKreaModels } from './krea-models.js'
+import { buildRunPayload, getRun, postRun, readRunRecord, writeRunRecord } from './krea-run.js'
 import { dataPaths } from './paths.js'
 
 /** One key check: long enough for a cold API, short enough to fail at the field. */
@@ -175,6 +176,19 @@ function adapterBacked(id) {
       return readAdapter(dir, name)
     },
   }
+}
+
+/**
+ * The Krea model a name refers to, or the failure the routes already answer with.
+ *
+ * Shared by the gate's preview and the run, so both resolve the name the same way and the
+ * run cannot post to a model the preview did not just describe.
+ */
+async function modelFor(root, name) {
+  const { models } = await readKreaModels(root)
+  const model = models.find((entry) => entry.name === name)
+  if (model === undefined) return { error: 'not-found', detail: 'no Krea model is named "' + String(name) + '"' }
+  return { model }
 }
 
 /**
@@ -342,6 +356,87 @@ export const krea = {
     const model = models.find((entry) => entry.name === name)
     if (model !== undefined) return { adapter: modelSurface(model) }
     return readAdapter(dir, name)
+  },
+
+  /**
+   * THIS IS THE PROVIDER THAT CAN RUN (S5). A model carries its own endpoint, its doors
+   * carry the API's own field names, and the key is a bearer token — which is everything a
+   * generation needs. RunningHub's run is a different job (a workflow's node ids, an upload
+   * for every image door) and says so rather than pretending.
+   */
+  runnable: true,
+
+  /**
+   * The gate's preview: the exact body a run would post, built by the same function the run
+   * itself uses, so what a person reads is what goes out. No key, no network, nothing spent.
+   */
+  async previewRun({ root, name, values }) {
+    const found = await modelFor(root, name)
+    if (found.error) return found
+    const built = buildRunPayload(found.model, values)
+    return {
+      name: found.model.name,
+      title: found.model.title,
+      model: found.model.model,
+      endpoint: found.model.endpoint,
+      docs: str(found.model.docs) || null,
+      ...built,
+    }
+  },
+
+  /**
+   * Start the job. The host route only reaches this after a person confirmed the payload
+   * the preview showed, and it refuses a payload the API would reject rather than spending
+   * a credit on a 400.
+   */
+  async startRun({ root, name, values, key, timeoutMs, fetchImpl }) {
+    const preview = await this.previewRun({ root, name, values })
+    if (preview.error) return preview
+    if (preview.missing.length > 0) return { error: 'payload-incomplete', detail: 'still empty: ' + preview.missing.join(', ') }
+    if (preview.refused.length > 0) {
+      return { error: 'payload-refused', detail: preview.refused.map((row) => row.key + ': ' + row.reason).join(', ') }
+    }
+    const posted = await postRun({ base: this.base, endpoint: preview.endpoint, body: preview.body, key, timeoutMs, fetchImpl })
+    if (posted.error) return posted
+
+    const at = new Date().toISOString()
+    const record = {
+      schema: 'muen-krea-run/v1',
+      jobId: posted.jobId,
+      at,
+      model: preview.model,
+      title: preview.title,
+      endpoint: preview.endpoint,
+      body: preview.body,
+      // THE GATE'S OWN ANSWER, in the record, because rule 4 asks what was shipped and
+      // why: the payload above is what a person saw before this line existed.
+      gate: { confirmed: true, by: 'human', at },
+      status: posted.status,
+    }
+    await writeRunRecord(root, record)
+    return { jobId: posted.jobId, status: posted.status }
+  },
+
+  /**
+   * One poll of a running job. The outcome is written back to that job's record, so the
+   * file on disk ends as the answer rather than as the request.
+   */
+  async readRun({ root, jobId, key, timeoutMs, fetchImpl }) {
+    const read = await getRun({ base: this.base, jobId, key, timeoutMs, fetchImpl })
+    if (read.error) return read
+    if (read.state === 'done' || read.state === 'failed') {
+      const record = await readRunRecord(root, jobId)
+      if (record !== null) {
+        await writeRunRecord(root, {
+          ...record,
+          status: read.status,
+          urls: read.urls,
+          error: read.error,
+          finishedAt: new Date().toISOString(),
+        })
+      }
+    }
+    return read
   },
 }
 

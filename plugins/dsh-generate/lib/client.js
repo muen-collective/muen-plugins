@@ -129,6 +129,39 @@ window.__ModuleLoader__.load({
       // Said where the run will be, because the form is real and nothing submits:
       // the payload gate, the run strip and the result are the next slice (§10).
       'surface.pending': 'Running comes next: the payload gate and the run strip are not built yet.',
+      // S5: the gate and the run strip. The Run control's own label is adapter data
+      // (`ui.runLabel`), so nothing here names a workflow or a provider.
+      'run.action': 'Run',
+      'run.gate.title': 'Run this?',
+      'run.gate.body': 'This is exactly what will be sent. Nothing runs until you confirm it, and a run is paid.',
+      'run.gate.request': 'The exact request',
+      'run.gate.hide': 'Hide the request',
+      'run.gate.model': 'Model',
+      'run.gate.prompt': 'Prompt',
+      'run.gate.to': 'Posted to',
+      'run.gate.missing': 'Still empty:',
+      'run.gate.refused': 'These cannot be sent yet:',
+      'run.gate.confirm': 'Confirm and run',
+      'run.gate.cancel': 'Cancel',
+      'run.gate.starting': 'Starting…',
+      'run.phase.queued': 'Queued',
+      'run.phase.running': 'Running',
+      'run.phase.done': 'Done',
+      'run.phase.failed': 'Failed',
+      'run.job': 'Run',
+      'run.result.open': 'Open the image',
+      'run.result.alt': 'The generated image',
+      'run.again': 'Run again',
+      'run.failed': 'That run failed.',
+      // A run's own failures. `no-api-balance` is the same fact as the key row's note:
+      // the balance is empty, the key is fine.
+      'error.noBalance': 'The API balance is empty. Top it up on the provider\'s API page.',
+      'error.noKey': 'No key is linked for this provider. Link one in Settings → Generate.',
+      'error.tooManyJobs': 'The provider is already running as many jobs as it allows. Try again in a moment.',
+      'error.badRequest': 'The provider refused the request.',
+      'error.payloadIncomplete': 'A required field is still empty.',
+      'error.payloadRefused': 'A value cannot be sent as it stands.',
+      'error.jobGone': 'That run is no longer on the provider.',
       'card.community': 'someone else\'s app',
       'surface.image.choose': 'Choose an image',
       'pane.loading': 'Checking your wallet…',
@@ -308,6 +341,35 @@ window.__ModuleLoader__.load({
       'surface.advanced': '高级',
       'surface.advanced.hide': '收起高级选项',
       'surface.pending': '运行功能稍后提供：付费前的载荷确认与运行状态尚未构建。',
+      'run.action': '运行',
+      'run.gate.title': '确认运行？',
+      'run.gate.body': '以下是即将发送的内容。确认之前不会运行，运行会计费。',
+      'run.gate.request': '完整请求',
+      'run.gate.hide': '收起请求',
+      'run.gate.model': '模型',
+      'run.gate.prompt': '提示词',
+      'run.gate.to': '发送至',
+      'run.gate.missing': '仍为空：',
+      'run.gate.refused': '暂时无法发送：',
+      'run.gate.confirm': '确认并运行',
+      'run.gate.cancel': '取消',
+      'run.gate.starting': '正在启动…',
+      'run.phase.queued': '排队中',
+      'run.phase.running': '运行中',
+      'run.phase.done': '完成',
+      'run.phase.failed': '失败',
+      'run.job': '运行',
+      'run.result.open': '打开图片',
+      'run.result.alt': '生成的图片',
+      'run.again': '再运行一次',
+      'run.failed': '这次运行失败了。',
+      'error.noBalance': 'API 余额为空，请到服务商的 API 页面充值。',
+      'error.noKey': '该服务商还没有连接密钥，请在「设置 → Generate」中连接。',
+      'error.tooManyJobs': '服务商正在运行的任务已达上限，请稍后再试。',
+      'error.badRequest': '服务商拒绝了这次请求。',
+      'error.payloadIncomplete': '还有必填项为空。',
+      'error.payloadRefused': '有数值暂时无法发送。',
+      'error.jobGone': '服务商上已经没有这次运行。',
       'card.community': '他人的应用',
       'surface.image.choose': '选择图片',
       'pane.loading': '正在检查密钥…',
@@ -431,6 +493,13 @@ window.__ModuleLoader__.load({
       'read-only': 'error.readOnly',
       'no-credentials': 'error.noCredentials',
       'credentials-unavailable': 'error.noCredentials',
+      'no-key': 'error.noKey',
+      'no-api-balance': 'error.noBalance',
+      'too-many-jobs': 'error.tooManyJobs',
+      'bad-request': 'error.badRequest',
+      'payload-incomplete': 'error.payloadIncomplete',
+      'payload-refused': 'error.payloadRefused',
+      'job-not-found': 'error.jobGone',
     }
 
     /**
@@ -1188,6 +1257,95 @@ window.__ModuleLoader__.load({
         borderRadius: 6,
         cursor: 'pointer',
       },
+      /**
+       * S5: the run. One column under the form — the Run control, then the strip that
+       * says where the run is, then the result. Every value is a theme alias, so the
+       * pane reads under EVA, the stock theme and any community theme alike.
+       */
+      runBlock: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        marginTop: 18,
+        paddingTop: 14,
+        borderTop: '1px solid var(--dsw-alias-border-l1)',
+      },
+      runStrip: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 10px',
+        fontSize: 12,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-secondary)',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '.5px solid var(--dsw-alias-border-l1)',
+        borderRadius: 8,
+      },
+      /** The phase, first and strongest: it is the answer to "what is happening". */
+      runPhase: {
+        flex: 'none',
+        color: 'var(--dsw-alias-label-primary)',
+        fontWeight: 600,
+      },
+      /** Elapsed time and the run id: facts beside the phase, never louder than it. */
+      runMeta: {
+        minWidth: 0,
+        color: 'var(--dsw-alias-label-caption)',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      },
+      runFailed: {
+        color: 'var(--dsw-alias-state-error-primary)',
+        borderColor: 'var(--dsw-alias-state-error-primary)',
+        alignItems: 'flex-start',
+      },
+      runFigure: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      },
+      runImage: {
+        display: 'block',
+        width: '100%',
+        maxWidth: 460,
+        borderRadius: 10,
+        border: '.5px solid var(--dsw-alias-border-l1)',
+        background: 'var(--dsw-alias-bg-layer-1)',
+      },
+      runLink: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+        color: 'var(--dsw-alias-link)',
+        textDecoration: 'none',
+        whiteSpace: 'nowrap',
+        fontSize: 12,
+      },
+      /** The gate's own rows: a label, then the value a person is about to send. */
+      gateRows: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        marginTop: 4,
+      },
+      gateRow: {
+        display: 'flex',
+        gap: 10,
+        fontSize: 12,
+        lineHeight: '18px',
+      },
+      gateKey: {
+        flex: 'none',
+        width: 104,
+        color: 'var(--dsw-alias-label-caption)',
+      },
+      gateValue: {
+        minWidth: 0,
+        color: 'var(--dsw-alias-label-primary)',
+        overflowWrap: 'anywhere',
+      },
       /** The one disclosure that hides the parameter-ish doors (§10). */
       disclosure: {
         display: 'block',
@@ -1707,6 +1865,83 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The three calls a run makes, in the order a run makes them (S5).
+     *
+     * THE HOST BUILDS THE BODY, NOT THIS HALF. The gate shows the request that will leave
+     * the machine, so the request has to be built by the same function that sends it; a
+     * preview assembled here would be a second implementation, and the two would drift
+     * into a dialog that describes something else.
+     *
+     * The key never appears in any of this: the host reads it from the credential store
+     * per call (§12 rule 2).
+     */
+
+    /** The gate's preview: free, read-only, and the exact body a confirm would post. */
+    async function fetchPayload(provider, name, values) {
+      try {
+        const response = await fetch(providerUrl(provider, 'payload'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ name, values }),
+        })
+        let body = null
+        try {
+          body = await response.json()
+        } catch {
+          body = null
+        }
+        if (!response.ok || !body) return { ok: false, error: (body && body.error) || 'host-error' }
+        return { ok: true, preview: body }
+      } catch {
+        return { ok: false, error: 'unreachable' }
+      }
+    }
+
+    /**
+     * Start it. `confirmed: true` is the person's own action, recorded by the host in the
+     * run's file; the route refuses a call without it, so the gate is not merely a dialog
+     * this half chose to draw.
+     */
+    async function postRun(provider, name, values) {
+      try {
+        const response = await fetch(providerUrl(provider, 'run'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ name, values, confirmed: true }),
+        })
+        let body = null
+        try {
+          body = await response.json()
+        } catch {
+          body = null
+        }
+        if (!response.ok || !body || !body.jobId) return { ok: false, error: (body && body.error) || 'host-error', detail: body && body.detail }
+        return { ok: true, jobId: body.jobId, status: body.status }
+      } catch {
+        return { ok: false, error: 'unreachable' }
+      }
+    }
+
+    /** One poll. The host asks Krea and writes the outcome back to the run's record. */
+    async function readRun(provider, jobId) {
+      try {
+        const response = await fetch(providerUrl(provider, 'run') + '?job=' + encodeURIComponent(jobId), {
+          headers: { accept: 'application/json' },
+        })
+        let body = null
+        try {
+          body = await response.json()
+        } catch {
+          body = null
+        }
+        if (!response.ok || !body) return { ok: false, error: (body && body.error) || 'host-error' }
+        return { ok: true, ...body }
+      } catch {
+        return { ok: false, error: 'unreachable' }
+      }
+    }
+
+    /**
      * The doors in the order the surface draws them.
      *
      * `ui.order` is the author's order; the primary door leads, because that is the
@@ -2049,7 +2284,256 @@ window.__ModuleLoader__.load({
             )
           : null,
         showAdvanced ? advanced.map(doorRow) : null,
-        h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
+        // A surface that can run gets the run strip; one that cannot says so rather than
+        // offering a control that would post a request this plugin cannot build yet.
+        adapter.runnable === true
+          ? h(RunStrip, { key: adapter.name, t, provider, adapter, values })
+          : h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
+      )
+    }
+
+    /**
+     * The run: the gate, the wait, and the result (S5).
+     *
+     * THE GATE IS THE FIRST THING THIS COMPONENT DRAWS (§12 rule 1). The Run control does
+     * not submit: it asks the host for the exact body a run would post and shows it, and
+     * only a second, explicit press sends it. Cancel returns to the form with every value
+     * intact, which is why the form's state lives in the surface above and this component
+     * only reads it.
+     *
+     * THE KEY IS NOT HERE. Every call below is to this plugin's own host route; the host
+     * reads the key from the credential store, builds the body, posts it, and answers with
+     * a job id. That is also what makes the preview trustworthy: the dialog and the request
+     * are the same function's output, not two implementations that agree today.
+     *
+     * ONE RUN AT A TIME, and the strip owns it. A run in flight keeps its job id and its
+     * start time, so the phase, the elapsed seconds and the failure all belong to the same
+     * attempt. Krea's own message is shown verbatim on a failure, because a sentence this
+     * plugin invented about someone else's error helps nobody.
+     */
+    function RunStrip({ t, provider, adapter, values }) {
+      const [run, setRun] = React.useState({ phase: 'form' })
+      const [requestShown, setRequestShown] = React.useState(false)
+
+      /** The label a door is drawn under, so the gate names what the form named. */
+      const labelOf = (key) => {
+        const door = adapter.doors[key]
+        return door && typeof door.label === 'string' ? door.label : key
+      }
+
+      const openGate = async () => {
+        setRequestShown(false)
+        setRun({ phase: 'gate', preview: null })
+        const preview = await fetchPayload(provider, adapter.name, values)
+        setRun((current) => {
+          if (current.phase !== 'gate') return current
+          return preview.ok ? { phase: 'gate', preview: preview.preview } : { phase: 'gate', preview: null, error: preview.error }
+        })
+      }
+
+      const confirm = async () => {
+        setRun((current) => ({ ...current, phase: 'starting' }))
+        const started = await postRun(provider, adapter.name, values)
+        if (!started.ok) {
+          setRun({ phase: 'failed', error: started.error, detail: started.detail, startedAt: Date.now(), finishedAt: Date.now() })
+          return
+        }
+        setRun({ phase: 'queued', jobId: started.jobId, startedAt: Date.now() })
+      }
+
+      // THE POLL. The host holds the key, so the host asks Krea; this half asks the host
+      // once every two seconds until the job settles, and stops the moment it does.
+      React.useEffect(() => {
+        // Keyed by the JOB, not by the phase: a phase change must not restart the loop,
+        // or every "queued → running" would fire another poll on the spot.
+        const jobId = run.jobId
+        if (typeof jobId !== 'string' || jobId === '') return undefined
+        let live = true
+        let settled = false
+        const tick = async () => {
+          if (settled) return
+          const read = await readRun(provider, jobId)
+          if (!live) return
+          if (!read.ok) {
+            settled = true
+            setRun((current) => (current.jobId === jobId ? { ...current, phase: 'failed', finishedAt: Date.now(), error: read.error } : current))
+            return
+          }
+          if (read.state === 'done') {
+            settled = true
+            setRun((current) => (current.jobId === jobId ? { ...current, phase: 'done', finishedAt: Date.now(), urls: read.urls } : current))
+            return
+          }
+          if (read.state === 'failed') {
+            settled = true
+            setRun((current) =>
+              current.jobId === jobId
+                ? {
+                    ...current,
+                    phase: 'failed',
+                    finishedAt: Date.now(),
+                    status: read.status,
+                    message: read.error && read.error.message ? String(read.error.message) : null,
+                  }
+                : current,
+            )
+            return
+          }
+          setRun((current) => (current.jobId === jobId ? { ...current, phase: read.state } : current))
+        }
+        // Once now, then every two seconds: a strip that waited two seconds to say
+        // anything would look like a control that did not respond.
+        tick()
+        const timer = setInterval(tick, 2000)
+        return () => {
+          live = false
+          clearInterval(timer)
+        }
+      }, [run.jobId])
+
+      const phase = run.phase
+      const gateOpen = phase === 'gate' || phase === 'starting'
+      const preview = run.preview || null
+      const blocked = preview === null || preview.missing.length > 0 || preview.refused.length > 0
+      const elapsed = run.startedAt ? Math.max(0, Math.round(((run.finishedAt || Date.now()) - run.startedAt) / 1000)) : 0
+      const back = () => setRun({ phase: 'form' })
+
+      const row = (key, value) =>
+        h(
+          'div',
+          { key, style: S.gateRow },
+          h('span', { style: S.gateKey }, key),
+          h('span', { style: S.gateValue }, value),
+        )
+
+      return h(
+        'div',
+        { style: S.runBlock, 'data-generate-run-block': adapter.name },
+        h(
+          'button',
+          {
+            type: 'button',
+            style: { ...S.primary, alignSelf: 'flex-start' },
+            'data-generate-run': adapter.name,
+            disabled: gateOpen,
+            onClick: openGate,
+          },
+          adapter.runLabel || t('run.action'),
+        ),
+        gateOpen
+          ? h(
+              Modal,
+              {
+                open: true,
+                onClose: phase === 'starting' ? () => {} : back,
+                title: t('run.gate.title'),
+                closeLabel: t('saved.close'),
+                description: t('run.gate.body'),
+                footer: h(
+                  'div',
+                  { style: S.row },
+                  h('button', { type: 'button', style: S.ghost, disabled: phase === 'starting', 'data-generate-gate-cancel': 'yes', onClick: back }, t('run.gate.cancel')),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      style: S.primary,
+                      disabled: phase === 'starting' || blocked,
+                      'data-generate-gate-confirm': 'yes',
+                      onClick: confirm,
+                    },
+                    phase === 'starting' ? t('run.gate.starting') : t('run.gate.confirm'),
+                  ),
+                ),
+              },
+              preview === null
+                ? h('div', { style: S.hint, 'data-generate-gate': 'loading' }, phase === 'gate' && run.error ? errorText(t, run.error) : t('surface.loading'))
+                : h(
+                    'div',
+                    { style: S.gateRows, 'data-generate-gate': adapter.name },
+                    row(t('run.gate.model'), adapter.title),
+                    row(t('run.gate.to'), preview.endpoint),
+                    Object.entries(preview.body).map(([key, value]) => row(labelOf(key), String(value))),
+                    preview.missing.length > 0
+                      ? h(
+                          'div',
+                          { style: S.fieldError, role: 'alert', 'data-generate-gate-missing': preview.missing.join(',') },
+                          t('run.gate.missing') + ' ' + preview.missing.map(labelOf).join(', '),
+                        )
+                      : null,
+                    preview.refused.length > 0
+                      ? h(
+                          'div',
+                          { style: S.fieldError, role: 'alert', 'data-generate-gate-refused': preview.refused.map((entry) => entry.key).join(',') },
+                          t('run.gate.refused') + ' ' + preview.refused.map((entry) => labelOf(entry.key) + ' (' + entry.reason + ')').join(', '),
+                        )
+                      : null,
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        style: { ...S.ghost, alignSelf: 'flex-start' },
+                        'data-generate-gate-request': requestShown ? 'open' : 'closed',
+                        onClick: () => setRequestShown((shown) => !shown),
+                      },
+                      requestShown ? t('run.gate.hide') : t('run.gate.request'),
+                    ),
+                    // THE RESOLVED REQUEST, as JSON to read and never to edit (§10): the
+                    // gate's job is to show a person what leaves the machine.
+                    requestShown
+                      ? h(
+                          'div',
+                          { style: S.promptBlock, 'data-generate-gate-code': adapter.name },
+                          h(CodeBlock, {
+                            code: JSON.stringify(preview.body, null, 2),
+                            copyLabel: t('settings.workflows.copy'),
+                            copiedLabel: t('settings.workflows.copied'),
+                          }),
+                        )
+                      : null,
+                  ),
+            )
+          : null,
+        phase === 'queued' || phase === 'running'
+          ? h(
+              'div',
+              { style: S.runStrip, 'data-generate-run-strip': phase },
+              h('span', { style: S.runPhase }, t('run.phase.' + phase)),
+              h('span', { style: S.runMeta, 'data-generate-run-elapsed': String(elapsed) }, elapsed + 's'),
+              run.jobId ? h('span', { style: S.runMeta, 'data-generate-run-job': run.jobId }, t('run.job') + ' ' + run.jobId) : null,
+            )
+          : null,
+        phase === 'failed'
+          ? h(
+              'div',
+              { style: { ...S.runStrip, ...S.runFailed }, role: 'alert', 'data-generate-run-failed': run.error || 'run-failed' },
+              h(
+                'span',
+                { style: S.gateValue },
+                run.message ? run.message : run.error ? errorText(t, run.error) : t('run.failed'),
+              ),
+              run.jobId ? h('span', { style: S.runMeta, 'data-generate-run-job': run.jobId }, t('run.job') + ' ' + run.jobId) : null,
+              h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: back }, t('run.again')),
+            )
+          : null,
+        phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0
+          ? h(
+              'div',
+              { style: S.runFigure, 'data-generate-result': run.urls[0] },
+              h('img', { style: S.runImage, src: run.urls[0], alt: t('run.result.alt') }),
+              h(
+                'div',
+                { style: S.row },
+                h(
+                  'a',
+                  { style: S.runLink, href: run.urls[0], target: '_blank', rel: 'noreferrer', 'data-generate-result-url': run.urls[0] },
+                  t('run.result.open'),
+                  h(IconRightUpOutline16, { size: 12 }),
+                ),
+                h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: back }, t('run.again')),
+              ),
+            )
+          : null,
       )
     }
 

@@ -370,6 +370,43 @@ means in a file), and `origin` is set. `readAdapter` applies the same three rule
 a file-name check, so `?name=../…` is refused before any file is opened, and the file
 must carry the name it was asked for.
 
+## The run (S5, built for Krea on 2026-09-23)
+
+**Asked for by the founder the same day the model landed:** *"i want s5 for krea"*.
+
+Four rules from §12 are structure here rather than style:
+
+- **Nothing is submitted without a person confirming a payload they have seen.** The Run control (labelled by the
+  adapter's own `ui.runLabel`) opens a gate: the model, the endpoint, every value under its door's label, and —
+  behind one disclosure, as JSON to read and never to edit — the exact request. Cancel returns to the form with
+  every value intact.
+- **The preview and the request are ONE function** (`lib/krea-run.js`, `buildRunPayload`). The browser asks the
+  host for the preview, and the host posts the body it just showed; a preview assembled in the browser would be a
+  second implementation, and the two would drift into a dialog that describes something else.
+- **The route enforces the gate, not the dialog.** `POST …/<id>/run` refuses a call that does not carry
+  `confirmed: true`, so a script, a stale tab or a future agent tool cannot spend without a person. The flag and
+  the payload go into that run's own file — `<profile>/generate/krea/runs/<jobId>.json` — which is what makes
+  "what did we ship and why" answerable later. **No key is ever written to it.**
+- **A payload the API would reject is refused before the POST**: a select outside its `enum`, a number outside the
+  app's bounds, a required door still empty, an image door holding a browser file path instead of a URL. A `400`
+  from Krea is a bug in this plugin, not a way to spend a credit.
+
+| Route | What it does |
+|---|---|
+| `POST /plugins/generate/providers/<id>/payload` | the gate's preview: `{ name, values }` → the exact body, what is still empty, what is refused. Free: no key, no network, nothing spent |
+| `POST /plugins/generate/providers/<id>/run` | `{ name, values, confirmed: true }` → `{ jobId, status }`; anything without the flag is refused by name |
+| `GET /plugins/generate/providers/<id>/run?job=<id>` | one poll → `{ state, status, urls, error }`, and the run's file gains the outcome on a terminal state |
+
+One job at a time. The host posts the body with the provider's key from the credential store and answers with a
+job id; the pane polls the host every two seconds, which asks Krea and writes the outcome back. The strip says
+`queued`/`running`, the elapsed seconds and the job id; a failure shows **Krea's own message verbatim** beside the
+job id and a way back to the form; a finished run draws the returned image with a link to it.
+
+**Krea is the provider that can run.** A model carries its own endpoint and its doors carry the API's own field
+names, which is everything a generation needs. RunningHub's run is a different job — a workflow's node ids, and an
+upload for every image door — so its surface still says running comes next, and the routes answer `501` for it
+rather than pretending.
+
 ## The install (S3)
 
 An **adapter** is one JSON file that says which RunningHub app, which revision, which doors it has and how
@@ -446,6 +483,7 @@ node verify/wallet.mjs           # the wallet routes, driven against fakes (+ li
 node verify/save-confirmation.mjs # a save that worked, and one that was refused
 node verify/adapter.mjs          # the install: doors read, adapters written and refused
 node verify/models.mjs           # the Krea models: the catalogue, the profile layer, both routes
+node verify/run.mjs              # S5: the payload builder, the gate the route enforces, the poll, the record
 node verify/skill.mjs            # the skill's order, and that the plugin has no write path
 node verify/start.mjs            # the hub: the cards, the surface, one settings page, and what may be listed
 node verify/mount.mjs --static   # registration only

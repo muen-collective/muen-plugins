@@ -359,5 +359,8 @@ export function modelSurface(model) {
     doors: model.doors,
     model: model.model,
     endpoint: model.endpoint,
+    // THIS SURFACE CAN RUN (S5). A model carries its own endpoint and its doors carry the
+    // API's own field names, so the host can build the body and post it.
+    runnable: true,
   }
 }

@@ -739,6 +739,133 @@ export function apply(ctx, config = {}) {
     send(res, 200, read.adapter)
   }
 
+  /**
+   * The provider's own key, resolved for a run.
+   *
+   * The pane never holds a key (§12 rule 2), so the host reads it here and puts it in one
+   * header. `resolve` is the same seam the key check uses; the difference is that this one
+   * is called per run rather than per page.
+   */
+  const providerKeyValue = async (provider) => {
+    const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
+    if (!credentials) return { error: 'no-credentials' }
+    let resolved
+    try {
+      resolved = await credentials.resolve(provider.keyRef)
+    } catch {
+      return { error: 'credentials-unavailable' }
+    }
+    if (!resolved || !resolved.value) return { error: 'no-key' }
+    return { key: resolved.value }
+  }
+
+  /**
+   * The gate's preview: what this surface WOULD post, and nothing else.
+   *
+   * Read-only and free. It exists so the dialog a person sees and the request that leaves
+   * the machine are built by one function — a preview assembled in the browser would be a
+   * second implementation of the payload, and the two would drift.
+   */
+  const providerPayload = async (provider, req, res) => {
+    if (typeof provider.previewRun !== 'function') {
+      send(res, 501, { error: 'unsupported', detail: 'this provider has no run path yet' })
+      return
+    }
+    const body = await readJsonBody(req)
+    if (body === undefined) {
+      send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
+      return
+    }
+    const preview = await provider.previewRun({ root: provider.data(root.root).root, name: body.name, values: body.values })
+    if (preview.error) {
+      send(res, preview.error === 'not-found' ? 404 : 400, preview)
+      return
+    }
+    send(res, 200, preview)
+  }
+
+  /**
+   * Start a run.
+   *
+   * THE GATE IS ENFORCED HERE, NOT IN THE DIALOG (§12 rule 1): a call that does not carry
+   * `confirmed: true` is refused, so nothing that skipped a person — a script, a future
+   * agent tool, a stale tab — can spend a credit. The flag is the record of that person's
+   * action, and it is written into the run's own file beside the payload they saw.
+   */
+  const providerRun = async (provider, req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    if (typeof provider.startRun !== 'function' || typeof provider.readRun !== 'function') {
+      send(res, 501, { error: 'unsupported', detail: 'this provider has no run path yet' })
+      return
+    }
+
+    if (method === 'GET') {
+      const url = new URL(req.url || '/', 'http://127.0.0.1')
+      const jobId = url.searchParams.get('job')
+      if (str(jobId) === null) {
+        send(res, 400, { error: 'bad-request', detail: '?job=<id> names the run to read' })
+        return
+      }
+      const key = await providerKeyValue(provider)
+      if (key.error) {
+        send(res, key.error === 'no-key' ? 400 : 500, { error: key.error })
+        return
+      }
+      const read = await provider.readRun({ root: provider.data(root.root).root, jobId, key: key.key })
+      if (read.error === 'job-not-found') {
+        send(res, 404, read)
+        return
+      }
+      if (read.error) {
+        send(res, read.error === 'invalid-key' ? 401 : 502, read)
+        return
+      }
+      send(res, 200, read)
+      return
+    }
+
+    if (method !== 'POST') {
+      methodNotAllowed(res, 'GET, POST')
+      return
+    }
+
+    const body = await readJsonBody(req)
+    if (body === undefined) {
+      send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
+      return
+    }
+    if (body.confirmed !== true) {
+      send(res, 400, {
+        error: 'not-confirmed',
+        detail: 'a run starts only from the gate: post the payload a person confirmed, with confirmed: true',
+      })
+      return
+    }
+    const key = await providerKeyValue(provider)
+    if (key.error) {
+      send(res, key.error === 'no-key' ? 400 : 500, { error: key.error })
+      return
+    }
+    const started = await provider.startRun({ root: provider.data(root.root).root, name: body.name, values: body.values, key: key.key })
+    if (started.error) {
+      const status =
+        started.error === 'not-found'
+          ? 404
+          : started.error === 'invalid-key'
+            ? 401
+            : started.error === 'no-api-balance'
+              ? 402
+              : started.error === 'too-many-jobs'
+                ? 429
+                : started.error === 'payload-incomplete' || started.error === 'payload-refused' || started.error === 'bad-request'
+                  ? 400
+                  : 502
+      send(res, status, started)
+      return
+    }
+    send(res, 200, started)
+  }
+
   /** `/providers/<id>/<action>`, with the provider resolved before any work happens. */
   const route = async (req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1')
@@ -768,6 +895,19 @@ export function apply(ctx, config = {}) {
 
     if (action === 'hidden') {
       await providerHidden(provider, req, res)
+      return
+    }
+
+    // The gate and the run. Both own their methods: the preview is a POST of the values a
+    // person is looking at, and the run route answers a GET (one poll) as well as the POST
+    // that starts it.
+    if (action === 'payload') {
+      await providerPayload(provider, req, res)
+      return
+    }
+
+    if (action === 'run') {
+      await providerRun(provider, req, res)
       return
     }
 

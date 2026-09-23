@@ -21,6 +21,7 @@
     "verify:saved": "node verify/save-confirmation.mjs",
     "verify:adapter": "node verify/adapter.mjs",
     "verify:models": "node verify/models.mjs",
+    "verify:run": "node verify/run.mjs",
     "verify:skill": "node verify/skill.mjs",
     "verify:start": "node verify/start.mjs"
   },
