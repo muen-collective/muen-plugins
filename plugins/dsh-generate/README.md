@@ -25,6 +25,14 @@ and the run are not faked here.
 | `settings.section` | exactly ONE settings page, id `generate`, listing every provider in the Models → Providers shape: a row per provider with a credential dot and its key state, one open editor card at a time, the API key as the primary field, and the install prompt where Models puts a model list |
 | the client locale registry | namespace `generate`, en + zh |
 | `ctx.tools` | `rh_workflow_graph` (read an app's doors) and `rh_adapter_validate` (check a written adapter) |
+
+**The prefix route is registered WITHOUT a trailing slash, and that is a contract.** The harness matches a
+prefix as `pathname === prefix || pathname.startsWith(prefix + '/')` (`@deepseek-ai/dsh-host-webserver`,
+`match()`) — it appends the slash itself. Register `'…/providers/'` and the second test becomes
+`startsWith('…/providers//')`, so only the bare path matches and every `/providers/<id>/…` request falls
+through to the SPA fallback as a 404 with an empty body. That was shipped on 2026-09-23 and broke every
+provider route at once; `verify/wallet.mjs` now runs its cases through a copy of the harness matcher, which
+is the check that would have caught it.
 | `ctx.skills` | `add-rh-workflow`, read from `skills/add-rh-workflow/SKILL.md` at apply time |
 
 ## Providers — one plugin, several of them
