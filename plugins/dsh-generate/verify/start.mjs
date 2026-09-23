@@ -10,9 +10,14 @@
  *    adapters."
  *
  * So the claims are: the start-page card is the harness's own standard card saying
- * "Generate with RunningHub" (no custom renderer, no degrade to one app's title);
- * the pane's first screen is the cards; a card opens that workflow's surface IN the
- * pane; and this plugin registers exactly one settings page.
+ * "Generate" (no custom renderer, no degrade to one app's title); the pane's first
+ * screen is the cards; a card opens that workflow's surface IN the pane; and this
+ * plugin registers exactly one settings page.
+ *
+ * THE TITLE IS THE SURFACE'S OWN LABEL (founder, 2026-09-23: "Generate with Runninghub
+ * should be Generate"). The card used to name the first provider; with four providers
+ * inside one plugin the card names none of them, and a provider is named where it is
+ * chosen — in the pane and in Settings → Generate.
  *
  * WHAT THIS PROVES, AND WHAT IT DOES NOT. `lib/client.js` is loaded in the same
  * stubbed loader verify/mount.mjs and verify/save-confirmation.mjs use, `apply(ctx)`
@@ -475,8 +480,8 @@ const guideCardSlots = seen.slots.filter((slot) => slot.options.name === 'sideba
 check('the pane body registers under our id', !!paneSlot && paneSlot.options.key === PKG_NAME, paneSlot && String(paneSlot.options.key))
 check('the chip registers beside it', !!titleSlot && titleSlot.options.key === PKG_NAME, titleSlot && String(titleSlot.options.key))
 check(
-  "the guide card is the harness's own standard card, and the copy names the provider",
-  !!type && type.guide.length === 1 && type.guide[0].title() === 'Generate with RunningHub',
+  "the guide card is the harness's own standard card, titled with the surface's own label",
+  !!type && type.guide.length === 1 && type.guide[0].title() === 'Generate',
   type && type.guide[0].title(),
 )
 check(
@@ -484,7 +489,7 @@ check(
   guideCardSlots.length === 0,
   guideCardSlots.map((slot) => String(slot.options.key)).join(', '),
 )
-check('the tab chip stays short, so the card can carry the provider', type.title() === 'Generate', type.title())
+check('the tab chip and the card carry the same label', type.title() === 'Generate', type.title())
 check(
   'ONE Generate settings page, never one per workflow (settings.section is a list)',
   settingsSlots.length === 1 && settingsSlots[0].options.id === 'generate' && settingsSlots[0].options.label() === 'Generate',

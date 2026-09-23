@@ -7,11 +7,13 @@
 //                 `type.label`.
 //   its body      the keyed `sidebar.right.pane.tab` seat under this package's id.
 //   its chip      the keyed `sidebar.right.pane.tab.title` seat under the same id.
-//   its card      the guide entry that puts "Generate with RunningHub" on the right
-//                 panel's start page beside "Workspace files", "New terminal" and
-//                 "Browser". It is the HARNESS'S OWN standard card: no renderer of
-//                 ours is registered, because a card that lists workflows stops
-//                 saying what it opens (founder, 2026-09-22).
+//   its card      the guide entry that puts "Generate" on the right panel's start
+//                 page beside "Workspace files", "New terminal" and "Browser". It is
+//                 the HARNESS'S OWN standard card: no renderer of ours is registered,
+//                 because a card that lists workflows stops saying what it opens
+//                 (founder, 2026-09-22). Its title is the surface's own label, not a
+//                 provider's (founder, 2026-09-23: "Generate with Runninghub should be
+//                 Generate").
 //   its settings  ONE `settings.section` page listing every provider, in the Models →
 //                 Providers shape (founder, 2026-09-23: *"use the models settings
 //                 design for generate settings"*): the section's own title and intro,
@@ -93,8 +95,8 @@ window.__ModuleLoader__.load({
 
     const EN = {
       'type.label': 'Generate',
-      'guide.title': 'Generate with RunningHub',
-      'guide.description': 'Run your RunningHub workflows here',
+      'guide.title': 'Generate',
+      'guide.description': 'Run your workflows here',
       // The pane is the HUB (founder, 2026-09-22): the start-page card is a plain
       // door, and every workflow surface lives inside this one pane. So the pane's
       // first screen is its card grid, and a card opens that workflow's surface.
@@ -230,8 +232,8 @@ window.__ModuleLoader__.load({
 
     const ZH = {
       'type.label': '生成',
-      'guide.title': '使用 RunningHub 生成',
-      'guide.description': '在这里运行你的 RunningHub 工作流',
+      'guide.title': '生成',
+      'guide.description': '在这里运行你的工作流',
       'surface.back': '全部工作流',
       'surface.loading': '正在读取工作流…',
       'surface.failed': '无法读取该工作流。',

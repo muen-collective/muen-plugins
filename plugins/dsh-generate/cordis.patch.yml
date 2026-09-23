@@ -3,7 +3,7 @@
 # One row: mount this package into the profile tree. The host half serves the provider
 # routes — the list, each provider's key, and each provider's workflows — and the
 # client half registers the `generate` right-panel tab type, its body and its chip,
-# the guide entry that puts the "Generate with RunningHub" card on the right panel's
+# the guide entry that puts the "Generate" card on the right panel's
 # start page, and the ONE settings page that lists every provider. The card is the
 # harness's own standard card; the pane behind it is the hub that holds every
 # workflow surface.
@@ -13,8 +13,9 @@
 # (`<profile>/generate/<provider>/adapters/<name>.json`) — so renaming the row again
 # moves the data with it. The name is provider-neutral on purpose: this plugin holds
 # four providers (Krea and Magnific for images, RunningHub and Comfy Cloud for
-# workflows — founder, 2026-09-23), and the surface keeps the label "Generate" while
-# the card names the provider.
+# workflows — founder, 2026-09-23), and both the surface and its start-page card keep
+# the label "Generate": the card names the surface, not one of the providers
+# (founder, 2026-09-23).
 - insert:
     - id: generate
       name: '@muen/dsh-generate'

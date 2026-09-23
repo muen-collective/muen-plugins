@@ -17,7 +17,7 @@ and the run are not faked here.
 | `ctx.sidebarRightTabs` | a `generate` page type, id `@muen/dsh-generate`, priority `extension` |
 | `sidebar.right.pane.tab` | the pane body, keyed by the same id |
 | `sidebar.right.pane.tab.title` | the tab chip's live text |
-| the type's `guide[]` | one entry, which puts the **Generate with RunningHub** card on the right panel's start page — the harness's own standard card, with no renderer of ours |
+| the type's `guide[]` | one entry, which puts the **Generate** card on the right panel's start page — the harness's own standard card, with no renderer of ours |
 | `/plugins/generate/providers` | the host route both the pane and Settings read: every provider with its key state and its workflow count |
 | `/plugins/generate/providers/<id>/key` | one provider's key: `GET` its state, `POST` to link or replace, `DELETE` to unlink |
 | `/plugins/generate/providers/<id>/workflows` | one provider's installed workflows — one disk read, no key, no network |
@@ -236,9 +236,10 @@ over:
 > surface needs to hold all wf surfaces inside this one RH plugin surface." …
 > "we should only have 1 generate settings with the different adapters."
 
-So the start-page card is the harness's own standard card, titled with the provider
-(**Generate with RunningHub** — the next provider plugin will say its own name), and
-the pane holds everything else:
+So the start-page card is the harness's own standard card, titled with the surface's
+own label (**Generate** — founder, 2026-09-23: *"Generate with Runninghub should be
+Generate"*; one plugin holds four providers, so the card names none of them), and the
+pane holds everything else:
 
 | Screen | What it is |
 |---|---|
