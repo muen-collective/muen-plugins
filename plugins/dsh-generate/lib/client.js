@@ -23,9 +23,10 @@
 //                 provider would be one Generate page per provider, which is exactly
 //                 what the founder ruled out.
 //
-// ONE PLUGIN, SEVERAL PROVIDERS (founder, 2026-09-22). Four are registered in the host
-// half (Krea, Magnific, RunningHub, Comfy Cloud), image providers first. The pane is
-// the hub: a meter per linked provider, then a card per installed workflow from every
+// ONE PLUGIN, SEVERAL PROVIDERS (founder, 2026-09-22). Three are registered in the host
+// half (Krea, RunningHub, Comfy Cloud), image providers first — Magnific was removed
+// 2026-09-23 (founder: "krea and comfy cloud works, you can remove magnific"). The pane
+// is the hub: a meter per linked provider, then a card per installed workflow from every
 // provider, and a card opens that workflow's surface in the same pane. The provider
 // list, each provider's key and each provider's workflows come from the host over
 // `/plugins/generate/providers/…`; the browser half never reads a file and never
@@ -198,13 +199,11 @@ window.__ModuleLoader__.load({
       'settings.workflows.add': 'To add one, ask the agent in chat:',
       'settings.workflows.copy': 'Copy',
       'settings.workflows.copied': 'Copied',
-      // Two providers answer about a key without accepting it, and the difference
-      // matters: one subscription has lapsed, and the other is an entitlement Magnific
-      // never confirms. Neither is a bad key, so neither is called one. Krea's third
-      // case is the same rule: HTTP 402 means the workspace's API balance is empty
-      // (Krea's own docs), and the key itself is fine.
+      // Two providers answer about a key without accepting it, and neither answer is a
+      // bad key: Comfy Cloud's subscription has lapsed, and Krea's API balance is empty.
+      // HTTP 429 and HTTP 402 mean exactly that in their own docs, so the key is kept
+      // and the row carries the reason instead of calling it invalid.
       'note.subscription-inactive': 'The key works, but this account has no active Comfy Cloud subscription, so a run would be refused.',
-      'note.not-entitled': 'Magnific answered the key but did not confirm access, so it is stored unchecked.',
       'note.no-api-balance': 'The key works, but this Krea workspace has no API balance, so a run would be refused. Top it up in Krea.',
       'pane.noProviders': 'This build has no providers registered.',
       // Rotation is a normal act, not an edge case: a person creates a new key on
@@ -302,7 +301,6 @@ window.__ModuleLoader__.load({
       'settings.workflows.copy': '复制',
       'settings.workflows.copied': '已复制',
       'note.subscription-inactive': '密钥可用，但此账户没有有效的 Comfy Cloud 订阅，运行会被拒绝。',
-      'note.not-entitled': 'Magnific 回应了密钥但没有确认访问权限，因此仅保存、未校验。',
       'note.no-api-balance': '密钥可用，但此 Krea 工作区没有 API 余额，运行会被拒绝。请在 Krea 充值。',
       'pane.noProviders': '此版本没有注册任何服务商。',
       'wallet.replace.hint': '在这里粘贴密钥会替换本机已保存的那个。',
@@ -1334,7 +1332,7 @@ window.__ModuleLoader__.load({
         { style: S.strip, 'data-generate-provider-strip': provider.id },
         showLabel ? h('span', { style: S.stripLabel }, provider.label) : null,
         // A provider with no balance endpoint says `Key saved` rather than claiming an
-        // empty wallet: Krea, Magnific and Comfy Cloud have no balance route at all.
+        // empty wallet: Krea and Comfy Cloud have no balance route at all.
         h(
           'span',
           { style: S.stripValue },

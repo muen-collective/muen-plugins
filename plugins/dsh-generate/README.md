@@ -48,28 +48,31 @@ a person manages the account at, the sentence that installs one of its workflows
 opens (which is how a key is validated before it is stored), where its data lives under the plugin root, and how
 to list and read its workflows.
 
-**Four are registered, in the order the surfaces show them — image providers first (founder, 2026-09-23:
-*"add image provider, then RunningHub … I have accounts at Krea API and I can make account Magnific for 1 month
-to test … I also have account Comfy Cloud"*):**
+**Three are registered, in the order the surfaces show them — image providers first (founder, 2026-09-23:
+*"add image provider, then RunningHub … I have accounts at Krea API … I also have account Comfy Cloud"*):**
 
 | Provider | Family | Host | Key check | Key page |
 |---|---|---|---|---|
 | Krea | image | `api.krea.ai` | `GET /jobs`, `Authorization: Bearer` | krea.ai/settings/api-tokens |
-| Magnific | image | `api.magnific.com` | `GET /v1/creations/recent?per_page=1`, `x-magnific-api-key` | magnific.com/user/organization/api-keys |
 | RunningHub | workflow | `www.runninghub.ai` | `POST /uc/openapi/accountStatus`, `Authorization: Bearer` | runninghub.ai/call-api/bill-task?tab=keys |
 | Comfy Cloud | workflow | `cloud.comfy.org` | `GET /api/user`, `X-API-Key` | platform.comfy.org/profile/api-keys |
+
+**Magnific was the fourth, registered and removed the same day.** It was taken for a one-month trial to test;
+the founder tested Krea and Comfy Cloud instead and reported *"krea and comfy cloud works, you can remove
+magnific"*. Its object, key check and strings are deleted rather than left disabled, so nothing in the surface
+can offer a provider this build does not support.
 
 Each check was researched on 2026-09-23 against the provider's own docs and OpenAPI, and the citations live on
 the provider object. Two facts shaped the contract:
 
-- **Only RunningHub can report a balance.** Krea, Magnific and Comfy Cloud publish no account endpoint at all —
+- **Only RunningHub can report a balance.** Krea and Comfy Cloud publish no account endpoint at all —
   Krea's docs say outright that balance *"cannot be read programmatically"* — so a row for those says `Key saved`
   rather than showing an empty wallet;
 - **a provider can answer about a key without accepting it.** Comfy Cloud answers `429` for a key whose
-  subscription is inactive, which means the key is real; Magnific answers `403` with a response component its own
-  spec never defines. Neither is thrown away (founder: *"store it and mark it unverified"*): the key is stored,
-  `verified` is false for the Magnific case, and the row carries the reason (`note`). A `401` is a bad key
-  everywhere, and a network failure is never reported as one.
+  subscription is inactive, and Krea answers `402` when the API balance is empty. Both mean the key is real,
+  and neither is thrown away (founder: *"store it and mark it unverified"*): the key is stored, `verified` is
+  false, and the row carries the reason (`note`). A `401` is a bad key everywhere, and a network failure is
+  never reported as one.
 
 **Why not a plugin per provider.** Two measured facts:
 
@@ -153,7 +156,7 @@ language. The line carries the same info glyph as the key directions and is read
 ## The key (S2, now per provider)
 
 S2 shipped one wallet route for one provider. The provider registry replaced it with one key route per
-provider, so every sentence below holds for all four:
+provider, so every sentence below holds for all three:
 
 | Route | What |
 |---|---|
@@ -179,7 +182,7 @@ API-keys page is unverified — epic 61 D23. If it turns out to be tier-specific
 `/call-api/bill-task?tab=keys` is the first thing to try.
 
 The key lives in the harness `credentials` seam as a `CredentialRef` named per provider — `RH_API_KEY`,
-`KREA_API_KEY`, `MAGNIFIC_API_KEY`, `COMFY_CLOUD_API_KEY` — so the value goes to
+`KREA_API_KEY`, `COMFY_CLOUD_API_KEY` — so the value goes to
 the provider's own writable store while an existing env file keeps working as the fallback. `source` is the
 seam's own word for where the value came from, and it has four values, not two: `file` is the provider-managed
 store (what a key pasted here becomes), `env` is the inherited process environment (`writable: false`), and
@@ -246,7 +249,7 @@ over:
 
 So the start-page card is the harness's own standard card, titled with the surface's
 own label (**Generate** — founder, 2026-09-23: *"Generate with Runninghub should be
-Generate"*; one plugin holds four providers, so the card names none of them), and the
+Generate"*; one plugin holds several providers, so the card names none of them), and the
 pane holds everything else:
 
 | Screen | What it is |

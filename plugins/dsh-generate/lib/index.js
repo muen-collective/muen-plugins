@@ -24,8 +24,8 @@
  *   GET    /plugins/generate/providers/<id>/workflows → what it has installed
  *   GET    /plugins/generate/providers/<id>/workflow?name=  → one workflow, whole
  *
- * FOUR PROVIDERS (providers.js): Krea and Magnific (image), RunningHub and Comfy
- * Cloud (workflows). Every route is provider-addressed, so a fifth provider is one
+ * THREE PROVIDERS (providers.js): Krea (image), RunningHub and Comfy Cloud
+ * (workflows). Every route is provider-addressed, so a fourth provider is one
  * object in that file.
  *
  * S3 ADDS THE INSTALL, and it is two tools and a skill, not a route:
@@ -467,8 +467,8 @@ export function apply(ctx, config = {}) {
    * The host one provider is asked at.
    *
    * `config.base` / `RH_BASE` predates the second provider and stays what it was: an
-   * override for the verify scripts and a pinned deployment. With four providers it
-   * can only name RunningHub's host — one override cannot mean four hosts, and letting
+   * override for the verify scripts and a pinned deployment. With three providers it
+   * can only name RunningHub's host — one override cannot mean three hosts, and letting
    * it rewrite every provider would send Krea's key to RunningHub's server.
    */
   const baseFor = (provider) => (provider.id === 'runninghub' ? base || provider.base : provider.base)
@@ -496,10 +496,10 @@ export function apply(ctx, config = {}) {
    *
    * `linked` is "a value resolves"; `verified` is "the provider answered about it".
    * They are two facts, and a provider can hold the first without the second: a key
-   * the provider would not check (Magnific's 403, whose response component the spec
-   * never defines) or one whose subscription has lapsed (Comfy Cloud's 429) is stored
-   * and reported unverified rather than thrown away (founder, 2026-09-23: *"store it
-   * and mark it unverified"*). `note` carries the caveat when there is one.
+   * whose subscription has lapsed (Comfy Cloud's 429) or whose API balance is empty
+   * (Krea's 402) is stored and reported unverified rather than thrown away (founder,
+   * 2026-09-23: *"store it and mark it unverified"*). `note` carries the caveat when
+   * there is one.
    */
   const keyStatus = async (provider) => {
     const empty = { ...identity(provider), linked: false, verified: false, writable: false, source: null, account: null, note: null, error: null }

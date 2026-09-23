@@ -350,7 +350,7 @@ const RUNNINGHUB = {
   addPrompt: 'add this RunningHub workflow <app link>',
 }
 /**
- * The other three providers, as the host builds them (2026-09-23). They are in the
+ * The other two providers, as the host builds them (2026-09-23). They are in the
  * list because the settings page and the pane now draw every provider, and the
  * first-run posture (the first UNLINKED provider opens its own card) is a behaviour
  * these cases have to account for rather than a fixture they can ignore.
@@ -364,15 +364,6 @@ const OTHERS = [
     keyUrl: 'https://www.krea.ai/settings/api-tokens',
     accountUrl: 'https://www.krea.ai/app/api',
     addPrompt: 'add this Krea model <model name>',
-  },
-  {
-    id: 'magnific',
-    label: 'Magnific',
-    kind: 'image',
-    keyPageLabel: 'API keys',
-    keyUrl: 'https://www.magnific.com/user/organization/api-keys',
-    accountUrl: null,
-    addPrompt: 'add this Magnific tool <tool name>',
   },
   {
     id: 'comfycloud',

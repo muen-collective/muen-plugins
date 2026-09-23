@@ -15,7 +15,7 @@
  * plugin registers exactly one settings page.
  *
  * THE TITLE IS THE SURFACE'S OWN LABEL (founder, 2026-09-23: "Generate with Runninghub
- * should be Generate"). The card used to name the first provider; with four providers
+ * should be Generate"). The card used to name the first provider; with three providers
  * inside one plugin the card names none of them, and a provider is named where it is
  * chosen — in the pane and in Settings → Generate.
  *
@@ -358,8 +358,8 @@ const KREA_FILE = {
 }
 
 /**
- * The host stub. The provider list is the real four (2026-09-23): RunningHub carries
- * this case's key state and installed units, and the other three are unlinked with
+ * The host stub. The provider list is the real three (2026-09-23): RunningHub carries
+ * this case's key state and installed units, and the other two are unlinked with
  * nothing installed — which is what makes the settings page's first-run posture
  * (the first UNLINKED provider opens its own card) a thing these cases can see.
  */
@@ -372,15 +372,6 @@ const OTHER_PROVIDERS = [
     keyUrl: 'https://www.krea.ai/settings/api-tokens',
     accountUrl: 'https://www.krea.ai/app/api',
     addPrompt: 'add this Krea model <model name>',
-  },
-  {
-    id: 'magnific',
-    label: 'Magnific',
-    kind: 'image',
-    keyPageLabel: 'API keys',
-    keyUrl: 'https://www.magnific.com/user/organization/api-keys',
-    accountUrl: null,
-    addPrompt: 'add this Magnific tool <tool name>',
   },
   {
     id: 'comfycloud',
@@ -401,7 +392,7 @@ function stubHost({ units = [], file = null, failList = false, linked = true } =
     fetch: async (url, init = {}) => {
       calls.push({ url, method: (init.method || 'GET').toUpperCase() })
       if (url === PROVIDERS_API) {
-        // The registry's own order: krea, magnific, runninghub, comfycloud.
+        // The registry's own order: krea, runninghub, comfycloud.
         const unlinked = (provider) => ({
           ...provider,
           linked: false,
@@ -416,7 +407,6 @@ function stubHost({ units = [], file = null, failList = false, linked = true } =
         return ok({
           providers: [
             unlinked(OTHER_PROVIDERS[0]),
-            unlinked(OTHER_PROVIDERS[1]),
             {
               id: PROVIDER,
               label: 'RunningHub',
@@ -434,7 +424,7 @@ function stubHost({ units = [], file = null, failList = false, linked = true } =
               error: null,
               workflows: units.length,
             },
-            unlinked(OTHER_PROVIDERS[2]),
+            unlinked(OTHER_PROVIDERS[1]),
           ],
         })
       }
@@ -532,13 +522,13 @@ check(
     .map((node) => node.props['data-generate-provider-card'])
   check(
     'the one settings page draws a row per provider, image providers first',
-    cardIds.join(',') === 'krea,magnific,runninghub,comfycloud',
+    cardIds.join(',') === 'krea,runninghub,comfycloud',
     JSON.stringify(cardIds),
   )
   const dots = nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-dot'])
   check(
     'every row carries a credential dot that says which state it is in',
-    dots.length === 4 && dots.map((node) => node.props['data-generate-provider-dot']).join(',') === 'none,none,ok,none',
+    dots.length === 3 && dots.map((node) => node.props['data-generate-provider-dot']).join(',') === 'none,ok,none',
     JSON.stringify(dots.map((node) => node.props['data-generate-provider-dot'])),
   )
   check(
@@ -846,7 +836,6 @@ for (const key of [
   // `t('note.' + provider.note)` from the host's row, so a missing key here shows the
   // raw id to the user — which is what a note without copy looks like.
   'note.subscription-inactive',
-  'note.not-entitled',
   'note.no-api-balance',
 ]) {
   check('the copy has ' + key + ' in English', typeof EN[key] === 'string' && EN[key] !== '', String(EN[key]))

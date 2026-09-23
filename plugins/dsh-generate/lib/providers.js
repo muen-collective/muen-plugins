@@ -24,27 +24,33 @@
  * before it is stored), where its own data lives under the plugin root, and how to
  * list and read its workflows.
  *
- * FOUR PROVIDERS, IN THE ORDER THE SURFACES SHOW THEM (founder, 2026-09-23: *"add
- * image provider, then RunningHub … I have accounts at Krea API and I can make
- * account Magnific for 1 month to test … I also have account Comfy Cloud"*):
+ * THREE PROVIDERS, IN THE ORDER THE SURFACES SHOW THEM (founder, 2026-09-23: *"add
+ * image provider, then RunningHub … I have accounts at Krea API … I also have account
+ * Comfy Cloud"*):
  *
  *   krea         image      https://api.krea.ai
- *   magnific     image      https://api.magnific.com
  *   runninghub   workflow   https://www.runninghub.ai
  *   comfycloud   workflow   https://cloud.comfy.org
+ *
+ * MAGNIFIC WAS REGISTERED AND REMOVED THE SAME DAY (2026-09-23). It was the fourth
+ * provider, taken for a one-month trial to test; the founder tested Krea and Comfy
+ * Cloud instead and reported *"krea and comfy cloud works, you can remove magnific"*.
+ * The object, its key check and its strings are deleted rather than left disabled, so
+ * nothing in the surface can offer a provider this build does not support. Git history
+ * is the record of what it was.
  *
  * EACH KEY CHECK IS ONE CHEAP AUTHENTICATED READ, researched 2026-09-23 and cited on
  * the provider itself. Two facts shaped the contract:
  *
- *   - only RunningHub can report a balance. Krea, Magnific and Comfy Cloud publish no
- *     account endpoint at all (Krea's own docs: *"There is no public endpoint for
- *     checking your balance programmatically"*), so `account` is whatever the check
- *     could read and the surface must not promise a number it cannot get;
+ *   - only RunningHub can report a balance. Krea and Comfy Cloud publish no account
+ *     endpoint at all (Krea's own docs: *"There is no public endpoint for checking your
+ *     balance programmatically"*), so `account` is whatever the check could read and the
+ *     surface must not promise a number it cannot get;
  *   - a provider may answer about the key without accepting it, in which case the key
- *     is real but unverified. Magnific answers `403` with an undocumented body, and
- *     Comfy Cloud answers `429` for a key whose subscription is inactive. Both are
- *     stored — the founder's rule, 2026-09-23: *"store it and mark it unverified"* —
- *     and the row says which of the two happened rather than calling a real key bad.
+ *     is real but unverified. Comfy Cloud answers `429` for a key whose subscription is
+ *     inactive, and Krea answers `402` when the API balance is empty. Both are stored —
+ *     the founder's rule, 2026-09-23: *"store it and mark it unverified"* — and the row
+ *     says which of the two happened rather than calling a real key bad.
  *
  * WHAT A CHECK MAY ANSWER, one shape for every provider:
  *
@@ -302,51 +308,6 @@ export const krea = {
 }
 
 /**
- * Magnific: the image enhancer.
- *
- * THE CHECK IS `GET /v1/creations/recent?per_page=1` — the one read the docs say
- * *"does not consume credits"*, and the only free call that resolves identity from
- * the key. Researched 2026-09-23: no balance, credits or plan endpoint exists in the
- * 360-path spec, so this provider can never report a number.
- *
- * 401 IS "BAD KEY"; 403 IS NOT. The spec references a `403-forbidden` response
- * component it never defines, so a 403 has no documented meaning: it may be a valid
- * key without API entitlement. Calling that key invalid would be a guess, and
- * throwing it away would lose a key the user owns, so it is stored and the row says
- * it was not checked.
- */
-export const magnific = {
-  id: 'magnific',
-  label: 'Magnific',
-  kind: 'image',
-  keyRef: 'MAGNIFIC_API_KEY',
-  base: 'https://api.magnific.com',
-  keyUrl: 'https://www.magnific.com/user/organization/api-keys',
-  keyPageLabel: 'API keys',
-  /** No billing page is documented well enough to link: every dashboard URL the docs
-   * cite answers 403 to a non-browser client, so the card links the key page only. */
-  accountUrl: null,
-  addPrompt: 'add this Magnific tool <tool name>',
-
-  async account({ base = this.base, key, timeoutMs = TIMEOUT_MS, fetchImpl = fetch } = {}) {
-    const read = await getJson(
-      base + '/v1/creations/recent?per_page=1',
-      { 'x-magnific-api-key': key },
-      { timeoutMs, fetchImpl },
-    )
-    if (read.error) return { error: read.error }
-    if (read.status === 401) return { error: 'invalid-key' }
-    if (read.status === 403) return { unverified: true, note: 'not-entitled' }
-    if (!read.ok) return { error: 'http-' + read.status }
-    if (!read.payload || !Array.isArray(read.payload.data)) return { error: 'unexpected-response' }
-    const first = read.payload.data[0]
-    return { account: { userId: first ? num(first.user_id) : null } }
-  },
-
-  ...adapterBacked('magnific'),
-}
-
-/**
  * Comfy Cloud: the hosted ComfyUI, and the second workflow provider.
  *
  * THE CHECK IS `GET /api/user` with `X-API-Key` — documented as *"information about
@@ -390,7 +351,7 @@ export const comfycloud = {
  * Every provider this build speaks to, in the order the surfaces show them:
  * the image providers first, then the workflow providers (founder, 2026-09-23).
  */
-export const PROVIDERS = [krea, magnific, runninghub, comfycloud]
+export const PROVIDERS = [krea, runninghub, comfycloud]
 
 /**
  * One provider by id, or null.
