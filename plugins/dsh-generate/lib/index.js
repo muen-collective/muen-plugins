@@ -70,16 +70,19 @@
  * @module @muen/dsh-generate
  */
 import { readFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, statfs } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { parseAppRef, readAppDoors } from './doors.js'
 import { loadHouse } from './house.js'
 import { ADAPTER_SCHEMA, adapterFromDoors, validateAdapter } from './adapter.js'
 import { PROVIDERS, normalizeKey, providerById, runOptions, runninghub, uploadFile } from './providers.js'
 import { readHidden, withHidden, writeHidden } from './hidden.js'
-import { libraryRoot, resolveDataRoot } from './paths.js'
+import { readChosenFolder, writeChosenFolder } from './library-path.js'
+import { CAN_CHOOSE, chooseFolder, revealFolder } from './folder-actions.js'
+import { resolveDataRoot } from './paths.js'
 
 /** Matches the row id in cordis.patch.yml. */
 export const name = 'generate'
@@ -103,6 +106,8 @@ export const name = 'generate'
  */
 const PROVIDERS_PATH = '/plugins/generate/providers'
 const PROVIDERS_PREFIX = '/plugins/generate/providers'
+// Exact route, no trailing slash (the webServer rule): where finished runs save.
+const LIBRARY_PATH = '/plugins/generate/library'
 const TIMEOUT_MS = 15000
 
 /** Refuse a body past this — a key is tens of bytes, and the route is reachable. */
@@ -538,6 +543,14 @@ function mountSkill(ctx) {
 export function apply(ctx, config = {}) {
   const base = str(config.base) || str(process.env.RH_BASE) || null
 
+  /**
+   * The two native folder verbs (lib/folder-actions.js): the OS dialog that picks a
+   * folder, and the reveal that opens the current one in Finder. They arrive through
+   * the config so a verify run injects fakes — a test must never pop a real dialog on
+   * the founder's screen — and `canChoose` is whether a dialog can run on this host.
+   */
+  const folders = config.folders || { choose: chooseFolder, reveal: revealFolder, canChoose: CAN_CHOOSE }
+
   // Resolved before the routes mount, because the provider routes answer from these
   // directories and the tools below report the same resolution (§4: one root, said
   // out loud once).
@@ -957,9 +970,10 @@ export function apply(ctx, config = {}) {
       }
       const read = await provider.readRun({
         root: provider.data(root.root).root,
-        // Where a finished run's bytes go: one library for the install, beside the provider
-        // directories rather than inside one (lib/library.js).
-        libraryRoot: libraryRoot(root.root),
+        // Where a finished run's bytes go, asked fresh on every poll: a folder the
+        // person chose in Settings wins, else the Desktop default (lib/library.js
+        // keeps the provider/workflow/day shape under whatever root answers).
+        libraryRoot: (await libraryState()).root,
         jobId,
         key: key.key,
       })
@@ -1103,13 +1117,150 @@ export function apply(ctx, config = {}) {
       methodNotAllowed(res, 'GET')
       return
     }
-    send(res, 200, await providerList())
+    // The library answer rides the list the settings page already reads: one request
+    // for the provider rows AND for where their runs save, so there is no second fetch
+    // to stub or to fail.
+    send(res, 200, { ...(await providerList()), library: await libraryState() })
+  }
+
+  /**
+   * WHERE A FINISHED RUN'S BYTES LAND, answered fresh on every read (founder,
+   * 2026-09-23: *"let's make save folder default on desktop, and the user can click
+   * to choose a different folder"*).
+   *
+   * A folder the person chose in Settings → Generate wins; it is stored in
+   * `<root>/library.json`, so the choice survives restarts and sits nowhere near a
+   * key. With no choice the bytes go to THE DESKTOP — the one folder that is always
+   * there, always visible, and never buried inside the harness's own install. The
+   * project-folder default this replaced is gone: a save nobody can find is the
+   * failure this row exists to prevent.
+   */
+  async function chosenFolder() {
+    return readChosenFolder(root.root)
+  }
+
+  /** `~/Desktop` and `~` expand; every other path is taken as written. */
+  function expandFolder(path) {
+    if (path === '~') return homedir()
+    if (path.startsWith('~/')) return join(homedir(), path.slice(2))
+    return path
+  }
+
+  /** The default save folder: the Desktop of whoever runs this install. */
+  function desktopFolder() {
+    return join(homedir(), 'Desktop')
+  }
+
+  /**
+   * Space left on the volume that holds the root (Capture One's own "Space Left"
+   * line, from the founder's reference screenshot). Null when the folder does not
+   * exist yet — a chosen path is stored before it is ever written into, and a
+   * missing folder is not an error, it just has no number to show.
+   */
+  async function freeBytesOf(path) {
+    try {
+      const stats = await statfs(path)
+      return Number(stats.bavail) * Number(stats.bsize)
+    } catch {
+      return null
+    }
+  }
+
+  async function libraryState() {
+    const custom = await chosenFolder()
+    const resolved = custom !== null ? expandFolder(custom) : desktopFolder()
+    return {
+      path: custom,
+      root: resolved,
+      source: custom !== null ? 'custom' : 'desktop',
+      // Whether the OS dialog behind the clickable path can run on this host, so the
+      // browser half knows when the path is a button and when it is only text.
+      canChoose: folders.canChoose === true,
+      freeBytes: await freeBytesOf(resolved),
+    }
+  }
+
+  async function writeLibraryFile(path) {
+    await writeChosenFolder(root.root, path)
+  }
+
+  /**
+   * GET answers the state. POST takes three shapes: `{ path }` stores a typed folder
+   * (`null` goes back to the Desktop default), `{ action: 'choose' }` opens the OS
+   * folder dialog starting at the current root and stores what came back, and
+   * `{ action: 'reveal' }` opens the current root in the file browser (founder:
+   * *"click on icon to open finder"*). A cancelled dialog answers the unchanged
+   * state — cancelling is not an error.
+   */
+  const libraryRoute = async (req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    if (method === 'GET') {
+      send(res, 200, await libraryState())
+      return
+    }
+    if (method !== 'POST') {
+      methodNotAllowed(res, 'GET, POST')
+      return
+    }
+    const body = await readJsonBody(req)
+    if (body === undefined) {
+      send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
+      return
+    }
+    if (body.action === 'reveal') {
+      try {
+        await folders.reveal((await libraryState()).root)
+        send(res, 200, { ok: true })
+      } catch (error) {
+        send(res, 500, { error: 'reveal-failed', detail: String((error && error.message) || error) })
+      }
+      return
+    }
+    if (body.action === 'choose') {
+      if (folders.canChoose !== true) {
+        send(res, 501, { error: 'unsupported', detail: 'this host has no folder dialog' })
+        return
+      }
+      let picked
+      try {
+        picked = await folders.choose((await libraryState()).root)
+      } catch (error) {
+        send(res, 500, { error: 'choose-failed', detail: String((error && error.message) || error) })
+        return
+      }
+      if (picked && picked.cancelled === true) {
+        send(res, 200, await libraryState())
+        return
+      }
+      const pickedPath = picked && typeof picked.path === 'string' ? picked.path.trim() : ''
+      if (pickedPath === '' || pickedPath.length > 4096 || pickedPath.includes('\0') || !pickedPath.startsWith('/')) {
+        send(res, 400, { error: 'bad-path', detail: 'the dialog answered with no absolute folder' })
+        return
+      }
+      await writeLibraryFile(pickedPath)
+      send(res, 200, await libraryState())
+      return
+    }
+    if (body.path === null) {
+      await writeLibraryFile(null)
+      send(res, 200, await libraryState())
+      return
+    }
+    const path = typeof body.path === 'string' ? body.path.trim() : ''
+    const absolute = path.startsWith('/') || path.startsWith('~') || /^[a-zA-Z]:[\\/]/.test(path)
+    if (path === '' || path.length > 4096 || path.includes('\0') || !absolute) {
+      send(res, 400, { error: 'bad-path', detail: 'an absolute folder path, or null for the default folder' })
+      return
+    }
+    await writeLibraryFile(path)
+    send(res, 200, await libraryState())
   }
 
   const mount = (server) => {
     if (!server || typeof server.register !== 'function') return
     ctx.effect(() => server.register({ kind: 'exact', path: PROVIDERS_PATH, handler: list }), 'generate: providers')
     ctx.effect(() => server.register({ kind: 'prefix', path: PROVIDERS_PREFIX, handler: route }), 'generate: provider routes')
+    ctx.effect(() => server.register({ kind: 'exact', path: LIBRARY_PATH, handler: libraryRoute }), 'generate: library')
   }
 
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined

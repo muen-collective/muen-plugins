@@ -97,6 +97,10 @@ export function resolveDataRoot({ argv = process.argv, env = process.env } = {})
  * It sits beside the provider directories rather than inside one, because a saved image is
  * the install's asset and not the provider's property — a workflow re-pointed at another
  * backend keeps its results.
+ *
+ * Since the 2026-09-23 save-folder change this is the FALLBACK root only: a folder the
+ * person chose wins, else `<project>/generate` — see `libraryState` in lib/index.js and
+ * the storage in lib/library-path.js.
  */
 export function libraryRoot(root) {
   return join(root, 'library')

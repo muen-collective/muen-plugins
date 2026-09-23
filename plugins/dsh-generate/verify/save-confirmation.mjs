@@ -668,7 +668,13 @@ if (pane && settings) {
     const { tree: first } = await render(settings.component, [{ method: 'GET', body: list({ ...LINKED, writable: false, source: 'env' }) }], 'settings-readonly')
     const tree = await openCard(first, PROVIDER, 'settings-readonly')
     const text = textOf(tree).join(' ')
-    check('a read-only key shows the reason instead of a field', !firstOf(tree, 'input') && text.includes(EN['settings.readOnly']), text.slice(0, 200))
+    check(
+      'a read-only key shows the reason instead of a field',
+      // Scoped to the KEY field (a password input): the settings page also carries the
+      // Save folder row, whose path input is not a credential and stays in every state.
+      !nodesOf(tree).some((node) => node.props && node.props.type === 'password') && text.includes(EN['settings.readOnly']),
+      text.slice(0, 200),
+    )
     check('a read-only key opens no dialog', !nodesOf(tree).some((node) => node.props && node.props['data-stub'] === 'modal'), text.slice(0, 200))
     check(
       'a read-only key cannot be removed from here either',

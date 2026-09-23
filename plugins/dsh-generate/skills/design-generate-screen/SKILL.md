@@ -2,17 +2,18 @@
 
 A workflow arrives with no screen. The install reads an app and writes an adapter; this skill
 decides what a person then sees — which doors stand on the main screen, what they are called,
-what the button says, what the gate shows, and what the screen does when a run fails.
+what the button says, and what the screen does when a run fails.
 
 It is a design pass over the adapter's authored fields, run against the pane's own rules. It
 never invents a control, never invents a number, and never writes plugin code.
 
 ## Rules that do not bend
 
-- **No node id, no field name, no parameter grid is ever drawn.** The raw request appears
-  once, inside the payload gate's disclosure, as JSON to read.
-- **Nothing spends without the gate.** Every design keeps the human confirm between the form
-  and the provider.
+- **No node id, no field name, no parameter grid is ever drawn.** The raw request belongs to
+  the host: every run records the exact payload it sent, and the surface renders none of it.
+- **One press spends.** The run control posts the run the moment it is pressed — there is no
+  confirmation dialog (founder, 2026-09-23) — so never tuck that press among harmless
+  controls, and put the run's phase on screen right away.
 - **The app or the API is the authority on numbers.** Options, bounds, steps and defaults are
   copied, never improved.
 - **Four doors is the main screen.** `house.mainDoors` is 4. A fifth door is a decision to put
@@ -29,7 +30,7 @@ never invents a control, never invents a number, and never writes plugin code.
   aspect door for a workflow that has none: that workflow gets a square canvas.
 - **A provider that declares run modes gets the split run control.** Its `runOption` (the
   registry's, never the adapter's — RunningHub's `instanceType` is the one today) becomes the
-  segment beside the action, and the chosen mode is part of what the gate shows, because it
+  segment beside the action, and the chosen mode travels with the run, because it
   changes what the run uses. A provider that declares none gets the plain button: never draw a
   segment that opens an empty list.
 - **Copy is the profile's language, and data.** Labels are authored words. The plugin's own
@@ -115,16 +116,15 @@ The value must still fit the door — an option the app offers, or inside the ap
 
 ## 7. Walk the screens
 
-Five surfaces carry a workflow. Only the third is per-workflow; the rest are chrome, and the
+Four surfaces carry a workflow. Only the third is per-workflow; the rest are chrome, and the
 rules are here so a design does not fight them.
 
 | Screen | What it shows | What it never shows |
 |---|---|---|
 | the start-page card | the surface's own label (**Generate**) and one line | a workflow list, a thumbnail, stats |
-| the pane home | the wallet strip, then one accordion section per provider, in registry order, minus the hidden ones; each header has the provider's name, `family · count` and the add and refresh glyphs; the open section holds its workflows as cards | a workflow's doors |
+| the pane home | one accordion section per provider, in registry order, minus the hidden ones: each header carries the provider's name and its chevron, the open section's band below it carries the wallet balance, `family · count` and the add and refresh glyphs, and the open section holds its workflows as cards | a workflow's doors |
 | the workflow surface | two cards that wrap: the parameters card (the workflow's title and blurb, the doors as controls in `ui.order` primary first, the app's tooltip under each, advanced doors behind one disclosure, the app's own bounds and options on every control, the run control at its foot) and the preview card (the run's state and its result) — plus a way back | a node id, a field name, an engine metadata row (the `title` may name the engine; nothing else renders model metadata), a panel that is not a `Card`, a card heading of its own |
-| the payload gate | the run label's own button; then the prompt, every image input by name, the target workflow by its semantic name, the balance before, the expected wait, and — behind one disclosure — the exact request, readable and not editable | anything editable in the request |
-| the run strip and result | `queued`/`running`, the elapsed time, the job id; a failure shows the provider's message verbatim beside the job id and a way back; a finished run draws the result with a link to it | a progress bar with no number behind it |
+| the run strip and result | `queued`/`running` with the spinning loading glyph, the elapsed time, the job id; a failure shows the provider's message verbatim beside the job id (the form never left the screen, so the run control is the way to try again — there is no Run again button); a finished run draws the result with a link to it | a progress bar with no number behind it, a Run again button |
 
 The empty and failure states are part of the design, not an afterthought: a section that
 answered nothing says so inside its own body, a workflow that cannot run says which door is
@@ -136,11 +136,12 @@ Settings row.
 The founder's eyes are the acceptance gate. Before you hand it over:
 
 - Open the pane and read the workflow's screen at both a linked and an unlinked provider.
-- Press the run control: the gate must open, and Cancel must return every value intact.
+- Press the run control: the run must start on that press — the strip appears and the control
+  disables itself — and a second press while it is in flight must post nothing.
 - If you hold the plugin source, this repo's checks are the mechanical half: `node
   verify/save-confirmation.mjs --show` prints the pane's states so the copy is read without a
-  restart, `node verify/run.mjs` drives the gate and the controls, `node verify/start.mjs`
-  drives the pane.
+  restart, `node verify/run.mjs` drives the host's payload and run routes, `node
+  verify/start.mjs` drives the pane.
 - A `link:`-installed plugin's edits do not reach the page until the app restarts. Say that a
   restart is owed instead of claiming the screen is live.
 

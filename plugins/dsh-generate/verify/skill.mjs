@@ -156,7 +156,7 @@ check('its whenToUse separates designing a screen from installing one', /rather 
 check('the design skill has no frontmatter to confuse the body', designShipped.startsWith('#'), designShipped.slice(0, 20))
 check('its rules also come before its steps', designAt('Rules that do not bend') < designAt('Say what the person is making'))
 check('it carries the rule that no node id and no field name is ever drawn', /No node id, no field name, no parameter grid is ever drawn/.test(designShipped))
-check('it carries the rule that nothing spends without the gate', /Nothing spends without the gate/.test(designShipped))
+check('it carries the rule that one press spends', /One press spends/.test(designShipped))
 check('it makes the app the authority on every number', /The app or the API is the authority on numbers/.test(designShipped))
 check('it fixes the main screen at the house style\'s four doors', /Four doors is the main screen/.test(designShipped) && /`house\.mainDoors` is 4/.test(designShipped))
 check('it names the one Card every panel is drawn from, so the next screen matches this one', /A panel is a `Card`/.test(designShipped) && /never restate a panel's style/.test(designShipped))
@@ -165,8 +165,8 @@ check('it makes the preview canvas follow the workflow\'s own aspect door', /The
 check('its screens table carries the two cards, parameters and preview', designAt('the parameters card') >= 0 && designAt('the preview card') >= 0)
 check('it reads the surface before designing it: the route or the read tool', designAt('GET /plugins/generate/providers/<id>/workflow') >= 0 && designAt('rh_workflow_graph') >= 0)
 check('it maps all five controls the pane can draw', ['`image`', '`text`', '`number`', '`select`', '`list`'].every((control) => designShipped.includes(control)))
-check('it walks the five screens a workflow appears on', (() => {
-  const screens = ['the start-page card', 'the pane home', 'the workflow surface', 'the payload gate', 'the run strip and result']
+check('it walks the four screens a workflow appears on', (() => {
+  const screens = ['the start-page card', 'the pane home', 'the workflow surface', 'the run strip and result']
   return screens.every((screen) => designAt(screen) >= 0)
 })(), 'start@' + designAt('the start-page card') + ' run@' + designAt('the run strip and result'))
 check('it sends an uninstalled workflow back to the install skill rather than writing one', designAt('add-rh-workflow') >= 0 && /It does not install a workflow/.test(designShipped))

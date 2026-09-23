@@ -159,6 +159,7 @@ const PRIMITIVES = {
   IconWarningOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'warning', ...props }),
   IconRightUpOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'right-up', ...props }),
   IconRefreshOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'refresh', ...props }),
+  IconLoadingOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'loading', ...props }),
   IconCheckOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'check', ...props }),
   IconInfoOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'info', ...props }),
   IconPlusOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'plus', ...props }),
@@ -351,6 +352,10 @@ async function loadClient() {
   const sandbox = {
     window: { __ModuleLoader__: { load: (registration) => { captured = registration } } },
     console,
+    // The one sheet this bundle injects: `apply()` appends a <style> when a DOM is
+    // present. The host defines the stub before this loader runs (see the registrations
+    // block), and the sandbox keeps its own reference to it.
+    document: globalThis.document,
     fetch: (url, init) => globalThis.fetch(url, init),
     // The run strip polls on an interval. The sandbox records the callbacks instead of
     // running them, so a check drives exactly one poll (`timers.at(-1)()`) rather than
@@ -645,6 +650,13 @@ function stubHost({
   const runs = []
   const assets = []
   let polls = 0
+  // The folder the Save-folder row posted, if any: the library answer mirrors the host's
+  // own precedence (a chosen folder, else the Desktop default).
+  let chosenPath = null
+  const libraryAnswer = () =>
+    chosenPath === null
+      ? { path: null, root: '/Users/you/Desktop', source: 'desktop', canChoose: true, freeBytes: 187904819200 }
+      : { path: chosenPath, root: chosenPath, source: 'custom', canChoose: true, freeBytes: 187904819200 }
   const ok = (body) => ({ ok: true, status: 200, json: async () => body })
   return {
     calls,
@@ -667,7 +679,9 @@ function stubHost({
         })
         return ok({ url: UPLOADED_URL })
       }
-      // The gate's preview. Built here the way the host builds it: the body is the values
+      // The payload preview, built here the way the host builds it (verify/run.mjs still
+      // drives this route, though the surface stopped calling it when the confirmation
+      // dialog went away): the body is the values
       // the surface holds, and a required door with nothing in it is `missing`.
       if (String(url).endsWith('/payload')) {
         const posted = JSON.parse((init && init.body) || '{}')
@@ -761,7 +775,31 @@ function stubHost({
             hidden: hidden.includes(provider.id),
             ...(runOption && provider.id === 'krea' ? { runOption } : {}),
           })),
+          // Where runs save, the way the host now answers it beside the rows: the
+          // settings page's Save folder row reads this field off the same request.
+          library: libraryAnswer(),
         })
+      }
+      // The Save-folder row: POST stores a chosen folder (or null for the Desktop
+      // default), opens the folder dialog or reveals the folder (`action`), and answers
+      // the state, exactly as /plugins/generate/library does.
+      if (String(url).endsWith('/plugins/generate/library') && (init.method || 'GET').toUpperCase() === 'POST') {
+        const posted = JSON.parse((init && init.body) || '{}')
+        if (posted.action === 'reveal') return ok({ ok: true })
+        if (posted.action === 'choose') {
+          chosenPath = '/Users/you/Pictures'
+          return ok(libraryAnswer())
+        }
+        if (posted.path === null) {
+          chosenPath = null
+          return ok(libraryAnswer())
+        }
+        const postedPath = typeof posted.path === 'string' ? posted.path.trim() : ''
+        if (postedPath === '' || !(postedPath.startsWith('/') || postedPath.startsWith('~'))) {
+          return { ok: false, status: 400, json: async () => ({ error: 'bad-path' }) }
+        }
+        chosenPath = postedPath
+        return ok(libraryAnswer())
       }
       // Every provider's workflow route answers, because the pane and the open card
       // read one list per provider: RunningHub carries the units, the rest are empty.
@@ -792,9 +830,31 @@ function stubHost({
 
 // ── the registrations ────────────────────────────────────────────────────────
 
+// A minimal `document`, so apply()'s one style injection is observable here the way it is
+// in the browser. It is defined BEFORE the loader runs — the client half executes in a VM,
+// so its `document` is the sandbox's own key — and the host key is dropped right after
+// apply; nothing else in this half touches it.
+const injectedStyles = []
+globalThis.document = {
+  head: {
+    appendChild: (element) => {
+      injectedStyles.push(element)
+      return element
+    },
+  },
+  createElement: () => ({ textContent: '', setAttribute() {}, remove() {} }),
+}
 const module = await loadClient()
 const { ctx, seen } = recordingCtx('en')
 module.apply(ctx)
+delete globalThis.document
+check(
+  'apply injects the one sheet the bundle needs: the spinner class and its keyframes',
+  injectedStyles.length === 1 &&
+    /@keyframes dsh-generate-spin/.test(String(injectedStyles[0].textContent)) &&
+    /\.dsh-generate-spin/.test(String(injectedStyles[0].textContent)),
+  JSON.stringify(injectedStyles.map((element) => String(element.textContent))),
+)
 
 const copy = seen.locales.find((entry) => entry.ns === 'generate')
 const EN = copy ? copy.table.en : {}
@@ -842,6 +902,70 @@ check(
   let opened
   try {
     tree = await settle(settings.component, { t }, 'settings')
+    // THE SAVE FOLDER ROW (founder, 2026-09-23: *"let's make save folder default on
+    // desktop, and the user can click to choose a different folder. in capture one its
+    // like this, click on icon to open finder"*). The host's answer rides the list the
+    // row already has — no second fetch — and the row draws the Capture One shape: a
+    // clickable path, the reveal arrow, the Space left line, and the typed input below.
+    check(
+      'the settings page says where runs save, from the host\'s own answer',
+      !!byAttr(tree, 'data-generate-library', 'yes') &&
+        textIn(byAttr(tree, 'data-generate-library-root', 'yes') || { children: [] }).includes('/Users/you/Desktop'),
+      byAttr(tree, 'data-generate-library-root', 'yes') ? textIn(byAttr(tree, 'data-generate-library-root', 'yes')) : 'no row',
+    )
+    check(
+      'the default root is a button: clicking the path is how a different folder is chosen',
+      (() => {
+        const path = byAttr(tree, 'data-generate-library-root', 'yes')
+        return !!path && path.props['data-generate-library-choose'] === 'yes' && typeof path.props.onClick === 'function'
+      })(),
+      'the path line carries its own click',
+    )
+    check(
+      'the Space left line carries the number the host measured',
+      (() => {
+        const line = byAttr(tree, 'data-generate-library-space', 'yes')
+        return !!line && textIn(line).includes(EN['settings.library.space']) && /\d+\.\d{2} GB/.test(textIn(line))
+      })(),
+      byAttr(tree, 'data-generate-library-space', 'yes') ? textIn(byAttr(tree, 'data-generate-library-space', 'yes')) : 'no space line',
+    )
+    // Click the path: the dialog's answer takes over as the root, and the reset appears.
+    const pathButton = byAttr(tree, 'data-generate-library-root', 'yes')
+    if (pathButton && typeof pathButton.props.onClick === 'function') pathButton.props.onClick()
+    const afterSave = await settle(settings.component, { t }, 'settings')
+    check(
+      'clicking the path opens the dialog, and what comes back takes over as the root',
+      !!afterSave &&
+        textIn(byAttr(afterSave, 'data-generate-library-root', 'yes') || { children: [] }).includes('/Users/you/Pictures') &&
+        !!byAttr(afterSave, 'data-generate-library-reset', 'yes'),
+      byAttr(afterSave, 'data-generate-library-root', 'yes') ? textIn(byAttr(afterSave, 'data-generate-library-root', 'yes')) : 'no row',
+    )
+    check(
+      'the reveal arrow stands beside the path, to open the folder in Finder',
+      !!byAttr(afterSave, 'data-generate-library-reveal', 'yes'),
+      'no reveal control',
+    )
+    const resetFolder = byAttr(afterSave, 'data-generate-library-reset', 'yes')
+    if (resetFolder) resetFolder.props.onClick()
+    tree = await settle(settings.component, { t }, 'settings')
+    check(
+      'one control puts the root back on the Desktop default',
+      textIn(byAttr(tree, 'data-generate-library-root', 'yes') || { children: [] }).includes('/Users/you/Desktop') &&
+        !byAttr(tree, 'data-generate-library-reset', 'yes'),
+      byAttr(tree, 'data-generate-library-root', 'yes') ? textIn(byAttr(tree, 'data-generate-library-root', 'yes')) : 'no row',
+    )
+    // The typed input still works — a path nobody wants to click through to.
+    const folderInput = byAttr(tree, 'data-generate-library-input', 'yes')
+    if (folderInput) folderInput.props.onChange({ target: { value: '/Volumes/External SSD/saves' } })
+    const afterType = await settle(settings.component, { t }, 'settings')
+    const saveFolder = byAttr(afterType, 'data-generate-library-save', 'yes')
+    if (saveFolder) saveFolder.props.onClick()
+    tree = await settle(settings.component, { t }, 'settings')
+    check(
+      'the typed path is still a way to choose, and the host\'s answer is what shows',
+      textIn(byAttr(tree, 'data-generate-library-root', 'yes') || { children: [] }).includes('/Volumes/External SSD/saves'),
+      byAttr(tree, 'data-generate-library-root', 'yes') ? textIn(byAttr(tree, 'data-generate-library-root', 'yes')) : 'no row',
+    )
     const toggle = byAttr(tree, 'data-generate-provider-toggle', PROVIDER)
     check(
       'a row carries the control that opens its own card',
@@ -1214,6 +1338,16 @@ check(
       stub.calls.filter((call) => call.url === PROVIDERS_API).length === readsBefore,
       JSON.stringify(stub.calls.map((call) => call.url)),
     )
+    // PUT KREA BACK. The provider store is shared by every surface in this file, and
+    // later checks re-settle LIVE trees (the metas loop opens each section in turn): a
+    // krea left hidden would erase its section from all of them. The checks that came
+    // before this block only read snapshots, which is why the leak was never noticed.
+    // The settings row is re-settled first so the switch's own props are current — the
+    // snapshot above predates the hide and would toggle the wrong way.
+    const freshSettings = await settle(settingsSlots[0].component, { t }, 'shared-settings')
+    const kreaHide = nodesOf(freshSettings).find((node) => node.props && node.props['data-generate-provider-hide'] === 'krea')
+    const kreaSwitch = kreaHide ? byAttr(kreaHide, 'data-stub', 'switch') : null
+    if (kreaSwitch) kreaSwitch.props.onClick()
   } finally {
     globalThis.fetch = real
   }
@@ -1240,31 +1374,6 @@ check(
   (() => {
     const head = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
     const band = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
-    return 'header: ' + (head ? textIn(head) : 'none') + ' / subheader: ' + (band ? textIn(band) : 'none')
-  })(),
-)
-check(
-  'an image provider\'s section draws like every other one: the name above, the shared count line below',
-  (() => {
-    const head = byAttr(home.tree, 'data-generate-section-toggle', 'krea')
-    const band = byAttr(home.tree, 'data-generate-section-sub', 'krea')
-    const headText = head ? textIn(head) : ''
-    const bandText = band ? textIn(band) : ''
-    // The family TAG ("Image") is the Settings row's, and stays there. On the pane a
-    // Krea section counts in the same words as RunningHub's (founder, 2026-09-23:
-    // *"use same naming on Krea accordion (and all accordions)"*), so the subheader
-    // says the shared family word and neither row ever carries the kind tag.
-    return (
-      headText.includes('Krea') &&
-      !headText.includes(EN['settings.kind.image']) &&
-      bandText.includes(EN['pane.section.family']) &&
-      bandText.includes(EN['pane.section.none']) &&
-      !bandText.includes(EN['settings.kind.image'])
-    )
-  })(),
-  (() => {
-    const head = byAttr(home.tree, 'data-generate-section-toggle', 'krea')
-    const band = byAttr(home.tree, 'data-generate-section-sub', 'krea')
     return 'header: ' + (head ? textIn(head) : 'none') + ' / subheader: ' + (band ? textIn(band) : 'none')
   })(),
 )
@@ -1344,22 +1453,33 @@ check(
     balanceRow ? textIn(balanceRow) : 'no balance row',
   )
   check(
-    'the strip above the accordion is gone: one balance row per provider, each in its subheader',
-    balanceRows.length === heads.length &&
-      heads.every((id) => {
-        const band = byAttr(home.tree, 'data-generate-section-sub', id)
-        const row = byAttr(home.tree, 'data-generate-provider-strip', id)
-        return !!band && !!row && nodesOf(band).includes(row)
-      }),
+    'the strip above the accordion is gone: a balance row lives only in its open section\'s band',
+    (() => {
+      const openIds = nodesOf(home.tree)
+        .filter((node) => node.props && node.props['data-generate-section-body'])
+        .map((node) => node.props['data-generate-section-body'])
+      if (openIds.length === 0 || balanceRows.length !== openIds.length) return false
+      // Every row sits in its own band, and a SHUT section draws no band at all
+      // (founder, 2026-09-23: *"when the accordion is closed don't show the subheader"*).
+      return (
+        openIds.every((id) => {
+          const band = byAttr(home.tree, 'data-generate-section-sub', id)
+          const row = byAttr(home.tree, 'data-generate-provider-strip', id)
+          return !!band && !!row && nodesOf(band).includes(row)
+        }) &&
+        heads.every((id) => openIds.includes(id) || !byAttr(home.tree, 'data-generate-section-sub', id))
+      )
+    })(),
     JSON.stringify(balanceRows.map((node) => node.props['data-generate-provider-strip'])),
   )
   // THE SUBHEADER (founder, 2026-09-23: *"the accordion header for generate is too
   // cluttered. remove the wallet balance, workflows counter, add/refresh icons.
-  // make a subheader with separator top/bottom and move these elements into it"*).
-  // The claims are structural, checked against the tree and the band's own style:
-  // the band sits between the header and the body inside the same card, it carries a
-  // hairline above and below, the header keeps none of what moved, and a collapsed
-  // section shows it too — the band is not behind the toggle.
+  // make a subheader with separator top/bottom and move these elements into it"*, and
+  // on seeing it: *"when the accordion is closed don't show the subheader"*). The
+  // claims are structural, checked against the tree and the band's own style: the band
+  // sits between the header and the body inside the same card, it carries a hairline
+  // above and below, the header keeps none of what moved — and it is behind the toggle:
+  // a shut section draws no band at all.
   check(
     'the subheader sits between the header and the body, with a separator above and below',
     (() => {
@@ -1400,12 +1520,20 @@ check(
     header ? textIn(header) : 'no header',
   )
   check(
-    'a collapsed section still shows its subheader: the band is not behind the toggle',
+    'a shut section shows no subheader at all: the band is behind the toggle (founder, 2026-09-23: *"when the accordion is closed don\'t show the subheader"*)',
     (() => {
-      const band = byAttr(home.tree, 'data-generate-section-sub', 'krea')
-      return !!band && !byAttr(home.tree, 'data-generate-section-body', 'krea') && !!byAttr(band, 'data-generate-provider-strip')
+      const shutBand = byAttr(home.tree, 'data-generate-section-sub', 'krea')
+      const openBand = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
+      return (
+        !shutBand &&
+        !byAttr(home.tree, 'data-generate-provider-strip', 'krea') &&
+        !byAttr(home.tree, 'data-generate-section-body', 'krea') &&
+        !!openBand &&
+        !!byAttr(openBand, 'data-generate-provider-strip') &&
+        !!byAttr(home.tree, 'data-generate-section-body', PROVIDER)
+      )
     })(),
-    'krea is shut on the home screen',
+    'krea is shut and runninghub is open on the home screen',
   )
   const parentOf = (root, node) => nodesOf(root).find((candidate) => candidate.children.includes(node)) || null
   check(
@@ -1451,38 +1579,72 @@ check(
     })(),
     header ? textIn(header) : 'no header',
   )
+  // EVERY SECTION COUNTS ALIKE, read by opening each in turn — one at a time is also how
+  // the accordion works, and a shut section draws no band to read (founder, 2026-09-23:
+  // *"when the accordion is closed don't show the subheader"*). The fixture goes back to
+  // runninghub-open afterwards.
+  const metaLines = []
+  // The card-view check earlier drove THIS instance to a unit surface; the first
+  // re-settle shows it, so walk back to the accordion before opening sections one by
+  // one (the fixture's own state — the home.tree snapshot alone cannot answer here).
+  let openTree = (await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })).tree
+  if (byAttr(openTree, 'data-generate-back', 'yes')) {
+    byAttr(openTree, 'data-generate-back', 'yes').props.onClick()
+    openTree = (await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })).tree
+  }
+  for (const id of heads) {
+    if (!byAttr(openTree, 'data-generate-section-body', id)) {
+      const toggle = byAttr(openTree, 'data-generate-section-toggle', id)
+      if (!toggle) {
+        metaLines.push(null)
+        continue
+      }
+      toggle.props.onClick()
+      openTree = (await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })).tree
+    }
+    const meta = byAttr(openTree, 'data-generate-section-meta', id)
+    metaLines.push(meta ? textIn(meta) : null)
+  }
   check(
     'every section counts its entries with the same word, whatever the provider is',
-    (() => {
-      const metas = heads.map((id) => byAttr(home.tree, 'data-generate-section-meta', id))
-      if (metas.some((node) => !node)) return false
-      const lines = metas.map((node) => textIn(node))
-      // "Workflows · N installed" on all four: a Krea section is not "Image · …" any
-      // more (founder, 2026-09-23: *"use same naming on Krea accordion (and all
-      // accordions)"*).
-      return lines.every((line) => line.startsWith(EN['pane.section.family'] + ' · ')) && lines[0] === 'Workflows · 2 installed'
-    })(),
-    JSON.stringify(heads.map((id) => {
-      const node = byAttr(home.tree, 'data-generate-section-meta', id)
-      return node ? textIn(node) : null
-    })),
+    metaLines.every((line) => line !== null && line.startsWith(EN['pane.section.family'] + ' · ')) &&
+      metaLines[0] === 'Workflows · 2 installed' &&
+      // The family TAG ("Image") is the Settings row's; a Krea band says the shared
+      // family word and never the kind tag (founder, 2026-09-23: *"use same naming on
+      // Krea accordion (and all accordions)"*).
+      !/image/i.test(metaLines[heads.indexOf('krea')] || ''),
+    JSON.stringify(heads.map((id, at) => [id, metaLines[at]])),
   )
-  check(
-    'an image provider\'s section says workflows too, so the two families read alike',
-    (() => {
-      const kreaMeta = byAttr(home.tree, 'data-generate-section-meta', 'krea')
-      const rhMeta = byAttr(home.tree, 'data-generate-section-meta', PROVIDER)
-      if (!kreaMeta || !rhMeta) return false
-      const word = (line) => line.slice(0, line.indexOf(' · '))
-      return word(textIn(kreaMeta)) === word(textIn(rhMeta)) && !/image/i.test(textIn(kreaMeta))
-    })(),
-    byAttr(home.tree, 'data-generate-section-meta', 'krea') ? textIn(byAttr(home.tree, 'data-generate-section-meta', 'krea')) : 'no meta',
-  )
-  check(
-    'an unlinked provider says its state in words rather than drawing an empty wallet',
-    textIn(byAttr(home.tree, 'data-generate-provider-strip', 'krea')).includes(EN['wallet.notLinked']),
-    textIn(byAttr(home.tree, 'data-generate-provider-strip', 'krea')),
-  )
+  {
+    const runninghub = byAttr(openTree, 'data-generate-section-toggle', PROVIDER)
+    if (runninghub) runninghub.props.onClick()
+    await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })
+  }
+  // THE ACCOUNT ARROW'S HOVER (founder, 2026-09-23: *"add onhover on the website link
+  // arrow to theme primary token color"*): state-swapped like the cards, because an
+  // inline style carries no `:hover`.
+  {
+    const linkAtRest = byAttr(home.tree, 'data-generate-account', PROVIDER)
+    if (linkAtRest && typeof linkAtRest.props.onMouseEnter === 'function') {
+      linkAtRest.props.onMouseEnter()
+      const hoveredLink = byAttr((await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })).tree, 'data-generate-account', PROVIDER)
+      check(
+        'the account arrow wears the theme primary while the pointer is on it',
+        !!hoveredLink && !!hoveredLink.props.style && hoveredLink.props.style.color === 'var(--dsw-alias-brand-primary)',
+        hoveredLink ? JSON.stringify(hoveredLink.props.style) : 'no arrow',
+      )
+      if (hoveredLink) hoveredLink.props.onMouseLeave()
+      const restLink = byAttr((await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })).tree, 'data-generate-account', PROVIDER)
+      check(
+        'the arrow lets the colour go when the pointer leaves',
+        !!restLink && !!restLink.props.style && restLink.props.style.color === 'var(--dsw-alias-label-tertiary)',
+        restLink ? JSON.stringify(restLink.props.style) : 'no arrow',
+      )
+    } else {
+      check('the account arrow wears the theme primary while the pointer is on it', false, 'no hover handler on the arrow')
+      check('the arrow lets the colour go when the pointer leaves', false, 'no hover handler on the arrow')
+    }
+  }
   check(
     'the way out to the account page is the glyph beside the provider\'s name',
     (() => {
@@ -1717,6 +1879,26 @@ check(
       'opening a section closes the open one: one section at a time',
       !!byAttr(after, 'data-generate-section-body', 'krea') && !byAttr(after, 'data-generate-section-body', PROVIDER),
       JSON.stringify(sectionIds(after)),
+    )
+    // The image provider's section, read where it can be read now: only its own open
+    // band says what it holds, and the shared count line is the claim.
+    const kreaHead = byAttr(after, 'data-generate-section-toggle', 'krea')
+    const kreaBand = byAttr(after, 'data-generate-section-sub', 'krea')
+    const kreaHeadText = kreaHead ? textIn(kreaHead) : ''
+    const kreaBandText = kreaBand ? textIn(kreaBand) : ''
+    check(
+      'an image provider\'s section draws like every other one: the name above, the shared count line below',
+      kreaHeadText.includes('Krea') &&
+        !kreaHeadText.includes(EN['settings.kind.image']) &&
+        kreaBandText.includes(EN['pane.section.family']) &&
+        kreaBandText.includes(EN['pane.section.none']) &&
+        !kreaBandText.includes(EN['settings.kind.image']),
+      'header: ' + kreaHeadText + ' / subheader: ' + kreaBandText,
+    )
+    check(
+      'an unlinked provider says its state in words rather than drawing an empty wallet',
+      textIn(byAttr(after, 'data-generate-provider-strip', 'krea') || { children: [] }).includes(EN['wallet.notLinked']),
+      textIn(byAttr(after, 'data-generate-provider-strip', 'krea') || { children: [] }),
     )
   } finally {
     globalThis.fetch = real
@@ -2084,12 +2266,14 @@ check(
   '',
 )
 
-// ── S5: the gate, the run and the result ────────────────────────────────────
+// ── S5: the run and the result ──────────────────────────────────────────────
 //
-// Founder, 2026-09-23: *"i want s5 for krea"*. A runnable surface offers the run; the
-// control opens the gate rather than submitting; nothing is posted without the person's
-// own confirm; and what comes back is drawn. The host's half of these rules is
-// verify/run.mjs — this is the half a person touches.
+// Founder, 2026-09-23: *"i want s5 for krea"*, and the same day the gate went away:
+// *"we don't need the confirmation modal, click the button can just run the job"*. A
+// runnable surface offers the run; ONE PRESS posts it outright — no dialog, no preview
+// fetch — the control is disabled while it is on its way, and what comes back is drawn
+// on the strip. The host's half (it still demands `confirmed: true` and refuses a
+// payload the API would reject) is verify/run.mjs — this is the half a person touches.
 {
   const props = {
     t,
@@ -2207,90 +2391,49 @@ check(
     )
     check('nothing is posted until that control is pressed', stub.runs.length === 0, JSON.stringify(stub.runs))
 
+    // ONE PRESS SPENDS (founder, 2026-09-23: *"we don't need the confirmation modal,
+    // click the button can just run the job"*): the press posts the run outright — no
+    // dialog opens and no preview is fetched. What the API would refuse is the host's
+    // answer to refuse (verify/run.mjs drives that half), so an empty required door is a
+    // strip failure rather than a dialog that used to block the button.
     if (runButton) runButton.props.onClick()
-    gate = await settle(paneSlot.component, props, 'pane-run')
-    check(
-      'the run control opens the gate rather than submitting',
-      !!byAttr(gate, 'data-generate-gate', MODEL_UNIT.name) && stub.runs.length === 0,
-      JSON.stringify({ gate: !!byAttr(gate, 'data-generate-gate', MODEL_UNIT.name), runs: stub.runs.length }),
-    )
-    check(
-      'the gate names the model and where the request goes',
-      textIn(gate).includes('Krea 2 Medium Turbo') && textIn(gate).includes('/generate/image/krea/krea-2/medium-turbo'),
-      textIn(gate).slice(0, 200),
-    )
-    check(
-      "the gate shows the request under the form's own labels, never as a raw body",
-      (() => {
-        const rows = nodesOf(gate).filter((node) => node.props && node.props['data-generate-gate-row'])
-        const text = textIn(gate)
-        // Every row is a labelled line; the body itself is only ever inside the disclosure's
-        // JSON, and a nested value must never reach the rows as `[object Object]`.
-        return rows.length >= 2 && !text.includes('[object Object]') && !text.includes('undefined')
-      })(),
-      JSON.stringify(nodesOf(gate).filter((node) => node.props && node.props['data-generate-gate-row']).map((node) => textIn(node))),
-    )
-    check(
-      'a required door that is still empty is named, and the confirm is blocked',
-      !!byAttr(gate, 'data-generate-gate-missing', 'prompt') &&
-        (byAttr(gate, 'data-generate-gate-confirm', 'yes') || { props: {} }).props.disabled === true,
-      JSON.stringify(byAttr(gate, 'data-generate-gate-missing', 'prompt') ? textIn(byAttr(gate, 'data-generate-gate-missing', 'prompt')) : 'no missing line'),
-    )
-    check(
-      'the request itself sits behind one disclosure, closed until it is asked for',
-      !nodesOf(gate).some((node) => node.props && node.props['data-generate-gate-code']) && !!byAttr(gate, 'data-generate-gate-request'),
-      'a gate that shows the JSON unasked is a wall of text',
-    )
-
-    // Cancel returns to the form with every value intact — the rule that makes the gate a
-    // gate rather than a trap.
-    const cancel = byAttr(gate, 'data-generate-gate-cancel', 'yes')
-    if (cancel) cancel.props.onClick()
-    const backAtForm = await settle(paneSlot.component, props, 'pane-run')
-    const promptDoor = nodesOf(backAtForm).find((node) => node.props && node.props['data-generate-door'] === 'prompt')
-    check(
-      'cancelling returns to the form, with the doors still there',
-      !byAttr(backAtForm, 'data-generate-gate', MODEL_UNIT.name) && !!promptDoor,
-      promptDoor ? 'the form is back' : 'no door after cancelling',
-    )
-    if (promptDoor) promptDoor.props.onChange({ target: { value: 'a cinematic glass cabin' } })
-
-    const typed = await settle(paneSlot.component, props, 'pane-run')
-    const again = byAttr(typed, 'data-generate-run', MODEL_UNIT.name)
-    if (again) again.props.onClick()
-    gate = await settle(paneSlot.component, props, 'pane-run')
-    check(
-      'with the required door filled the confirm is live, and not before',
-      !byAttr(gate, 'data-generate-gate-missing', 'prompt') &&
-        (byAttr(gate, 'data-generate-gate-confirm', 'yes') || { props: {} }).props.disabled !== true,
-      JSON.stringify((byAttr(gate, 'data-generate-gate-confirm', 'yes') || { props: {} }).props.disabled),
-    )
-
-    const showRequest = byAttr(gate, 'data-generate-gate-request')
-    if (showRequest) showRequest.props.onClick()
-    const disclosed = await settle(paneSlot.component, props, 'pane-run')
-    check(
-      'the disclosure shows the resolved request, as JSON to read',
-      (() => {
-        const block = nodesOf(disclosed).find((node) => node.props && node.props['data-generate-gate-code'] === MODEL_UNIT.name)
-        const code = block ? nodesOf(block).find((node) => node.props && node.props['data-stub'] === 'code') : null
-        return !!code && textIn(code).includes('"prompt"') && textIn(code).includes('a cinematic glass cabin')
-      })(),
-      'the gate must show what will leave the machine',
-    )
-
-    const confirm = byAttr(disclosed, 'data-generate-gate-confirm', 'yes')
-    if (confirm) confirm.props.onClick()
     const started = await settle(paneSlot.component, props, 'pane-run')
     check(
-      "confirming is what posts the run, with the person's own flag on it",
-      stub.runs.length === 1 && stub.runs[0].confirmed === true && stub.runs[0].name === MODEL_UNIT.name && stub.runs[0].values.prompt === 'a cinematic glass cabin',
-      JSON.stringify(stub.runs),
+      'the run control posts the run outright: no dialog, no preview, one press',
+      !nodesOf(started).some((node) => node.props && node.props['data-stub'] === 'modal') &&
+        !nodesOf(started).some((node) => node.props && node.props['data-generate-gate-row']) &&
+        !stub.calls.some((call) => String(call.url).endsWith('/payload')) &&
+        stub.runs.length === 1 &&
+        stub.runs[0].confirmed === true &&
+        stub.runs[0].name === MODEL_UNIT.name,
+      JSON.stringify({ runs: stub.runs.length, calls: stub.calls.map((call) => String(call.url)) }),
     )
     check(
       'the strip says the run is in flight, with its job id beside the phase',
       !!byAttr(started, 'data-generate-run-strip', 'running') && !!byAttr(started, 'data-generate-run-job', 'job-1'),
       JSON.stringify(nodesOf(started).filter((node) => node.props && (node.props['data-generate-run-strip'] || node.props['data-generate-run-job'])).map((node) => node.props['data-generate-run-strip'] || node.props['data-generate-run-job'])),
+    )
+    // The spinner (founder, 2026-09-23: *"add spinner to left of Running"*): the
+    // harness's own loading glyph, the FIRST thing in the strip — left of the phase —
+    // on the class the injected sheet spins.
+    check(
+      'the strip wears the loading glyph, spinning, left of the phase it reports',
+      (() => {
+        const strip = byAttr(started, 'data-generate-run-strip', 'running')
+        const spin = byAttr(started, 'data-generate-run-spin', 'running')
+        if (!strip || !spin || strip.children[0] !== spin) return false
+        const icon = nodesOf(spin).find((node) => node.props && node.props['data-stub'] === 'loading')
+        return !!icon && icon.props.className === 'dsh-generate-spin'
+      })(),
+      'the spin span is the strip\'s first child and carries the animated class',
+    )
+    check(
+      'the control is disabled while the run is on its way, so one press is one run',
+      (() => {
+        const live = byAttr(started, 'data-generate-run', MODEL_UNIT.name)
+        return !!live && live.props.disabled === true
+      })(),
+      'disabled at queued',
     )
 
     // One poll by hand, which is what the interval would have done two seconds later.
@@ -2313,6 +2456,28 @@ check(
         return !!line && textIn(line).includes(EN['run.saved']) && textIn(line).includes('20260923-job-1.png')
       })(),
       JSON.stringify(nodesOf(done).filter((node) => node.props && node.props['data-generate-saved']).map((node) => textIn(node))),
+    )
+    // No "Run again" button (founder, 2026-09-23: *"run again button can be removed"*):
+    // the parameters card never left, so the form itself is the way back. Type into it
+    // and press Run: what the form held when pressed is what the run posts.
+    check(
+      'there is no Run again button on a finished run — the form never left the screen',
+      !byAttr(done, 'data-generate-run-again', 'yes') && !!byAttr(done, 'data-generate-run', MODEL_UNIT.name),
+      byAttr(done, 'data-generate-run-again', 'yes') ? 'a Run again button is still drawn' : 'the Run control is the way back',
+    )
+    const formBack = done
+    const promptDoor = nodesOf(formBack).find((node) => node.props && node.props['data-generate-door'] === 'prompt')
+    if (promptDoor) promptDoor.props.onChange({ target: { value: 'a cinematic glass cabin' } })
+    const typed = await settle(paneSlot.component, props, 'pane-run')
+    const pressed = byAttr(typed, 'data-generate-run', MODEL_UNIT.name)
+    if (pressed) pressed.props.onClick()
+    await settle(paneSlot.component, props, 'pane-run')
+    check(
+      'what the form held when pressed is what the run posts',
+      stub.runs.length === 2 &&
+        stub.runs[1].confirmed === true &&
+        stub.runs[1].values.prompt === 'a cinematic glass cabin',
+      JSON.stringify(stub.runs.map((run) => run.values)),
     )
   } finally {
     globalThis.fetch = real
@@ -2461,35 +2626,28 @@ check(
       })(),
       JSON.stringify(byAttr(chosen, 'data-generate-mode') ? byAttr(chosen, 'data-generate-mode').props['data-generate-mode'] : 'no segment'),
     )
-    const run = byAttr(chosen, 'data-generate-run', MODEL_UNIT.name)
-    if (run) run.props.onClick()
-    const gate = await settle(paneSlot.component, props, 'pane-split')
-    check(
-      "the gate names the mode, from the host's own echo of the validated option",
-      (() => {
-        const sent = stub.calls.filter((call) => String(call.url).endsWith('/payload') && call.body)
-        const body = sent.length > 0 ? JSON.parse(sent[sent.length - 1].body) : null
-        return textIn(gate).includes('Instance') && textIn(gate).includes('Ultra') && !!body && !!body.options && body.options.instanceType === 'ultra'
-      })(),
-      'what the gate shows is what the request carries',
-    )
-    const prompt = byAttr(gate, 'data-generate-door', 'prompt')
+    // Type first, then press: the run posts outright and carries the chosen mode.
+    const prompt = byAttr(chosen, 'data-generate-door', 'prompt')
     if (prompt) prompt.props.onChange({ target: { value: 'a glass cabin' } })
     const filled = await settle(paneSlot.component, props, 'pane-split')
-    const go = byAttr(filled, 'data-generate-gate-confirm', 'yes')
-    if (go) go.props.onClick()
+    const run = byAttr(filled, 'data-generate-run', MODEL_UNIT.name)
+    if (run) run.props.onClick()
     await settle(paneSlot.component, props, 'pane-split')
     check(
-      'the run that starts carries the chosen mode too',
-      stub.runs.length > 0 && !!stub.runs[0].options && stub.runs[0].options.instanceType === 'ultra',
-      JSON.stringify(stub.runs.map((entry) => entry.options)),
+      'one press runs, and the run carries the mode the segment showed',
+      stub.runs.length === 1 &&
+        stub.runs[0].confirmed === true &&
+        !!stub.runs[0].options &&
+        stub.runs[0].options.instanceType === 'ultra' &&
+        stub.runs[0].values.prompt === 'a glass cabin',
+      JSON.stringify(stub.runs),
     )
   } finally {
     globalThis.fetch = real
   }
 }
 // A run that fails says whose words it is: the provider's message verbatim, plus the run
-// id, plus a way back to the form.
+// id — and the form stays on screen, which is the way back (no Run again button).
 {
   const props = {
     t,
@@ -2505,9 +2663,6 @@ check(
     const typed = await settle(paneSlot.component, props, 'pane-run-failed')
     const runButton = byAttr(typed, 'data-generate-run', MODEL_UNIT.name)
     if (runButton) runButton.props.onClick()
-    const gate = await settle(paneSlot.component, props, 'pane-run-failed')
-    const confirm = byAttr(gate, 'data-generate-gate-confirm', 'yes')
-    if (confirm) confirm.props.onClick()
     tree = await settle(paneSlot.component, props, 'pane-run-failed')
     check(
       "a failed run shows the provider's own message, not a sentence this plugin invented",
@@ -2520,9 +2675,9 @@ check(
       'a failure without its id is not actionable',
     )
     check(
-      'and it offers the way back to the form',
-      !!byAttr(tree, 'data-generate-run-again', 'yes'),
-      'a failed run must not be a dead end',
+      'and there is no Run again button — the failure keeps the form, which is the way back',
+      !byAttr(tree, 'data-generate-run-again', 'yes') && !!byAttr(tree, 'data-generate-run', MODEL_UNIT.name),
+      'a failed run must not be a dead end, and the Run control is still under the doors',
     )
   } finally {
     globalThis.fetch = real
@@ -2596,22 +2751,23 @@ check(
       })(),
       JSON.stringify(byAttr(tree, 'data-generate-preview-frame', ARRAYS_UNIT.name) ? byAttr(tree, 'data-generate-preview-frame', ARRAYS_UNIT.name).props['data-generate-preview-shape'] : 'no canvas'),
     )
-    if (runButton) runButton.props.onClick()
-    let gate = await settle(paneSlot.component, props, 'pane-arrays')
-    const promptDoor = byAttr(gate, 'data-generate-door', 'prompt')
+    // Type first, then press: what the form held — the row included — is what the run
+    // posts, and the press posts it outright (no dialog between the form and the run).
+    const promptDoor = nodesOf(tree).find((node) => node.props && node.props['data-generate-door'] === 'prompt')
     if (promptDoor) promptDoor.props.onChange({ target: { value: 'a glass cabin' } })
-    gate = await settle(paneSlot.component, props, 'pane-arrays')
-    const showRequest = byAttr(gate, 'data-generate-gate-request')
-    if (showRequest) showRequest.props.onClick()
-    gate = await settle(paneSlot.component, props, 'pane-arrays')
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+    const pressed = byAttr(tree, 'data-generate-run', ARRAYS_UNIT.name)
+    if (pressed) pressed.props.onClick()
+    await settle(paneSlot.component, props, 'pane-arrays')
     check(
-      'the gate shows the row itself: the array a run would post is what a person reads',
-      textIn(gate).includes('lora-7'),
-      textIn(gate).slice(0, 300),
+      'the run posts the row itself: the array the form held is the array that went',
+      stub.runs.length === 1 &&
+        !!stub.runs[0].values.styles &&
+        !!stub.runs[0].values.styles[0] &&
+        stub.runs[0].values.styles[0].id === 'lora-7',
+      JSON.stringify(stub.runs.map((entry) => entry.values && entry.values.styles)),
     )
-
-    const cancel = byAttr(gate, 'data-generate-gate-cancel', 'yes')
-    if (cancel) cancel.props.onClick()
+    // After the run the form is still there — a result does not cover the doors.
     tree = await settle(paneSlot.component, props, 'pane-arrays')
 
     // The API's own `maxItems`, drawn: a second moodboard cannot be added.

@@ -41,10 +41,11 @@
 // and a Copy control instead of a discovery button — a plugin cannot type into the
 // composer, and a slash command cannot start a turn (measured 2026-09-22).
 //
-// THE RUN IS NOT HERE. The surface renders the doors as controls, in `ui.order`, with
-// the app's own bounds and defaults, and nothing is submitted: the payload gate, the
-// run strip and the result are the next slice (§10, S5). The surface says so at its
-// foot rather than offering a button that lies.
+// ONE CLICK SPENDS (founder, 2026-09-23: *"we don't need the confirmation modal, click
+// the button can just run the job"*): the surface renders the doors as controls, in
+// `ui.order`, with the app's own bounds and defaults, and the run control posts the run
+// the moment it is pressed. The strip beside the form reports the phase, and the result
+// lands in the preview card — no dialog sits between the form and the provider.
 //
 // THE KEY NEVER REACHES THIS HALF (§12 rule 2). This file has no key in state beyond
 // the field being typed into, no `localStorage`, and no route that returns one: a
@@ -74,6 +75,11 @@ window.__ModuleLoader__.load({
       IconWarningOutline16,
       IconRightUpOutline16,
       IconRefreshOutline16,
+      // The run strip's spinner: the harness's own loading glyph — the one the
+      // connection indicator spins (founder, 2026-09-23: *"add spinner to left of
+      // Running … square shaped DSH spinner"*). Its class and keyframes are the one
+      // sheet this bundle injects; see `apply`.
+      IconLoadingOutline16,
       IconCheckOutline16,
       IconInfoOutline14,
       // The pane's own glyphs: a chevron per accordion header, a flow glyph on a
@@ -121,6 +127,8 @@ window.__ModuleLoader__.load({
     const PROVIDERS_API = '/plugins/generate/providers'
     /** `<providers>/<id>/<action>`, with the id escaped: it is data, not a path. */
     const providerUrl = (id, action) => PROVIDERS_API + '/' + encodeURIComponent(id) + '/' + action
+    /** Where finished runs land: the library root, read and changed in one place. */
+    const LIBRARY_API = '/plugins/generate/library'
 
     const EN = {
       'type.label': 'Generate',
@@ -144,24 +152,15 @@ window.__ModuleLoader__.load({
       'surface.failed': 'That workflow could not be read.',
       'surface.advanced': 'Advanced',
       'surface.advanced.hide': 'Hide advanced',
-      // Said where the run will be, because the form is real and nothing submits:
-      // the payload gate, the run strip and the result are the next slice (§10).
-      'surface.pending': 'Running comes next: the payload gate and the run strip are not built yet.',
-      // S5: the gate and the run strip. The Run control's own label is adapter data
-      // (`ui.runLabel`), so nothing here names a workflow or a provider.
+      // Shown on a runnable-shaped surface whose provider cannot run: the run control,
+      // its strip and its result are what a runnable workflow has instead.
+      'surface.pending': 'This workflow cannot run yet.',
+      // S5: the run. The Run control's own label is adapter data (`ui.runLabel`), so
+      // nothing here names a workflow or a provider. ONE CLICK SPENDS — there is no
+      // confirmation dialog any more (founder, 2026-09-23) — and this is the short
+      // while between the press and the host's answer.
       'run.action': 'Run',
-      'run.gate.title': 'Run this?',
-      'run.gate.body': 'This is exactly what will be sent. Nothing runs until you confirm it, and a run is paid.',
-      'run.gate.request': 'The exact request',
-      'run.gate.hide': 'Hide the request',
-      'run.gate.model': 'Model',
-      'run.gate.prompt': 'Prompt',
-      'run.gate.to': 'Posted to',
-      'run.gate.missing': 'Still empty:',
-      'run.gate.refused': 'These cannot be sent yet:',
-      'run.gate.confirm': 'Confirm and run',
-      'run.gate.cancel': 'Cancel',
-      'run.gate.starting': 'Starting…',
+      'run.starting': 'Starting…',
       'run.phase.queued': 'Queued',
       'run.phase.running': 'Running',
       'run.phase.done': 'Done',
@@ -169,7 +168,6 @@ window.__ModuleLoader__.load({
       'run.job': 'Run',
       'run.result.open': 'Open the image',
       'run.result.alt': 'The generated image',
-      'run.again': 'Run again',
       'run.failed': 'That run failed.',
       // A run's own failures. `no-api-balance` is the same fact as the key row's note:
       // the balance is empty, the key is fine.
@@ -316,6 +314,19 @@ window.__ModuleLoader__.load({
       'settings.workflows.add': 'To add one, ask the agent in chat:',
       'settings.workflows.copy': 'Copy',
       'settings.workflows.copied': 'Copied',
+      // Where finished runs land (founder, 2026-09-23: *"let's make save folder default
+      // on desktop, and the user can click to choose a different folder"*). The host
+      // answers the effective path; this row is the Capture One shape over it — a
+      // clickable path, the Finder arrow, the Space left line.
+      'settings.library.title': 'Save folder',
+      'settings.library.hint': 'Where finished runs are saved. Defaults to your Desktop.',
+      'settings.library.current': 'Saving to',
+      'settings.library.placeholder': '/Users/you/Desktop',
+      'settings.library.default': 'Use Desktop',
+      'settings.library.choose': 'Choose a different folder',
+      'settings.library.reveal': 'Open in Finder',
+      'settings.library.space': 'Space left',
+      'settings.library.failed': 'That folder could not be saved.',
       // Three providers answer about a key without accepting it, and none of those
       // answers is a bad key: Comfy Cloud's subscription has lapsed, Magnific's API
       // entitlement is a 403 its own spec never defines, and Krea's API balance is
@@ -377,20 +388,9 @@ window.__ModuleLoader__.load({
       'surface.failed': '无法读取该工作流。',
       'surface.advanced': '高级',
       'surface.advanced.hide': '收起高级选项',
-      'surface.pending': '运行功能稍后提供：付费前的载荷确认与运行状态尚未构建。',
+      'surface.pending': '该工作流暂不能运行。',
       'run.action': '运行',
-      'run.gate.title': '确认运行？',
-      'run.gate.body': '以下是即将发送的内容。确认之前不会运行，运行会计费。',
-      'run.gate.request': '完整请求',
-      'run.gate.hide': '收起请求',
-      'run.gate.model': '模型',
-      'run.gate.prompt': '提示词',
-      'run.gate.to': '发送至',
-      'run.gate.missing': '仍为空：',
-      'run.gate.refused': '暂时无法发送：',
-      'run.gate.confirm': '确认并运行',
-      'run.gate.cancel': '取消',
-      'run.gate.starting': '正在启动…',
+      'run.starting': '正在启动…',
       'run.phase.queued': '排队中',
       'run.phase.running': '运行中',
       'run.phase.done': '完成',
@@ -398,7 +398,6 @@ window.__ModuleLoader__.load({
       'run.job': '运行',
       'run.result.open': '打开图片',
       'run.result.alt': '生成的图片',
-      'run.again': '再运行一次',
       'run.failed': '这次运行失败了。',
       'error.noBalance': 'API 余额为空，请到服务商的 API 页面充值。',
       'error.noKey': '该服务商还没有连接密钥，请在「设置 → Generate」中连接。',
@@ -479,6 +478,15 @@ window.__ModuleLoader__.load({
       'settings.workflows.add': '要添加工作流，请在对话里对智能体说：',
       'settings.workflows.copy': '复制',
       'settings.workflows.copied': '已复制',
+      'settings.library.title': '保存文件夹',
+      'settings.library.hint': '生成结果的保存位置。默认保存到你的桌面。',
+      'settings.library.current': '正在保存到',
+      'settings.library.placeholder': '/Users/you/Desktop',
+      'settings.library.default': '使用桌面',
+      'settings.library.choose': '选择其他文件夹',
+      'settings.library.reveal': '在 Finder 中打开',
+      'settings.library.space': '剩余空间',
+      'settings.library.failed': '该文件夹无法保存。',
       'note.subscription-inactive': '密钥可用，但此账户没有有效的 Comfy Cloud 订阅，运行会被拒绝。',
       'note.not-entitled': 'Magnific 回应了密钥但没有确认访问权限，因此仅保存、未校验。',
       'note.no-api-balance': '密钥可用，但此 Krea 工作区没有 API 余额，运行会被拒绝。请在 Krea 充值。',
@@ -1072,7 +1080,10 @@ window.__ModuleLoader__.load({
       sections: {
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        // The gap below each section card — the founder's *"increase gap space below
+        // separator and krea card"* (2026-09-23). One number, so every section's
+        // bottom edge gets the same air.
+        gap: 14,
         padding: '14px 12px 2px',
       },
       /**
@@ -1111,10 +1122,10 @@ window.__ModuleLoader__.load({
        * one below, holding the balance, the count line and the two glyph controls that
        * used to crowd the header. The header keeps only the status light, the
        * provider's name with its account glyph, and the chevron — one row whatever a
-       * provider's numbers say. The band is drawn open or shut: the balance and the
-       * count are what a person scans four collapsed sections for, and add and refresh
-       * are how a collapsed one is acted on. It is NOT the toggle — only the header
-       * above it folds the section.
+       * provider's numbers say. The band draws only while the section is OPEN (founder,
+       * the same day: *"when the accordion is closed don't show the subheader"*), so a
+       * shut section is the bare name row. It is NOT the toggle — only the header above
+       * it folds the section.
        */
       sectionSub: {
         display: 'flex',
@@ -1236,7 +1247,10 @@ window.__ModuleLoader__.load({
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
-        padding: '2px 12px 12px',
+        // The space between the band's bottom separator and the first card, the other
+        // half of *"increase gap space below separator and krea card"* (2026-09-23) —
+        // it was 2px, which read as the card stuck to the line.
+        padding: '14px 12px 12px',
       },
       sectionCards: {
         display: 'flex',
@@ -1625,6 +1639,12 @@ window.__ModuleLoader__.load({
         border: '.5px solid var(--dsw-alias-border-l1)',
         borderRadius: 8,
       },
+      /** The spinner the strip wears left of the phase: the loading glyph, spinning. */
+      runSpin: {
+        flex: 'none',
+        display: 'inline-flex',
+        color: 'var(--dsw-alias-label-secondary)',
+      },
       /** The phase, first and strongest: it is the answer to "what is happening". */
       runPhase: {
         flex: 'none',
@@ -1677,6 +1697,14 @@ window.__ModuleLoader__.load({
         minWidth: 0,
         color: 'var(--dsw-alias-label-primary)',
         overflowWrap: 'anywhere',
+        // A PROMPT CAN BE A WHOLE PAGE (founder's screenshot, 2026-09-23: the gate
+        // dialog ran 2674px tall because one row carried every word of a long
+        // prompt). The value scrolls inside a capped box instead of stretching the
+        // dialog — short values never reach the cap — and `contain` keeps a wheel
+        // over the prompt from scrolling the dialog behind it.
+        maxHeight: '40vh',
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
       },
       /** The one disclosure that hides the parameter-ish doors (§10). */
       disclosure: {
@@ -1735,7 +1763,7 @@ window.__ModuleLoader__.load({
      * than a list already in flight.
      */
     const providerStore = (() => {
-      let state = { phase: 'loading', providers: [] }
+      let state = { phase: 'loading', providers: [], library: null }
       let revision = 0
       let inflight = null
       const listeners = new Set()
@@ -1749,10 +1777,10 @@ window.__ModuleLoader__.load({
         try {
           const response = await fetch(PROVIDERS_API, { headers: { accept: 'application/json' } })
           const body = await response.json()
-          if (!response.ok || !body || !Array.isArray(body.providers)) return { phase: 'failed', providers: [] }
-          return { phase: 'ready', providers: body.providers }
+          if (!response.ok || !body || !Array.isArray(body.providers)) return { phase: 'failed', providers: [], library: null }
+          return { phase: 'ready', providers: body.providers, library: body.library || null }
         } catch {
-          return { phase: 'failed', providers: [] }
+          return { phase: 'failed', providers: [], library: null }
         }
       }
 
@@ -1901,7 +1929,7 @@ window.__ModuleLoader__.load({
       // Refresh asks again rather than taking whatever read is already in flight.
       const reload = React.useCallback(() => providerStore.load({ force: true }), [])
 
-      return { phase: state.phase, providers: state.providers, busy, load: reload, save, unlink, setHidden, confirmed, forget }
+      return { phase: state.phase, providers: state.providers, library: state.library, busy, load: reload, save, unlink, setHidden, confirmed, forget }
     }
 
     /**
@@ -2197,42 +2225,21 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The three calls a run makes, in the order a run makes them (S5).
+     * The two calls a run makes: start it, then read it back (S5).
      *
-     * THE HOST BUILDS THE BODY, NOT THIS HALF. The gate shows the request that will leave
-     * the machine, so the request has to be built by the same function that sends it; a
-     * preview assembled here would be a second implementation, and the two would drift
-     * into a dialog that describes something else.
+     * THE HOST BUILDS THE BODY, NOT THIS HALF — and with the confirmation dialog gone
+     * (founder, 2026-09-23) there is no preview step left between the form and the run:
+     * the press posts, and the host's own validation is what answers an incomplete
+     * payload, as a strip failure rather than as a dialog.
      *
      * The key never appears in any of this: the host reads it from the credential store
      * per call (§12 rule 2).
      */
 
-    /** The gate's preview: free, read-only, and the exact body a confirm would post. */
-    async function fetchPayload(provider, name, values, options) {
-      try {
-        const response = await fetch(providerUrl(provider, 'payload'), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify(options ? { name, values, options } : { name, values }),
-        })
-        let body = null
-        try {
-          body = await response.json()
-        } catch {
-          body = null
-        }
-        if (!response.ok || !body) return { ok: false, error: (body && body.error) || 'host-error' }
-        return { ok: true, preview: body }
-      } catch {
-        return { ok: false, error: 'unreachable' }
-      }
-    }
-
     /**
-     * Start it. `confirmed: true` is the person's own action, recorded by the host in the
-     * run's file; the route refuses a call without it, so the gate is not merely a dialog
-     * this half chose to draw.
+     * Start it. `confirmed: true` is the person's own action — the press of the run
+     * control — recorded by the host in the run's file; the route refuses a call without
+     * it, so a stale tab or a script cannot spend what a person never started.
      */
     async function postRun(provider, name, values, options) {
       try {
@@ -3071,18 +3078,19 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The run: the gate, the wait, and the result (S5).
+     * The run: one click, the wait, and the result (S5).
      *
-     * THE GATE IS THE FIRST THING THE CONTROL DRAWS (§12 rule 1). The Run control does
-     * not submit: it asks the host for the exact body a run would post and shows it, and
-     * only a second, explicit press sends it. Cancel returns to the form with every value
-     * intact, which is why the form's state lives in the surface above and this half only
-     * reads it.
+     * ONE CLICK SPENDS (founder, 2026-09-23: *"we don't need the confirmation modal,
+     * click the button can just run the job"*). There is no dialog between the form and
+     * the provider: pressing the run control posts the run immediately, and the strip in
+     * the output column is what reports it. The host still refuses a call without
+     * `confirmed: true` — the press is that confirmation — and it still refuses a payload
+     * the API would reject, so an empty required door fails as a strip error rather than
+     * as a dialog that used to block the button.
      *
      * THE KEY IS NOT HERE. Every call below is to this plugin's own host route; the host
      * reads the key from the credential store, builds the body, posts it, and answers with
-     * a job id. That is also what makes the preview trustworthy: the dialog and the request
-     * are the same function's output, not two implementations that agree today.
+     * a job id.
      *
      * ONE RUN AT A TIME, and the state owns it. A run in flight keeps its job id and its
      * start time, so the phase, the elapsed seconds and the failure all belong to the same
@@ -3096,39 +3104,28 @@ window.__ModuleLoader__.load({
      */
     function useRun({ t, provider, adapter, values, runOption = null }) {
       const [run, setRun] = React.useState({ phase: 'form' })
-      const [requestShown, setRequestShown] = React.useState(false)
       /**
        * THE RUN'S OWN MODE, when the provider declares one (RunningHub's `instanceType`).
        *
        * It lives with the run rather than with the doors because it is not a door: it is the
-       * same choice for every app, it goes to the request's top level, and the gate has to
-       * show it like anything else that changes what a run costs. `null` means "whatever the
-       * provider's own fallback is", so a surface that was never touched sends a complete
-       * request.
+       * same choice for every app, it goes to the request's top level, and it changes what a
+       * run costs. `null` means "whatever the provider's own fallback is", so a surface that
+       * was never touched sends a complete request.
        */
       const declared = runOption && Array.isArray(runOption.modes) && runOption.modes.length > 0 ? runOption : null
       const [mode, setMode] = React.useState(null)
       const modeId = declared ? mode || declared.fallback : null
       const options = declared ? { [declared.key]: modeId } : null
 
-      /** The label a door is drawn under, so the gate names what the form named. */
-      const labelOf = (key) => {
-        const door = adapter ? adapter.doors[key] : null
-        return door && typeof door.label === 'string' ? door.label : key
-      }
+      /** Whether a run is on its way: the control stays disabled until the host answers. */
+      const inFlight = run.phase === 'starting' || run.phase === 'queued' || run.phase === 'running'
 
-      const openGate = async () => {
-        setRequestShown(false)
-        setRun({ phase: 'gate', preview: null })
-        const preview = await fetchPayload(provider, adapter.name, values, options)
-        setRun((current) => {
-          if (current.phase !== 'gate') return current
-          return preview.ok ? { phase: 'gate', preview: preview.preview } : { phase: 'gate', preview: null, error: preview.error }
-        })
-      }
-
+      // The press IS the confirmation (founder, 2026-09-23): no preview is fetched and no
+      // dialog opens — the run posts now, and `confirmed: true` travels with it because
+      // the host still demands a person's own action in the request.
       const confirm = async () => {
-        setRun((current) => ({ ...current, phase: 'starting' }))
+        if (inFlight) return
+        setRun({ phase: 'starting' })
         const started = await postRun(provider, adapter.name, values, options)
         if (!started.ok) {
           setRun({ phase: 'failed', error: started.error, detail: started.detail, startedAt: Date.now(), finishedAt: Date.now() })
@@ -3189,56 +3186,31 @@ window.__ModuleLoader__.load({
         }
       }, [run.jobId])
 
-      const phase = run.phase
-      const preview = run.preview || null
       const elapsed = run.startedAt ? Math.max(0, Math.round(((run.finishedAt || Date.now()) - run.startedAt) / 1000)) : 0
       return {
         ...run,
-        phase,
-        preview,
         elapsed,
-        requestShown,
-        setRequestShown,
-        labelOf,
-        openGate,
         confirm,
+        inFlight,
         // The provider's run option, and the mode chosen in it. A provider that declares
         // none gives `runOption: null` and the surface draws a plain run button.
         runOption: declared,
         mode: modeId,
         setMode,
-        // Cancel and "run again" are the same move: back to the form, values intact.
-        back: () => setRun({ phase: 'form' }),
-        gateOpen: phase === 'gate' || phase === 'starting',
-        blocked: preview === null || preview.missing.length > 0 || preview.refused.length > 0,
+        // NO "RUN AGAIN" CONTROL (founder, 2026-09-23: *"run again button can be
+        // removed"*): the parameters card never leaves the screen, so the Run button
+        // under the doors IS the way to run again — press it and `confirm` starts the
+        // next run with the values still in the form.
       }
     }
 
-    /** The foot of the parameters column: the control that spends, and its gate. */
+    /** The foot of the parameters column: the control that spends. */
     function RunControl({ t, adapter, run }) {
       if (!adapter) return null
-      const row = (key, value) =>
-        h(
-          'div',
-          { key, style: S.gateRow, 'data-generate-gate-row': key },
-          h('span', { style: S.gateKey }, key),
-          h('span', { style: S.gateValue }, value),
-        )
       const runLabel = adapter.runLabel || t('run.action')
-      /**
-       * The run's own options, as rows for the gate: named by the provider's label for the
-       * choice and read from the HOST's echo of the validated option, so the gate shows what
-       * would actually be sent rather than what the browser remembers choosing.
-       */
-      const optionRows = (state) => {
-        const declared = state.runOption
-        const chosen = state.preview && state.preview.options
-        if (!declared || !chosen) return []
-        return Object.entries(chosen).map(([key, value]) => {
-          const mode = (declared.modes || []).find((entry) => entry.id === value)
-          return row(declared.label || key, mode ? mode.label : String(value))
-        })
-      }
+      // One press posts the run (founder, 2026-09-23); while it is on its way the control
+      // is disabled and says so, and the strip in the output column takes over.
+      const label = run.phase === 'starting' ? t('run.starting') : runLabel
       return h(
         'div',
         { style: S.runBlock, 'data-generate-run-block': adapter.name },
@@ -3247,12 +3219,12 @@ window.__ModuleLoader__.load({
         run.runOption
           ? h(SplitButton, {
               t,
-              label: runLabel,
+              label,
               modes: run.runOption.modes,
               value: run.mode,
               onValue: run.setMode,
-              disabled: run.gateOpen,
-              onClick: run.openGate,
+              disabled: run.inFlight,
+              onClick: run.confirm,
               attrs: { 'data-generate-run': adapter.name, 'data-generate-run-mode': run.runOption.key },
             })
           : h(
@@ -3261,90 +3233,11 @@ window.__ModuleLoader__.load({
                 type: 'button',
                 style: { ...S.primary, alignSelf: 'flex-start' },
                 'data-generate-run': adapter.name,
-                disabled: run.gateOpen,
-                onClick: run.openGate,
+                disabled: run.inFlight,
+                onClick: run.confirm,
               },
-              runLabel,
+              label,
             ),
-        run.gateOpen
-          ? h(
-              Modal,
-              {
-                open: true,
-                onClose: run.phase === 'starting' ? () => {} : run.back,
-                title: t('run.gate.title'),
-                closeLabel: t('saved.close'),
-                description: t('run.gate.body'),
-                footer: h(
-                  'div',
-                  { style: S.row },
-                  h('button', { type: 'button', style: S.ghost, disabled: run.phase === 'starting', 'data-generate-gate-cancel': 'yes', onClick: run.back }, t('run.gate.cancel')),
-                  h(
-                    'button',
-                    {
-                      type: 'button',
-                      style: S.primary,
-                      disabled: run.phase === 'starting' || run.blocked,
-                      'data-generate-gate-confirm': 'yes',
-                      onClick: run.confirm,
-                    },
-                    run.phase === 'starting' ? t('run.gate.starting') : t('run.gate.confirm'),
-                  ),
-                ),
-              },
-              run.preview === null
-                ? h('div', { style: S.hint, 'data-generate-gate': 'loading' }, run.phase === 'gate' && run.error ? errorText(t, run.error) : t('surface.loading'))
-                : h(
-                    'div',
-                    { style: S.gateRows, 'data-generate-gate': adapter.name },
-                    row(t('run.gate.model'), adapter.title),
-                    row(t('run.gate.to'), run.preview.endpoint),
-                    ...optionRows(run),
-                    // The host's own rows when it sent them: it knows the labels, and a
-                    // provider whose body is a node list cannot be read by key in here.
-                    ...(Array.isArray(run.preview.rows)
-                      ? run.preview.rows.map((entry, index) => row(entry.label + '\u0000' + index, entry.value))
-                      : Object.entries(run.preview.body).map(([key, value]) => row(run.labelOf(key), String(value)))),
-                    run.preview.missing.length > 0
-                      ? h(
-                          'div',
-                          { style: S.fieldError, role: 'alert', 'data-generate-gate-missing': run.preview.missing.join(',') },
-                          t('run.gate.missing') + ' ' + run.preview.missing.map(run.labelOf).join(', '),
-                        )
-                      : null,
-                    run.preview.refused.length > 0
-                      ? h(
-                          'div',
-                          { style: S.fieldError, role: 'alert', 'data-generate-gate-refused': run.preview.refused.map((entry) => entry.key).join(',') },
-                          t('run.gate.refused') + ' ' + run.preview.refused.map((entry) => run.labelOf(entry.key) + ' (' + entry.reason + ')').join(', '),
-                        )
-                      : null,
-                    h(
-                      'button',
-                      {
-                        type: 'button',
-                        style: { ...S.ghost, alignSelf: 'flex-start' },
-                        'data-generate-gate-request': run.requestShown ? 'open' : 'closed',
-                        onClick: () => run.setRequestShown((shown) => !shown),
-                      },
-                      run.requestShown ? t('run.gate.hide') : t('run.gate.request'),
-                    ),
-                    // THE RESOLVED REQUEST, as JSON to read and never to edit (§10): the
-                    // gate's job is to show a person what leaves the machine.
-                    run.requestShown
-                      ? h(
-                          'div',
-                          { style: S.promptBlock, 'data-generate-gate-code': adapter.name },
-                          h(CodeBlock, {
-                            code: JSON.stringify(run.preview.body, null, 2),
-                            copyLabel: t('settings.workflows.copy'),
-                            copiedLabel: t('settings.workflows.copied'),
-                          }),
-                        )
-                      : null,
-                  ),
-            )
-          : null,
       )
     }
 
@@ -3358,6 +3251,14 @@ window.__ModuleLoader__.load({
           ? h(
               'div',
               { style: S.runStrip, 'data-generate-run-strip': run.phase },
+              // Left of the phase, the harness's own loading glyph spinning on the class
+              // this bundle injects (founder, 2026-09-23: *"add spinner to left of
+              // Running"*).
+              h(
+                'span',
+                { style: S.runSpin, 'data-generate-run-spin': run.phase, 'aria-hidden': true },
+                h(IconLoadingOutline16, { size: 14, className: 'dsh-generate-spin' }),
+              ),
               h('span', { style: S.runPhase }, t('run.phase.' + run.phase)),
               h('span', { style: S.runMeta, 'data-generate-run-elapsed': String(run.elapsed) }, run.elapsed + 's'),
               run.jobId ? h('span', { style: S.runMeta, 'data-generate-run-job': run.jobId }, t('run.job') + ' ' + run.jobId) : null,
@@ -3373,7 +3274,6 @@ window.__ModuleLoader__.load({
                 run.message ? run.message : run.error ? errorText(t, run.error) : t('run.failed'),
               ),
               run.jobId ? h('span', { style: S.runMeta, 'data-generate-run-job': run.jobId }, t('run.job') + ' ' + run.jobId) : null,
-              h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: run.back }, t('run.again')),
             )
           : null,
         // WHERE IT LANDED. The host downloads the bytes on the terminal read (a provider's
@@ -3396,7 +3296,6 @@ window.__ModuleLoader__.load({
                 t('run.result.open'),
                 h(IconRightUpOutline16, { size: 12 }),
               ),
-              h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: run.back }, t('run.again')),
             )
           : null,
       )
@@ -3469,6 +3368,10 @@ window.__ModuleLoader__.load({
       // refresh"*, then the header decluttering that created the band) and the thing
       // it reveals is still the body's.
       const [addShown, setAddShown] = React.useState(false)
+      // The account arrow's hover colour, swapped from state the way the workflow
+      // cards do theirs: an inline style carries no `:hover` (founder, 2026-09-23:
+      // *"add onhover on the website link arrow to theme primary token color"*).
+      const [accountHover, accountHoverProps] = useHover()
       // "Workflows · 2 installed", not "Workflows · 2 workflows installed": the line
       // says the family itself, so the count is only the number after it. The family
       // word is the same on every section (founder, 2026-09-23) — see
@@ -3550,11 +3453,16 @@ window.__ModuleLoader__.load({
                       href: provider.accountUrl,
                       target: '_blank',
                       rel: 'noreferrer',
-                      style: S.sectionAccountIcon,
+                      // Under the pointer the arrow paints the theme's primary; at rest
+                      // it keeps the same tertiary ink it always had.
+                      style: accountHover
+                        ? { ...S.sectionAccountIcon, color: 'var(--dsw-alias-brand-primary)' }
+                        : S.sectionAccountIcon,
                       title: t('settings.account'),
                       'aria-label': t('settings.account'),
                       'data-generate-account': provider.id,
                       onClick: (event) => event.stopPropagation(),
+                      ...accountHoverProps,
                     },
                     h(IconRightUpOutline16, { size: 12 }),
                   )
@@ -3566,14 +3474,15 @@ window.__ModuleLoader__.load({
         // THE SUBHEADER (founder, 2026-09-23: *"the accordion header for generate is
         // too cluttered. remove the wallet balance, workflows counter, add/refresh
         // icons. make a subheader with separator top/bottom and move these elements
-        // into it"*): a band under the header, hairline above and below, holding what
-        // used to crowd the toggle row — the balance, then the count line, then the
-        // add and refresh glyphs. It draws open or shut: the balance and the count are
-        // what a person scans collapsed sections for, and add and refresh are how a
-        // collapsed one is acted on. The header above stays the ONLY toggle, so
-        // nothing in this band folds the section by being clicked, and clicks here do
-        // not bubble into it — the band is the header's sibling, not its child.
-        h(
+        // into it"*, and on seeing it: *"when the accordion is closed don't show the
+        // subheader"*): a band under the header, hairline above and below, holding what
+        // crowded the toggle row — the balance, then the count line, then the add and
+        // refresh glyphs. It draws only while the section is open, so a shut section is
+        // the bare name row. The header stays the ONLY toggle; the band is its sibling,
+        // not its child, so a click here never folds the section. The `&&` renders
+        // nothing when shut — `walk()` normalises booleans to null and React drops
+        // `false` children alike.
+        open && h(
           'div',
           { style: S.sectionSub, 'data-generate-section-sub': provider.id },
           h(
@@ -4243,9 +4152,168 @@ window.__ModuleLoader__.load({
      * provider, a workflow is installed by the agent from a link, so the card carries
      * the sentence to say instead of a discovery button.
      */
+    /**
+     * WHERE FINISHED RUNS LAND (founder, 2026-09-23: *"let's make save folder default
+     * on desktop, and the user can click to choose a different folder. in capture one
+     * its like this, click on icon to open finder"*).
+     *
+     * The Capture One shape: one path line that says where saves go, clickable to open
+     * the OS folder dialog (`{ action: 'choose' }`), an arrow glyph beside it that
+     * reveals the folder in Finder (`{ action: 'reveal' }`), and the "Space left"
+     * number under it. The default root is the Desktop; a host with no dialog
+     * (`canChoose: false`) still shows the path as text and keeps the typed input
+     * below as the way to choose. The input stays for a path nobody wants to click
+     * through to, and the host validates either way — this row never claims a folder
+     * the host refused.
+     */
+    function LibraryFolder({ t, library }) {
+      const [value, setValue] = React.useState('')
+      const [current, setCurrent] = React.useState(null)
+      const [state, setState] = React.useState('idle')
+      const shown = current || library || null
+      // Seed the input once from the host's answer, without clobbering what is typed.
+      const seeded = React.useRef(false)
+      React.useEffect(() => {
+        if (seeded.current || !library) return
+        seeded.current = true
+        setValue(typeof library.path === 'string' ? library.path : '')
+      }, [library])
+
+      const post = async (payload) => {
+        setState('saving')
+        try {
+          const response = await fetch(LIBRARY_API, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          const body = await response.json()
+          if (!response.ok || !body || !body.root) {
+            setState('failed')
+            return
+          }
+          setCurrent(body)
+          // A folder picked in the dialog lands in the input too, so the two ways to
+          // choose never show different paths.
+          setValue(typeof body.path === 'string' ? body.path : '')
+          setState('saved')
+        } catch {
+          setState('failed')
+        }
+      }
+      const savePath = () => post({ path: value.trim() === '' ? null : value.trim() })
+      const useDefault = () => {
+        setValue('')
+        post({ path: null })
+      }
+      // The two Capture One moves: the path itself opens the folder dialog, the arrow
+      // reveals the folder. A cancelled dialog answers the unchanged state, so the row
+      // just settles; a host with no dialog never renders the path as a button.
+      const choosePath = () => post({ action: 'choose' })
+      const revealPath = async () => {
+        try {
+          const response = await fetch(LIBRARY_API, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify({ action: 'reveal' }),
+          })
+          if (response.ok) setState('idle')
+        } catch {
+          setState('failed')
+        }
+      }
+
+      // "Space left" the way Capture One writes it: a number with two decimals and a
+      // unit, only when the host could measure the volume. `shown` is null before the
+      // host has answered at all, and an unanswered row draws no number.
+      const space =
+        shown && typeof shown.freeBytes === 'number' && shown.freeBytes >= 0
+          ? t('settings.library.space') + ' ' + (shown.freeBytes / 1024 ** 3).toFixed(2) + ' GB'
+          : null
+      const rootText = shown && shown.root ? t('settings.library.current') + ' ' + shown.root : t('settings.library.current') + ' …'
+      const canChoose = !!(shown && shown.canChoose)
+
+      return h(
+        'div',
+        { style: S.rowCard, 'data-generate-library': 'yes' },
+        h(
+          'div',
+          { style: S.rowHead },
+          h('span', { style: S.rowIdentity }, h('span', { style: S.rowName }, t('settings.library.title'))),
+        ),
+        h('div', { style: S.rowSummary }, t('settings.library.hint')),
+        h(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+          canChoose
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  style: { ...S.ghost, flex: '1 1 auto', minWidth: 0, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+                  'data-generate-library-root': 'yes',
+                  'data-generate-library-choose': 'yes',
+                  'aria-label': t('settings.library.choose'),
+                  disabled: state === 'saving',
+                  onClick: choosePath,
+                },
+                rootText,
+              )
+            : h('div', { style: { ...S.hint, flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, 'data-generate-library-root': 'yes' }, rootText),
+          shown && shown.root
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  style: { ...S.ghost, flex: 'none', display: 'flex', alignItems: 'center' },
+                  'data-generate-library-reveal': 'yes',
+                  'aria-label': t('settings.library.reveal'),
+                  disabled: state === 'saving',
+                  onClick: revealPath,
+                },
+                h(IconRightUpOutline16, { size: 12 }),
+              )
+            : null,
+        ),
+        space ? h('div', { style: S.hint, 'data-generate-library-space': 'yes' }, space) : null,
+        h(
+          'div',
+          { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } },
+          h('input', {
+            style: { ...S.settingsInput, flex: '1 1 220px' },
+            value,
+            placeholder: t('settings.library.placeholder'),
+            'aria-label': t('settings.library.title'),
+            'data-generate-library-input': 'yes',
+            spellCheck: false,
+            autoComplete: 'off',
+            onChange: (event) => {
+              setValue(event.target.value)
+              if (state === 'failed' || state === 'saved') setState('idle')
+            },
+          }),
+          h(
+            'button',
+            { type: 'button', style: S.secondary, disabled: state === 'saving', 'data-generate-library-save': 'yes', onClick: savePath },
+            t('wallet.key.save'),
+          ),
+          shown && shown.source === 'custom'
+            ? h(
+                'button',
+                { type: 'button', style: S.secondary, disabled: state === 'saving', 'data-generate-library-reset': 'yes', onClick: useDefault },
+                t('settings.library.default'),
+              )
+            : null,
+        ),
+        state === 'failed'
+          ? h('div', { style: S.fieldError, role: 'alert', 'data-generate-library-failed': 'yes' }, t('settings.library.failed'))
+          : null,
+      )
+    }
+
     function GenerateSettings(props) {
       const t = translatorOf(props)
-      const { phase, providers, busy, save, unlink, setHidden, confirmed, forget } = useProviders()
+      const { phase, providers, busy, save, unlink, setHidden, confirmed, forget, library } = useProviders()
       // Which card is open. `undefined` means "the page has not been touched", which is
       // what lets the first-run posture open the first unlinked provider's card — the
       // same posture Models gives a provider with no key anywhere. No effect is needed
@@ -4332,6 +4400,8 @@ window.__ModuleLoader__.load({
             }),
           ),
         ),
+        // Where these providers' runs save, under the rows it belongs to.
+        h(LibraryFolder, { t, library }),
       )
     }
     /** The chip's live text. Thunked copy is read again on every use, not captured. */
@@ -4391,6 +4461,23 @@ window.__ModuleLoader__.load({
      */
     function apply(ctx) {
       const t = ctx.locale.bind(NS)
+      // THE ONE INJECTED SHEET. A bundle's client half is one script — there is no
+      // stylesheet to own — so what CSS alone can do (the run strip's spinner needs
+      // keyframes) travels in one <style> this effect adds and removes with the row.
+      // Skipped where there is no DOM: the verify harness runs this half in Node.
+      ctx.effect(() => {
+        if (typeof document === 'undefined' || !document.head) return () => {}
+        const style = document.createElement('style')
+        style.setAttribute('data-generate-style', 'yes')
+        style.textContent =
+          '@keyframes dsh-generate-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }\n' +
+          '.dsh-generate-spin { animation: dsh-generate-spin 0.9s linear infinite; }\n' +
+          '@media (prefers-reduced-motion: reduce) { .dsh-generate-spin { animation: none; } }'
+        document.head.appendChild(style)
+        return () => {
+          style.remove()
+        }
+      }, 'generate.style')
       ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'generate.copy')
       ctx.effect(() => ctx.sidebarRightTabs.register(generateDefinition(t)), 'generate.type')
       ctx.effect(

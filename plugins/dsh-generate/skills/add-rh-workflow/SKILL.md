@@ -26,8 +26,8 @@ same adapter shape, and an adapter either of them writes must pass
   `multiline`, `default` and `hint` are facts about the app. The validator compares
   them against the live app and fails the adapter when one differs.
 - **One paid run is the user's decision, not yours.** This skill never submits a
-  run. It writes a surface; running it happens in the panel, behind the payload
-  gate.
+  run. It writes a surface; running it happens in the panel, and one press of the
+  run control is what starts it.
 
 ## 1. Ask for the link
 

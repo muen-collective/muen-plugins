@@ -8,10 +8,12 @@
  * and the record beside it keeps the path — "what did we ship and why" (epic 61 §12 rule 4)
  * then answers with a file rather than with a URL that may already be dead.
  *
- * ONE ROOT FOR EVERY PROVIDER, so the library is a property of the install rather than of
- * whoever made the asset:
+ * ONE ROOT, ASKED FRESH (founder, 2026-09-23: *"let's make save folder default on
+ * desktop"*): the root is the folder chosen in Settings → Generate, else the Desktop —
+ * lib/index.js (`libraryState`) resolves it per read — and this module lays the tail
+ * out under whichever root answers:
  *
- *   <profile>/generate/library/<provider>/<workflow>/<yyyymmdd>-<jobId>.<ext>
+ *   <root>/<provider>/<workflow>/<yyyymmdd>-<jobId>.<ext>
  *
  * PROVIDER, THEN WORKFLOW, THEN THE DAY IN THE NAME (chosen by the founder, 2026-09-23).
  * The first two are how a person looks for a thing again — "the outfit swaps from last

@@ -438,7 +438,8 @@ Four rules from §12 are structure here rather than style:
 One job at a time. The host posts the body with the provider's key from the credential store and answers with a
 job id; the pane polls the host every two seconds, which asks Krea and writes the outcome back. The strip says
 `queued`/`running`, the elapsed seconds and the job id; a failure shows **Krea's own message verbatim** beside the
-job id and a way back to the form; a finished run draws the returned image with a link to it.
+job id — and the form never left the screen, so the Run button is the way to try again. A finished run draws the
+returned image with a link to it.
 
 **RunningHub runs too, since 2026-09-23.** Its run is a different job from Krea's and it is built in
 `lib/runninghub-run.js`: the payload is a **node list** built from the adapter's own `(nodeId, fieldName)` pairs
@@ -461,12 +462,14 @@ provider that can spend and one that cannot. Comfy Cloud and Magnific still answ
 their surfaces still say running comes next.
 
 **A FINISHED RUN SAVES ITS BYTES, because a link is not a result** (founder, 2026-09-23: *"also for saving to
-local. we should think about folder organization"*). RunningHub's upload links are documented as lasting a day
-and its output host's lifetime is undocumented, so on the terminal read the host downloads what the provider
-answered and writes it into **one library for the install**:
+local. we should think about folder organization"*, then *"let's make save folder default on desktop, and the user
+can click to choose a different folder"*). RunningHub's upload links are documented as lasting a day and its
+output host's lifetime is undocumented, so on the terminal read the host downloads what the provider answered and
+writes it into **one library for the install**, rooted at the save folder — a chosen folder if there is one, the
+**Desktop** otherwise:
 
 ```
-<profile>/generate/library/<provider>/<workflow>/<yyyymmdd>-<jobId>.<ext>
+<save folder>/<provider>/<workflow>/<yyyymmdd>-<jobId>.<ext>
 ```
 
 Provider, then workflow, then the day as a filename prefix (the founder's call): the first two are how a person
@@ -478,6 +481,16 @@ of the library, and a path that is already there is left alone — a poll may re
 (`saveErrors`), the run still reports what the provider said, and the pane draws the saved path the host
 answered with. Cloudinary is the next destination — the seam is a second write the record names, never a
 dependency of the run.
+
+**THE SAVE-FOLDER ROW IS CAPTURE ONE'S SHAPE** (founder, 2026-09-23: *"in capture one its like this, click on
+icon to open finder"*). Settings → Generate's Save folder row draws the path as a **button** — clicking it opens
+the OS folder dialog (`POST /plugins/generate/library` with `{ action: 'choose' }`, which starts at the current
+root and stores what came back; a cancel answers the unchanged state) — an arrow beside it reveals the folder in
+Finder (`{ action: 'reveal' }`), and the **Space left** line under it carries the volume's free bytes from the
+host's `statfs`. The state answers `canChoose`, so a host with no dialog draws the path as text and 501s the
+choose; the typed input stays for a path nobody wants to click through to, and `Use Desktop` puts the default
+back. The choice persists in `<profile>/generate/library.json`, beside the provider directories and nowhere near
+a key.
 
 **A run's record is provider-neutral.** `lib/run-record.js` owns where a record lives
 (`<profile>/generate/<provider>/runs/<jobId>.json`), how it is written and how it is read; each runner writes its
@@ -506,7 +519,9 @@ ignored. So choosing 9:16 makes the canvas portrait **before** the run and the r
 (`object-fit: contain`, so no aspect is ever cropped), capped at `60vh` because a portrait canvas in a narrow
 pane would otherwise be taller than the screen. A workflow with no aspect door gets a **square** canvas — the one
 shape that never misrepresents a workflow — rather than a guessed one. `RunOutput` no longer draws the image at
-all: it draws the phase, the failure and the open/again controls, and the canvas above it owns the picture.
+all: it draws the phase, the failure and the open link, and the canvas above it owns the picture. There is no
+"Run again" button (founder, 2026-09-23: *"run again button can be removed"*) — the parameters card never leaves
+the screen, so the Run button under the doors is the way to run again.
 
 **The run control is a split button where the provider declares run modes** (founder, 2026-09-23:
 *"RH has option to run as plus vs ultra we can use this shadcn split button"*). RunningHub's own OpenAPI is
@@ -641,7 +656,11 @@ node verify/mount.mjs --static   # registration only
 `verify/mount.mjs` runs the shipped `lib/client.js` in a stubbed loader and reads every registration back off
 a recording ctx. `verify/wallet.mjs` imports `lib/index.js`, mounts the route against a recording web server, and
 drives it with a stubbed RunningHub and a recording credentials seam — including the rule that no response
-body ever carries a key. Its fixtures use the seam's real `source` values (`file`, `env`); they said
+body ever carries a key, and the save folder's own route (**132/132**): the Desktop default, the typed choice
+refusing an unresolvable path, `{ action: 'choose' }` starting the (faked) dialog at the current root and
+storing its answer, a cancel leaving the state alone, a non-absolute answer refused, `{ action: 'reveal' }`
+opening the current root and following a reset to the default, a `501` from a host with no dialog, and a
+failed reveal reported as its own error. Its fixtures use the seam's real `source` values (`file`, `env`); they said
 `store`/`environment` until 2026-09-22, strings the seam never emits, which is how the strip came to call a
 pasted key "from your environment" while every check stayed green. `verify/save-confirmation.mjs` (**65/65**) renders the shipped components with React stood in for by a shim
 with working hooks and a stubbed `fetch`, presses Save and Remove key, and reads what the surface does next: a
@@ -675,7 +694,7 @@ segment sanitiser removed, 77/79 with the save given nothing to fetch). It also 
 refuses an undeclared option and an out-of-list value, the workflow route serves `runnable` from the registry,
 and an adapter's `source` never reaches the page.
 
-`verify/start.mjs` (**236/236**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/start.mjs` (**243/243**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
 the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
 **one accordion section per provider in registry order, all four whether linked or not**, each header holding
@@ -686,7 +705,11 @@ a card carrying its workflow's title and its one-line second row with **no thumb
 header beside refresh revealing that provider's own prompt only when clicked (and wearing a tooltip on hover,
 as refresh does), an empty open section saying so and naming that glyph, a failed list saying so instead of
 wearing the empty state and offering no add control at all, and a workflow's doors rendered as the app's own
-controls. It
+controls. The **Save folder row** is checked in the Capture One shape: the Desktop default drawn from the
+host's own answer, the path as a button that posts `{ action: 'choose' }` and takes the dialog's answer as the
+root, the reveal arrow beside it, the Space left line carrying the host's number, `Use Desktop` putting the
+default back, and the typed input still working as the other way to choose. A finished or failed run is
+checked for **no Run again button** — with the Run control present under the doors, which is the way back. It
 also drives the host half for real over temp directories: what may be listed, and what `readAdapter` refuses.
 Opening a workflow is checked through the founder's 2026-09-23 fixes as well: the way out is a **back arrow with
 its label** and room under it, the surface is a **wrapping row of two cards** — parameters and preview, the first
@@ -705,7 +728,10 @@ the card kit included: **219/220** with the kit's radius and padding changed, wi
 with the chosen mode never sent; **222/223** with the canvas no longer driven by the aspect door,
 with the door no longer found, or with its value no longer parsed; **216/217** with the chevron removed, the
 margin under the back control zeroed, or the floor taken off the decrement; **215/217** with the columns no longer
-wrapping.
+wrapping. The 2026-09-23 save-folder and Run-again checks were mutation-tested the same day: **130/132** with the
+default pointed back at a project folder, **242/243** with the Space left line dropped, **241/243** with the path
+no longer a button, **242/243** with the Run again button restored on a failure, and **131/132** with `{ action:
+'choose' }` starting the dialog anywhere but the current root.
 
 `verify/adapter.mjs` (**96/96**) drives both tools through the definitions the plugin actually registers, with
 a stubbed RunningHub that answers **per app id** — a URL-blind stub would let an adapter naming one app pass

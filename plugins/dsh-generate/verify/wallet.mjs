@@ -21,7 +21,7 @@
  *   node verify/wallet.mjs --static   host cases only
  */
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { Readable } from 'node:stream'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -225,9 +225,11 @@ const module = await import(pathToFileURL(join(ROOT, 'lib/index.js')).href)
 
 /**
  * Mount the shipped host half once, with fresh fakes.
+ * @param folders optional folder-verb fakes (`choose`, `reveal`, `canChoose`) handed
+ *   to `apply` so no test can open a real OS dialog or a real Finder window.
  * @returns the route handler, the credentials fake and the server fake.
  */
-function mount(credentials) {
+function mount(credentials, folders) {
   const server = fakeServer()
   const ctx = {
     get: (name) => (name === 'webServer' ? server : name === 'credentials' ? credentials : undefined),
@@ -237,23 +239,30 @@ function mount(credentials) {
     },
     inject: () => {},
   }
-  module.apply(ctx, { base: BASE })
+  module.apply(ctx, { base: BASE, ...(folders ? { folders } : {}) })
   // The provider routes: one exact path for the list, one prefix for everything the
   // providers answer. The prefix handler dispatches on `req.url`, which is what the
   // fake request carries.
   const prefix = server.routes.find((route) => route.kind === 'prefix')
   const exact = server.routes.find((route) => route.path === PROVIDERS_PATH)
-  return { server, handler: prefix && prefix.handler, list: exact && exact.handler }
+  const library = server.routes.find((route) => route.kind === 'exact' && route.path === '/plugins/generate/library')
+  return { server, handler: prefix && prefix.handler, list: exact && exact.handler, library: library && library.handler }
 }
 
 // 1. the routes themselves
 {
   const { server } = mount(fakeCredentials({}))
-  // TWO registrations, and they are two questions: the list of providers, and
-  // everything one provider answers (its key, its workflows, one workflow). A plugin
-  // per provider would have needed a third and a fourth; the provider id is in the
-  // path instead, which is why one prefix can serve them all.
-  check('exactly two routes are registered', server.routes.length === 2, server.routes.length + ' routes')
+  // THREE registrations, and they are three questions: the list of providers,
+  // everything one provider answers (its key, its workflows, one workflow, its run),
+  // and where finished runs save. A plugin per provider would have needed a fourth
+  // and a fifth; the provider id is in the path instead, which is why one prefix can
+  // serve them all.
+  check('exactly three routes are registered: the list, the provider prefix, and the library', server.routes.length === 3, server.routes.length + ' routes')
+  check(
+    "the save folder answers at an exact '/plugins/generate/library' — no trailing slash, the webServer rule",
+    server.routes.some((route) => route.kind === 'exact' && route.path === '/plugins/generate/library'),
+    server.routes.map((route) => route.kind + ' ' + route.path).join(', '),
+  )
   check(
     "the provider list is an exact '" + PROVIDERS_PATH + "'",
     server.routes.some((route) => route.kind === 'exact' && route.path === PROVIDERS_PATH),
@@ -294,6 +303,146 @@ function mount(credentials) {
     check('the route is a same-origin path (the pane fetches it directly)', true)
   } catch (error) {
     check('the route is a same-origin path (the pane fetches it directly)', false, String(error.message))
+  }
+}
+
+// 1a. the save folder's own route (founder, 2026-09-23: *"let's make save folder
+// default on desktop, and the user can click to choose a different folder. in capture
+// one its like this, click on icon to open finder"*).
+// Driven through the harness matcher's own `match`, like every route here — a path bug
+// would 404 exactly the way the provider routes once did. The data root is a throwaway
+// directory, because storing a choice WRITES `library.json` and that write must never
+// land in the real profile (the same discipline the hidden-test block uses). The folder
+// verbs are FAKES: a verify run must not pop a dialog or a Finder window on anyone's
+// screen, and the fakes record what the route asked for.
+{
+  const dir = await mkdtemp(join(tmpdir(), 'rh-library-'))
+  const previous = process.env.RH_DATA_DIR
+  process.env.RH_DATA_DIR = dir
+  const revealed = []
+  let pickAnswer = { path: '/tmp/dialog-picked' }
+  const folders = {
+    canChoose: true,
+    choose: async (startAt) => {
+      if (pickAnswer && pickAnswer.error) throw new Error(pickAnswer.error)
+      return pickAnswer
+    },
+    reveal: async (path) => {
+      revealed.push(path)
+      return path
+    },
+  }
+  try {
+    const { server, library } = mount(fakeCredentials({}), folders)
+    check(
+      "the matcher claims the save folder route at '/plugins/generate/library'",
+      !!server.match('/plugins/generate/library') && typeof library === 'function',
+      server.routes.map((route) => route.kind + ' ' + route.path).join(', '),
+    )
+    const fresh = await call(library, 'GET')
+    check(
+      'with no choice stored the answer is the Desktop — the default the founder asked for',
+      fresh.statusCode === 200 &&
+        json(fresh).path === null &&
+        json(fresh).source === 'desktop' &&
+        json(fresh).root === join(homedir(), 'Desktop'),
+      JSON.stringify(json(fresh)),
+    )
+    check(
+      'the answer carries whether a folder dialog can run here, and how much space is left',
+      json(fresh).canChoose === true &&
+        (json(fresh).freeBytes === null || (typeof json(fresh).freeBytes === 'number' && json(fresh).freeBytes >= 0)),
+      JSON.stringify({ canChoose: json(fresh).canChoose, freeBytes: json(fresh).freeBytes }),
+    )
+    const chosen = await call(library, 'POST', { path: '/tmp/mitsu-downloads' })
+    check(
+      'a chosen folder is stored and echoed straight back as the root',
+      chosen.statusCode === 200 && json(chosen).source === 'custom' && json(chosen).root === '/tmp/mitsu-downloads',
+      JSON.stringify(json(chosen)),
+    )
+    const again = await call(library, 'GET')
+    check('the choice survives the next read', again.statusCode === 200 && json(again).path === '/tmp/mitsu-downloads', JSON.stringify(json(again)))
+    const refused = await call(library, 'POST', { path: 'relative/folder' })
+    check(
+      'a path that names no folder this side can resolve is refused before it is stored',
+      refused.statusCode === 400 && json(refused).error === 'bad-path' && json(again).path === '/tmp/mitsu-downloads',
+      JSON.stringify(json(refused)),
+    )
+    // THE CLICK-TO-CHOOSE: the dialog runs at the CURRENT root, its answer is stored
+    // like any other choice, and cancelling leaves the state untouched.
+    const pickStarts = []
+    folders.choose = async (startAt) => {
+      pickStarts.push(startAt)
+      return pickAnswer
+    }
+    const picked = await call(library, 'POST', { action: 'choose' })
+    check(
+      'clicking the path opens the dialog AT the current root and stores what came back',
+      picked.statusCode === 200 &&
+        json(picked).source === 'custom' &&
+        json(picked).root === '/tmp/dialog-picked' &&
+        pickStarts[0] === '/tmp/mitsu-downloads',
+      JSON.stringify({ status: picked.statusCode, body: json(picked), pickStarts }),
+    )
+    pickAnswer = { cancelled: true }
+    const cancelled = await call(library, 'POST', { action: 'choose' })
+    check(
+      'a cancelled dialog answers the unchanged state — cancelling is not an error',
+      cancelled.statusCode === 200 && json(cancelled).root === '/tmp/dialog-picked' && json(cancelled).source === 'custom',
+      JSON.stringify(json(cancelled)),
+    )
+    pickAnswer = { path: 'not-absolute' }
+    const badPick = await call(library, 'POST', { action: 'choose' })
+    check(
+      'a dialog answer that names no absolute folder is refused before it is stored',
+      badPick.statusCode === 400 && json(badPick).error === 'bad-path',
+      JSON.stringify(json(badPick)),
+    )
+    // THE REVEAL: it opens whatever the current root is, and answers plainly.
+    const reveal = await call(library, 'POST', { action: 'reveal' })
+    check(
+      'the reveal opens the current root in the file browser',
+      reveal.statusCode === 200 && json(reveal).ok === true && revealed[0] === '/tmp/dialog-picked',
+      JSON.stringify({ status: reveal.statusCode, body: json(reveal), revealed }),
+    )
+    const reset = await call(library, 'POST', { path: null })
+    check(
+      'null goes back to the Desktop default, and the stored choice is gone',
+      reset.statusCode === 200 && json(reset).path === null && json(reset).source === 'desktop' && json(reset).root === join(homedir(), 'Desktop'),
+      JSON.stringify(json(reset)),
+    )
+    const revealDefault = await call(library, 'POST', { action: 'reveal' })
+    check(
+      'after the reset the reveal follows the default too, not the old choice',
+      revealDefault.statusCode === 200 && revealed[revealed.length - 1] === join(homedir(), 'Desktop'),
+      JSON.stringify(revealed),
+    )
+    // A HOST WITH NO DIALOG says so instead of pretending: 501 on choose, and the
+    // state answers canChoose false so the browser half draws the path as text.
+    const noDialog = mount(fakeCredentials({}), { canChoose: false, choose: async () => ({ cancelled: true }), reveal: async () => {} })
+    const noDialogState = await call(noDialog.library, 'GET')
+    const noDialogPick = await call(noDialog.library, 'POST', { action: 'choose' })
+    check(
+      'a host with no folder dialog reports it on the state and answers 501 to a choose',
+      json(noDialogState).canChoose === false && noDialogPick.statusCode === 501 && json(noDialogPick).error === 'unsupported',
+      JSON.stringify({ state: json(noDialogState), pick: json(noDialogPick) }),
+    )
+    const revealFails = mount(fakeCredentials({}), {
+      canChoose: true,
+      choose: async () => ({ cancelled: true }),
+      reveal: async () => {
+        throw new Error('no finder here')
+      },
+    })
+    const failedReveal = await call(revealFails.library, 'POST', { action: 'reveal' })
+    check(
+      'a reveal that cannot run is reported as its own failure, never stored as a choice',
+      failedReveal.statusCode === 500 && json(failedReveal).error === 'reveal-failed',
+      JSON.stringify(json(failedReveal)),
+    )
+  } finally {
+    if (previous === undefined) delete process.env.RH_DATA_DIR
+    else process.env.RH_DATA_DIR = previous
   }
 }
 
