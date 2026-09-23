@@ -1,0 +1,8 @@
+# fast-context — bundle patch layer.
+#
+# One row. The Host half owns the trigger, the retrieval child, and the pre-step
+# injection; the Client half owns the card above the composer. Nothing else is
+# inserted: the plugin publishes no service and patches no shipped row.
+- insert:
+    - id: fast-context
+      name: '@muen/dsh-fast-context'

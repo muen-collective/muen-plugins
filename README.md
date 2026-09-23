@@ -8,6 +8,25 @@ DSH upgrades.
 This is a **monorepo**: one subdirectory per plugin, so we can keep adding plugins (and forks of
 community plugins) without restructuring.
 
+## This repo is public, and that decides what belongs here
+
+The rule is one question: **does the plugin name or serve one client, or exist only for Muen's own
+install?** Yes → it lives in the private sibling **`muen-collective/mitsumeru-plugins`**, not here.
+No → here, where it is safe for a stranger to read.
+
+The asymmetry is why the default is to stay out: **this repo cannot be un-published.** Git history
+keeps what a later delete removes from the tree, so a client plugin pushed here is a permanent public
+record, while a plugin moved *out* of the private repo loses nothing but a copy. When it is genuinely
+unclear whether something is client-bound, it goes to the private repo until the founder answers.
+
+Being **shipped inside the app** is a different axis and does not decide this one: the vendored set
+comes from `SHIPPED_PLUGINS` in the shell (`packages/mitsumeru/src/main/harness.ts`), and a plugin can
+ship without being a market listing — `@muen/dsh-brand-mitsumeru` is the example, since it carries
+Mitsumeru's own identity and is vendored into the public app release rather than offered to the market.
+
+Skills and processes are not plugins and are not here: they live in the private `muen-method`
+(collaborator-only, decision 52), and workflow JSON lives in the private `muen-workflows`.
+
 ## Naming schema (keep consistent — every plugin follows this)
 
 | Thing | Convention | Example |

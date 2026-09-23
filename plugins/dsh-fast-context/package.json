@@ -1,0 +1,35 @@
+{
+  "name": "@muen/dsh-fast-context",
+  "version": "0.1.0",
+  "description": "Pre-send workspace retrieval: one background Explore agent per new session, started the moment the session opens and before the user types. Its evidence pack is prepended to the model's first step, plus a card above the composer showing the run. Gives the context-watchdog's \"New session\" advice somewhere warm to land.",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muen-collective/muen-plugins"
+  },
+  "main": "lib/index.js",
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ]
+}
