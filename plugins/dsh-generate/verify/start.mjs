@@ -41,7 +41,7 @@ import { ADAPTER_SCHEMA, listAdapters, readAdapter } from '../lib/adapter.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
-const PKG_NAME = '@muen/dsh-runninghub'
+const PKG_NAME = '@muen/dsh-generate'
 const WALLET_API = '/plugins/generate/wallet'
 const ADAPTERS_API = '/plugins/generate/adapters'
 const ADAPTER_API = '/plugins/generate/adapter'
@@ -404,7 +404,7 @@ check(
 check('the tab chip stays short, so the card can carry the provider', type.title() === 'Generate', type.title())
 check(
   'ONE Generate settings page, never one per workflow (settings.section is a list)',
-  settingsSlots.length === 1 && settingsSlots[0].options.id === 'runninghub-wallet' && settingsSlots[0].options.label() === 'Generate',
+  settingsSlots.length === 1 && settingsSlots[0].options.id === 'generate' && settingsSlots[0].options.label() === 'Generate',
   JSON.stringify(settingsSlots.map((slot) => slot.options.id)),
 )
 
@@ -740,7 +740,7 @@ try {
 
 // ── the install that is actually on this machine, when there is one ─────────
 
-const profile = join(homedir(), 'Library', 'Application Support', 'Mitsumeru', 'mitsu-dsh', 'profiles', 'mitsu', 'runninghub', 'adapters')
+const profile = join(homedir(), 'Library', 'Application Support', 'Mitsumeru', 'mitsu-dsh', 'profiles', 'mitsu', 'generate', 'adapters')
 const installed = await listAdapters(profile).catch(() => null)
 if (installed === null || installed.entries.length === 0) {
   skip('the installed profile lists at least one workflow', 'nothing installed at ' + profile)
