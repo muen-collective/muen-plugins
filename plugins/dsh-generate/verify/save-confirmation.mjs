@@ -144,6 +144,7 @@ const PRIMITIVES = {
   IconCheckOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'check', ...props }),
   IconInfoOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'info', ...props }),
   IconPlusOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'plus', ...props }),
+  IconChevronLeftOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'chevron-left', ...props }),
   /** The harness's hover bubble: it keeps the label and renders the anchor it wraps. */
   Tooltip: (props) => REACT.createElement('span', { 'data-stub': 'tooltip', label: props.label, side: props.side }, props.children),
   /** The settings hide switch: a 36×20 button whose label lives in `aria-label`. */

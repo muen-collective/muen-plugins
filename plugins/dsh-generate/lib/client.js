@@ -82,6 +82,10 @@ window.__ModuleLoader__.load({
       // section's status light instead (founder, 2026-09-23).
       IconChevronDownOutline14,
       IconChevronRightOutline14,
+      // The surface's way out wears a left chevron (founder, 2026-09-23: *"the All
+      // workflows button should have back arrow"*). The set carries no minus glyph, so
+      // the number stepper's decrement draws U+2212 as text — see `S.stepperButton`.
+      IconChevronLeftOutline14,
       IconBranchOutline16,
       IconPlusOutline16,
       // The add control and the snippet it reveals are the harness's own atoms, not
@@ -122,6 +126,10 @@ window.__ModuleLoader__.load({
       // door, and every workflow surface lives inside this one pane. So the pane's
       // first screen is its card grid, and a card opens that workflow's surface.
       'surface.back': 'All workflows',
+      // The number stepper's two glyph buttons. Both are icon-only, so each carries its
+      // own label for a screen reader and its own hover tooltip.
+      'surface.step.down': 'Decrease',
+      'surface.step.up': 'Increase',
       'surface.loading': 'Reading the workflow…',
       'surface.failed': 'That workflow could not be read.',
       'surface.advanced': 'Advanced',
@@ -351,6 +359,8 @@ window.__ModuleLoader__.load({
       'guide.title': '生成',
       'guide.description': '在这里运行你的工作流',
       'surface.back': '全部工作流',
+      'surface.step.down': '减少',
+      'surface.step.up': '增加',
       'surface.loading': '正在读取工作流…',
       'surface.failed': '无法读取该工作流。',
       'surface.advanced': '高级',
@@ -1256,10 +1266,46 @@ window.__ModuleLoader__.load({
       surface: {
         padding: '10px 12px 24px',
       },
+      /**
+       * The way out, and the room under it (founder, 2026-09-23: *"the All workflows
+       * button should have back arrow … Increase gap space below"*): the chevron rides
+       * with the label, and the control is a ghost button with the arrow's own width
+       * reserved so the label never shifts.
+       */
       surfaceHead: {
         display: 'flex',
         alignItems: 'center',
         gap: 8,
+        marginBottom: 18,
+      },
+      /**
+       * PARAMETERS BESIDE THE OUTPUT (founder, 2026-09-23: *"Design for responsive, past
+       * mobile breakpoint we should 2 column parameters + output preview"*). It is a
+       * WRAPPING FLEX ROW, not a media query: the pane is what changes width — docked,
+       * split, or fullscreen — so the breakpoint is the container's own, and the two
+       * columns stack in a narrow pane and stand side by side in a wide one.
+       */
+      surfaceColumns: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'flex-start',
+        gap: 20,
+      },
+      /** The left column: the doors, and the control that spends. */
+      surfaceParams: {
+        flex: '1 1 320px',
+        minWidth: 260,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      },
+      /** The right column: what the run is doing and what it made. */
+      surfaceOutput: {
+        flex: '1 1 300px',
+        minWidth: 240,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
       },
       /** A door's control. Same field as the key form, tighter under its own label. */
       input: {
@@ -1280,6 +1326,64 @@ window.__ModuleLoader__.load({
         minHeight: 84,
         resize: 'vertical',
         lineHeight: 1.5,
+      },
+      /**
+       * THE NUMBER DOOR IS A STEPPER (founder, 2026-09-23: *"for number input use the
+       * correct primitive"*, with RunningHub's own form as the reference). It is the
+       * same design the founder pasted — a bordered group, a square button either side,
+       * the value centred between them — drawn with the harness's own `Button` and
+       * theme aliases rather than by adding React Aria and Tailwind to a public plugin:
+       * this package declares one external peer and no runtime dependencies, and a
+       * control is not worth a second React stack inside the bundle.
+       */
+      stepper: {
+        display: 'flex',
+        alignItems: 'stretch',
+        marginTop: 6,
+        width: '100%',
+        maxWidth: 180,
+        boxSizing: 'border-box',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '1px solid var(--dsw-alias-border-l1)',
+        borderRadius: 6,
+        overflow: 'hidden',
+      },
+      /**
+       * One side of the stepper. The minus is TEXT, not an icon: the harness's icon set
+       * carries no minus glyph (measured 2026-09-23 — every `Icon*` export under
+       * `@deepseek-ai/dsh-client-ui-primitives`), and a hand-drawn SVG for a horizontal
+       * bar would be a worse answer than U+2212, which is the character the typographic
+       * minus is for.
+       */
+      stepperButton: {
+        flex: 'none',
+        width: 30,
+        padding: 0,
+        font: 'inherit',
+        fontSize: 14,
+        lineHeight: 1,
+        color: 'var(--dsw-alias-label-secondary)',
+        background: 'transparent',
+        border: 'none',
+        borderRight: '1px solid var(--dsw-alias-border-l1)',
+        cursor: 'pointer',
+      },
+      /** The increment sits on the other edge, so its border faces the other way. */
+      stepperButtonUp: {
+        borderRight: 'none',
+        borderLeft: '1px solid var(--dsw-alias-border-l1)',
+      },
+      /** The value: centred, tabular, and quiet about its own edges. */
+      stepperValue: {
+        flex: '1 1 auto',
+        minWidth: 0,
+        marginTop: 0,
+        padding: '7px 4px',
+        textAlign: 'center',
+        fontVariantNumeric: 'tabular-nums',
+        background: 'transparent',
+        border: 'none',
+        borderRadius: 0,
       },
       /** A door the app exposes as an image slot: pick a file, or paste a URL. */
       imageBox: {
@@ -1347,6 +1451,18 @@ window.__ModuleLoader__.load({
         marginTop: 18,
         paddingTop: 14,
         borderTop: '1px solid var(--dsw-alias-border-l1)',
+      },
+      /**
+       * The output column (founder, 2026-09-23): what the run is doing and what it made,
+       * beside the parameters in a wide pane and under them in a narrow one. It draws
+       * nothing at all in the form phase — `data-generate-output-empty` is how a check
+       * knows the column is there and quiet rather than missing.
+       */
+      runOutput: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        minWidth: 0,
       },
       runStrip: {
         display: 'flex',
@@ -2405,11 +2521,23 @@ window.__ModuleLoader__.load({
         setValues((current) => ({ ...current, [key]: next }))
       }
 
+      // The way out wears a left chevron (founder, 2026-09-23: *"the All workflows button
+      // should have back arrow"*), and the label follows it.
       const head = h(
         'div',
         { style: S.surfaceHead },
-        h('button', { type: 'button', style: S.ghost, 'data-generate-back': 'yes', onClick: onBack }, t('surface.back')),
+        h(
+          'button',
+          { type: 'button', style: { ...S.ghost, display: 'inline-flex', alignItems: 'center', gap: 4 }, 'data-generate-back': 'yes', onClick: onBack },
+          h(IconChevronLeftOutline14, { size: 14 }),
+          t('surface.back'),
+        ),
       )
+
+      // The run state is READ HERE, above the early return, because a hook may not be
+      // called conditionally: the run outlives the loading phase, and a person who
+      // started one keeps it while the surface re-renders around them.
+      const run = useRun({ t, provider, adapter, values })
 
       if (phase !== 'ready' || !adapter) {
         return h(
@@ -2467,7 +2595,56 @@ window.__ModuleLoader__.load({
           )
         }
         if (door.type === 'number') {
-          return h('input', { ...shared, type: 'number', value, min: door.min, max: door.max, step: door.step })
+          // A STEPPER, not a bare number input (founder, 2026-09-23). The value stays a
+          // string on the way out, exactly as the text and select doors hand theirs over,
+          // so the host's builder sees one value type from every control. The step is the
+          // app's own when it declares one; the buttons stop at the app's own bounds
+          // rather than letting a click post something the API would refuse.
+          const step = typeof door.step === 'number' && door.step > 0 ? door.step : 1
+          const current = Number(value)
+          const atMin = typeof door.min === 'number' && Number.isFinite(current) && current <= door.min
+          const atMax = typeof door.max === 'number' && Number.isFinite(current) && current >= door.max
+          const nudge = (delta) => () => {
+            const from = Number.isFinite(current) ? current : 0
+            let next = from + delta * step
+            if (typeof door.min === 'number') next = Math.max(door.min, next)
+            if (typeof door.max === 'number') next = Math.min(door.max, next)
+            // Floating steps accumulate error (0.1 three times is 0.30000000000000004),
+            // so the sum is rounded to the step's own precision.
+            const decimals = String(step).includes('.') ? String(step).split('.')[1].length : 0
+            onValue(String(Number(next.toFixed(decimals))))
+          }
+          return h(
+            'div',
+            { style: S.stepper, 'data-generate-stepper': doorKey },
+            h(
+              'button',
+              {
+                type: 'button',
+                style: S.stepperButton,
+                disabled: atMin,
+                title: t('surface.step.down'),
+                'aria-label': t('surface.step.down'),
+                'data-generate-step-down': doorKey,
+                onClick: nudge(-1),
+              },
+              '\u2212',
+            ),
+            h('input', { ...shared, style: { ...S.input, ...S.stepperValue }, type: 'number', value, min: door.min, max: door.max, step }),
+            h(
+              'button',
+              {
+                type: 'button',
+                style: { ...S.stepperButton, ...S.stepperButtonUp },
+                disabled: atMax,
+                title: t('surface.step.up'),
+                'aria-label': t('surface.step.up'),
+                'data-generate-step-up': doorKey,
+                onClick: nudge(1),
+              },
+              h(IconPlusOutline16, { size: 14 }),
+            ),
+          )
         }
         if (door.type === 'image') {
           return h(ImageField, { id, doorKey, value, onChange: onValue, t, provider, canUpload })
@@ -2552,56 +2729,74 @@ window.__ModuleLoader__.load({
         'div',
         { style: S.surface, 'data-generate-surface': 'ready', 'data-generate-unit': adapter.name, 'data-generate-provider': provider },
         head,
-        h('div', { style: S.title }, adapter.title),
-        adapter.blurb ? h('div', { style: S.body }, adapter.blurb) : null,
-        ...main.map(doorRow),
-        advanced.length > 0
-          ? h(
-              'button',
-              {
-                type: 'button',
-                style: S.disclosure,
-                'data-generate-advanced': showAdvanced ? 'open' : 'closed',
-                onClick: () => setShowAdvanced((open) => !open),
-              },
-              (showAdvanced ? t('surface.advanced.hide') : t('surface.advanced')) + ' (' + advanced.length + ')',
-            )
-          : null,
-        showAdvanced ? advanced.map(doorRow) : null,
-        // A surface that can run gets the run strip; one that cannot says so rather than
-        // offering a control that would post a request this plugin cannot build yet.
-        adapter.runnable === true
-          ? h(RunStrip, { key: adapter.name, t, provider, adapter, values })
-          : h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
+        h(
+          'div',
+          { style: S.surfaceColumns, 'data-generate-columns': 'two' },
+          h(
+            'div',
+            { style: S.surfaceParams, 'data-generate-column': 'params' },
+            h('div', { style: S.title }, adapter.title),
+            adapter.blurb ? h('div', { style: S.body }, adapter.blurb) : null,
+            ...main.map(doorRow),
+            advanced.length > 0
+              ? h(
+                  'button',
+                  {
+                    type: 'button',
+                    style: S.disclosure,
+                    'data-generate-advanced': showAdvanced ? 'open' : 'closed',
+                    onClick: () => setShowAdvanced((open) => !open),
+                  },
+                  (showAdvanced ? t('surface.advanced.hide') : t('surface.advanced')) + ' (' + advanced.length + ')',
+                )
+              : null,
+            showAdvanced ? advanced.map(doorRow) : null,
+            // A surface that can run gets the run control under its own form, the way the
+            // reference design puts the button at the foot of the parameters; one that
+            // cannot says so rather than offering a control that would post a request this
+            // plugin cannot build yet.
+            adapter.runnable === true
+              ? h(RunControl, { key: adapter.name, t, adapter, run })
+              : h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
+          ),
+          // The right column: what the run is doing, and what it made. Empty until there
+          // is something to say, so a wide pane does not open on a blank half.
+          adapter.runnable === true ? h(RunOutput, { key: adapter.name + '-out', t, adapter, run }) : null,
+        ),
       )
     }
 
     /**
      * The run: the gate, the wait, and the result (S5).
      *
-     * THE GATE IS THE FIRST THING THIS COMPONENT DRAWS (§12 rule 1). The Run control does
+     * THE GATE IS THE FIRST THING THE CONTROL DRAWS (§12 rule 1). The Run control does
      * not submit: it asks the host for the exact body a run would post and shows it, and
      * only a second, explicit press sends it. Cancel returns to the form with every value
-     * intact, which is why the form's state lives in the surface above and this component
-     * only reads it.
+     * intact, which is why the form's state lives in the surface above and this half only
+     * reads it.
      *
      * THE KEY IS NOT HERE. Every call below is to this plugin's own host route; the host
      * reads the key from the credential store, builds the body, posts it, and answers with
      * a job id. That is also what makes the preview trustworthy: the dialog and the request
      * are the same function's output, not two implementations that agree today.
      *
-     * ONE RUN AT A TIME, and the strip owns it. A run in flight keeps its job id and its
+     * ONE RUN AT A TIME, and the state owns it. A run in flight keeps its job id and its
      * start time, so the phase, the elapsed seconds and the failure all belong to the same
      * attempt. Krea's own message is shown verbatim on a failure, because a sentence this
      * plugin invented about someone else's error helps nobody.
+     *
+     * THE STATE IS A HOOK AND THE VIEW IS TWO PIECES (founder, 2026-09-23: *"2 column
+     * parameters + output preview"*): the control that spends sits at the foot of the
+     * parameters column, and the strip and the result sit in the output column beside it.
+     * Splitting the state from both views is what lets one run be drawn in two places.
      */
-    function RunStrip({ t, provider, adapter, values }) {
+    function useRun({ t, provider, adapter, values }) {
       const [run, setRun] = React.useState({ phase: 'form' })
       const [requestShown, setRequestShown] = React.useState(false)
 
       /** The label a door is drawn under, so the gate names what the form named. */
       const labelOf = (key) => {
-        const door = adapter.doors[key]
+        const door = adapter ? adapter.doors[key] : null
         return door && typeof door.label === 'string' ? door.label : key
       }
 
@@ -2676,12 +2871,28 @@ window.__ModuleLoader__.load({
       }, [run.jobId])
 
       const phase = run.phase
-      const gateOpen = phase === 'gate' || phase === 'starting'
       const preview = run.preview || null
-      const blocked = preview === null || preview.missing.length > 0 || preview.refused.length > 0
       const elapsed = run.startedAt ? Math.max(0, Math.round(((run.finishedAt || Date.now()) - run.startedAt) / 1000)) : 0
-      const back = () => setRun({ phase: 'form' })
+      return {
+        ...run,
+        phase,
+        preview,
+        elapsed,
+        requestShown,
+        setRequestShown,
+        labelOf,
+        openGate,
+        confirm,
+        // Cancel and "run again" are the same move: back to the form, values intact.
+        back: () => setRun({ phase: 'form' }),
+        gateOpen: phase === 'gate' || phase === 'starting',
+        blocked: preview === null || preview.missing.length > 0 || preview.refused.length > 0,
+      }
+    }
 
+    /** The foot of the parameters column: the control that spends, and its gate. */
+    function RunControl({ t, adapter, run }) {
+      if (!adapter) return null
       const row = (key, value) =>
         h(
           'div',
@@ -2689,7 +2900,6 @@ window.__ModuleLoader__.load({
           h('span', { style: S.gateKey }, key),
           h('span', { style: S.gateValue }, value),
         )
-
       return h(
         'div',
         { style: S.runBlock, 'data-generate-run-block': adapter.name },
@@ -2699,57 +2909,57 @@ window.__ModuleLoader__.load({
             type: 'button',
             style: { ...S.primary, alignSelf: 'flex-start' },
             'data-generate-run': adapter.name,
-            disabled: gateOpen,
-            onClick: openGate,
+            disabled: run.gateOpen,
+            onClick: run.openGate,
           },
           adapter.runLabel || t('run.action'),
         ),
-        gateOpen
+        run.gateOpen
           ? h(
               Modal,
               {
                 open: true,
-                onClose: phase === 'starting' ? () => {} : back,
+                onClose: run.phase === 'starting' ? () => {} : run.back,
                 title: t('run.gate.title'),
                 closeLabel: t('saved.close'),
                 description: t('run.gate.body'),
                 footer: h(
                   'div',
                   { style: S.row },
-                  h('button', { type: 'button', style: S.ghost, disabled: phase === 'starting', 'data-generate-gate-cancel': 'yes', onClick: back }, t('run.gate.cancel')),
+                  h('button', { type: 'button', style: S.ghost, disabled: run.phase === 'starting', 'data-generate-gate-cancel': 'yes', onClick: run.back }, t('run.gate.cancel')),
                   h(
                     'button',
                     {
                       type: 'button',
                       style: S.primary,
-                      disabled: phase === 'starting' || blocked,
+                      disabled: run.phase === 'starting' || run.blocked,
                       'data-generate-gate-confirm': 'yes',
-                      onClick: confirm,
+                      onClick: run.confirm,
                     },
-                    phase === 'starting' ? t('run.gate.starting') : t('run.gate.confirm'),
+                    run.phase === 'starting' ? t('run.gate.starting') : t('run.gate.confirm'),
                   ),
                 ),
               },
-              preview === null
-                ? h('div', { style: S.hint, 'data-generate-gate': 'loading' }, phase === 'gate' && run.error ? errorText(t, run.error) : t('surface.loading'))
+              run.preview === null
+                ? h('div', { style: S.hint, 'data-generate-gate': 'loading' }, run.phase === 'gate' && run.error ? errorText(t, run.error) : t('surface.loading'))
                 : h(
                     'div',
                     { style: S.gateRows, 'data-generate-gate': adapter.name },
                     row(t('run.gate.model'), adapter.title),
-                    row(t('run.gate.to'), preview.endpoint),
-                    Object.entries(preview.body).map(([key, value]) => row(labelOf(key), String(value))),
-                    preview.missing.length > 0
+                    row(t('run.gate.to'), run.preview.endpoint),
+                    Object.entries(run.preview.body).map(([key, value]) => row(run.labelOf(key), String(value))),
+                    run.preview.missing.length > 0
                       ? h(
                           'div',
-                          { style: S.fieldError, role: 'alert', 'data-generate-gate-missing': preview.missing.join(',') },
-                          t('run.gate.missing') + ' ' + preview.missing.map(labelOf).join(', '),
+                          { style: S.fieldError, role: 'alert', 'data-generate-gate-missing': run.preview.missing.join(',') },
+                          t('run.gate.missing') + ' ' + run.preview.missing.map(run.labelOf).join(', '),
                         )
                       : null,
-                    preview.refused.length > 0
+                    run.preview.refused.length > 0
                       ? h(
                           'div',
-                          { style: S.fieldError, role: 'alert', 'data-generate-gate-refused': preview.refused.map((entry) => entry.key).join(',') },
-                          t('run.gate.refused') + ' ' + preview.refused.map((entry) => labelOf(entry.key) + ' (' + entry.reason + ')').join(', '),
+                          { style: S.fieldError, role: 'alert', 'data-generate-gate-refused': run.preview.refused.map((entry) => entry.key).join(',') },
+                          t('run.gate.refused') + ' ' + run.preview.refused.map((entry) => run.labelOf(entry.key) + ' (' + entry.reason + ')').join(', '),
                         )
                       : null,
                     h(
@@ -2757,19 +2967,19 @@ window.__ModuleLoader__.load({
                       {
                         type: 'button',
                         style: { ...S.ghost, alignSelf: 'flex-start' },
-                        'data-generate-gate-request': requestShown ? 'open' : 'closed',
-                        onClick: () => setRequestShown((shown) => !shown),
+                        'data-generate-gate-request': run.requestShown ? 'open' : 'closed',
+                        onClick: () => run.setRequestShown((shown) => !shown),
                       },
-                      requestShown ? t('run.gate.hide') : t('run.gate.request'),
+                      run.requestShown ? t('run.gate.hide') : t('run.gate.request'),
                     ),
                     // THE RESOLVED REQUEST, as JSON to read and never to edit (§10): the
                     // gate's job is to show a person what leaves the machine.
-                    requestShown
+                    run.requestShown
                       ? h(
                           'div',
                           { style: S.promptBlock, 'data-generate-gate-code': adapter.name },
                           h(CodeBlock, {
-                            code: JSON.stringify(preview.body, null, 2),
+                            code: JSON.stringify(run.preview.body, null, 2),
                             copyLabel: t('settings.workflows.copy'),
                             copiedLabel: t('settings.workflows.copied'),
                           }),
@@ -2778,16 +2988,26 @@ window.__ModuleLoader__.load({
                   ),
             )
           : null,
-        phase === 'queued' || phase === 'running'
+      )
+    }
+
+    /** The output column: the phase, the failure, and the result. */
+    function RunOutput({ t, adapter, run }) {
+      if (!adapter) return null
+      const anything = run.phase === 'queued' || run.phase === 'running' || run.phase === 'failed' || (run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0)
+      return h(
+        'div',
+        { style: S.runOutput, 'data-generate-run-output': adapter.name, ...(anything ? {} : { 'data-generate-output-empty': 'yes' }) },
+        run.phase === 'queued' || run.phase === 'running'
           ? h(
               'div',
-              { style: S.runStrip, 'data-generate-run-strip': phase },
-              h('span', { style: S.runPhase }, t('run.phase.' + phase)),
-              h('span', { style: S.runMeta, 'data-generate-run-elapsed': String(elapsed) }, elapsed + 's'),
+              { style: S.runStrip, 'data-generate-run-strip': run.phase },
+              h('span', { style: S.runPhase }, t('run.phase.' + run.phase)),
+              h('span', { style: S.runMeta, 'data-generate-run-elapsed': String(run.elapsed) }, run.elapsed + 's'),
               run.jobId ? h('span', { style: S.runMeta, 'data-generate-run-job': run.jobId }, t('run.job') + ' ' + run.jobId) : null,
             )
           : null,
-        phase === 'failed'
+        run.phase === 'failed'
           ? h(
               'div',
               { style: { ...S.runStrip, ...S.runFailed }, role: 'alert', 'data-generate-run-failed': run.error || 'run-failed' },
@@ -2797,10 +3017,10 @@ window.__ModuleLoader__.load({
                 run.message ? run.message : run.error ? errorText(t, run.error) : t('run.failed'),
               ),
               run.jobId ? h('span', { style: S.runMeta, 'data-generate-run-job': run.jobId }, t('run.job') + ' ' + run.jobId) : null,
-              h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: back }, t('run.again')),
+              h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: run.back }, t('run.again')),
             )
           : null,
-        phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0
+        run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0
           ? h(
               'div',
               { style: S.runFigure, 'data-generate-result': run.urls[0] },
@@ -2814,7 +3034,7 @@ window.__ModuleLoader__.load({
                   t('run.result.open'),
                   h(IconRightUpOutline16, { size: 12 }),
                 ),
-                h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: back }, t('run.again')),
+                h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: run.back }, t('run.again')),
               ),
             )
           : null,

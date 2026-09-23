@@ -162,6 +162,8 @@ const PRIMITIVES = {
   IconCheckOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'check', ...props }),
   IconInfoOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'info', ...props }),
   IconPlusOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'plus', ...props }),
+  // The way out of a workflow surface wears this (founder, 2026-09-23).
+  IconChevronLeftOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'chevron-left', ...props }),
   /**
    * The real atoms the add control is built from. `Button` keeps its props on the
    * node, so a check can read the label and call the click. `CodeBlock` is drawn the
@@ -1738,6 +1740,113 @@ check(
   })(),
   JSON.stringify(byAttr(opened.tree, 'data-generate-door', 'scaleBy') && byAttr(opened.tree, 'data-generate-door', 'scaleBy').props),
 )
+
+// ── the three fixes the founder asked for on opening a workflow ──────────────
+//
+// "the All workflows button should have back arrow … Increase gap space below.
+//  Design for responsive, past mobile breakpoint we should 2 column parameters +
+//  output preview. … for number input use the correct primitive" (2026-09-23).
+
+{
+  const props = { t, useTabInfo: () => ({ tab: { navigation: { params: { unit: KREA.name, provider: PROVIDER }, revision: 1 } } }) }
+  const back = byAttr(opened.tree, 'data-generate-back', 'yes')
+  check(
+    'the way out of a surface is a back arrow and its label',
+    (() => {
+      if (!back) return false
+      const glyph = nodesOf(back).find((node) => node.props && node.props['data-stub'] === 'chevron-left')
+      return !!glyph && textIn(back).includes(EN['surface.back'])
+    })(),
+    back ? JSON.stringify(nodesOf(back).filter((node) => node.props && node.props['data-stub']).map((node) => node.props['data-stub'])) : 'no back control',
+  )
+  check(
+    'the back control has room under it before the workflow\'s own title',
+    (() => {
+      const head = byAttr(opened.tree, 'data-generate-back', 'yes')
+      const row = head ? nodesOf(opened.tree).find((node) => node.children.includes(head)) : null
+      return !!row && typeof row.props.style.marginBottom === 'number' && row.props.style.marginBottom >= 14
+    })(),
+    (() => {
+      const head = byAttr(opened.tree, 'data-generate-back', 'yes')
+      const row = head ? nodesOf(opened.tree).find((node) => node.children.includes(head)) : null
+      return row ? String(row.props.style.marginBottom) : 'no head row'
+    })(),
+  )
+  check(
+    'parameters and output are two columns that wrap, so a wide pane puts them side by side',
+    (() => {
+      const columns = byAttr(opened.tree, 'data-generate-columns', 'two')
+      const params = byAttr(opened.tree, 'data-generate-column', 'params')
+      if (!columns || !params) return false
+      // The wrap is the breakpoint: the pane's own width decides, not the window's.
+      if (columns.props.style.flexWrap !== 'wrap') return false
+      const kids = nodesOf(columns)
+      // The parameter column is the first of the two, and it holds the doors.
+      return kids.includes(params) && kids[1] === params && !!byAttr(params, 'data-generate-door-row', 'megapixels')
+    })(),
+    'a wrapping row of two columns is the responsive shape a resizable pane needs',
+  )
+
+  // The number door is the stepper primitive: a decrement, the value, an increment.
+  check(
+    'a number door draws the stepper the founder asked for: minus, value, plus',
+    (() => {
+      const box = byAttr(opened.tree, 'data-generate-stepper', 'megapixels')
+      const down = byAttr(opened.tree, 'data-generate-step-down', 'megapixels')
+      const up = byAttr(opened.tree, 'data-generate-step-up', 'megapixels')
+      const value = byAttr(opened.tree, 'data-generate-door', 'megapixels')
+      if (!box || !down || !up || !value) return false
+      // The value keeps the door's own identity and bounds; the buttons are the new part.
+      return (
+        nodesOf(box).includes(value) &&
+        nodesOf(box).includes(down) &&
+        nodesOf(box).includes(up) &&
+        value.props.min === 0.1 &&
+        value.props.max === 16 &&
+        value.props.step === 0.1 &&
+        down.props['aria-label'] === EN['surface.step.down'] &&
+        up.props['aria-label'] === EN['surface.step.up']
+      )
+    })(),
+    JSON.stringify(!!byAttr(opened.tree, 'data-generate-stepper', 'megapixels')),
+  )
+  const stepUp = byAttr(opened.tree, 'data-generate-step-up', 'megapixels')
+  if (stepUp) stepUp.props.onClick()
+  const stepped = await settle(paneSlot.component, props, 'pane-opened')
+  check(
+    "the increment moves the value by the app's own step, and the value stays a value",
+    String(byAttr(stepped, 'data-generate-door', 'megapixels').props.value) === '2.1',
+    String(byAttr(stepped, 'data-generate-door', 'megapixels').props.value),
+  )
+  // Walk it down to the app's own floor: the value stops there and the button goes dead.
+  let floored = stepped
+  for (let press = 0; press < 24; press += 1) {
+    const down = byAttr(floored, 'data-generate-step-down', 'megapixels')
+    if (!down || down.props.disabled === true) break
+    down.props.onClick()
+    floored = await settle(paneSlot.component, props, 'pane-opened')
+  }
+  check(
+    "the stepper stops at the app's own floor and disables the control that would pass it",
+    (() => {
+      const value = byAttr(floored, 'data-generate-door', 'megapixels')
+      const down = byAttr(floored, 'data-generate-step-down', 'megapixels')
+      return String(value.props.value) === '0.1' && !!down && down.props.disabled === true
+    })(),
+    JSON.stringify({
+      value: String(byAttr(floored, 'data-generate-door', 'megapixels').props.value),
+      disabled: byAttr(floored, 'data-generate-step-down', 'megapixels').props.disabled,
+    }),
+  )
+  // Put it back where the fixture had it, so the checks after this block read the same
+  // surface the fixture authored.
+  const backUp = byAttr(floored, 'data-generate-step-up', 'megapixels')
+  if (backUp) {
+    const input = byAttr(floored, 'data-generate-door', 'megapixels')
+    input.props.onChange({ target: { value: '2' } })
+    await settle(paneSlot.component, props, 'pane-opened')
+  }
+}
 check(
   "a select door offers the app's own options and starts on its default",
   (() => {
@@ -1855,6 +1964,31 @@ check(
       'a surface that can run offers the run, labelled by the adapter itself',
       !!runButton && textIn(runButton) === 'Generate',
       runButton ? textIn(runButton) : 'no run control',
+    )
+    // The two columns, on a surface that has something to put in the second one: the
+    // control that spends stays with the form, and the output column waits beside it
+    // (founder, 2026-09-23: *"2 column parameters + output preview"*).
+    check(
+      'the run control is in the parameters column and the output column waits beside it',
+      (() => {
+        const params = byAttr(tree, 'data-generate-column', 'params')
+        const output = nodesOf(tree).find((node) => node.props && node.props['data-generate-run-output'] === MODEL_UNIT.name)
+        const columns = byAttr(tree, 'data-generate-columns', 'two')
+        if (!params || !output || !columns || !runButton) return false
+        return (
+          nodesOf(params).includes(runButton) &&
+          !nodesOf(output).includes(runButton) &&
+          nodesOf(columns).includes(output) &&
+          columns.props.style.flexWrap === 'wrap'
+        )
+      })(),
+      'the run control belongs with the form; what the run makes belongs beside it',
+    )
+    check(
+      'the output column is drawn and quiet before a run, rather than missing',
+      !!nodesOf(tree).find((node) => node.props && node.props['data-generate-run-output'] === MODEL_UNIT.name) &&
+        !!byAttr(tree, 'data-generate-output-empty', 'yes'),
+      'a column that appears only after a run would make the pane jump',
     )
     check('nothing is posted until that control is pressed', stub.runs.length === 0, JSON.stringify(stub.runs))
 

@@ -364,7 +364,7 @@ start page card; icon + label + 2nd row (no thumbnails)"*):
 | a workflow card | the harness's own start-page card: **glyph + title + one line**, no thumbnail. The second row is whose app it is (when that is a fact), then the blurb; a workflow with no description falls back to the provider's name. The provider is not on the card — the section header names it, and `data-generate-provider` carries the fact in the DOM |
 | the add glyph | the add path for every section, empty or not, in the header beside refresh. One click reveals **that provider's own install prompt** (`addPrompt`) with Copy beside it — the sentence the agent's skill answers to — and opens the section if it was closed |
 | an open section with nothing in it | one quiet line saying so and naming the glyph that fixes it (`pane.section.empty`). It is replaced by the prompt when the glyph is clicked |
-| a workflow | its surface, in the same pane: **doors as controls** in `ui.order` with the primary door first, the app's tooltip under each, `advanced` doors behind one disclosure, the app's own bounds/options/defaults on every control, and a way back to the list |
+| a workflow | its surface, in the same pane: **doors as controls** in `ui.order` with the primary door first, the app's tooltip under each, `advanced` doors behind one disclosure, the app's own bounds/options/defaults on every control, a **number door drawn as the stepper** (minus · value · plus, stopping at the app's own bounds), and **two wrapping columns** — parameters and the run control on the left, the run's own state and its result on the right — each headed by a **← All workflows** control with room under it |
 | the host did not answer | that, said plainly — not a false "nothing installed". A section whose list failed says so inside its own body, and when no provider answered the pane draws the failure block instead of the accordion |
 
 One section is open at a time, and the first provider that actually has workflows opens
@@ -444,6 +444,21 @@ job id and a way back to the form; a finished run draws the returned image with 
 names, which is everything a generation needs. RunningHub's run is a different job — a workflow's node ids, and an
 upload for every image door — so its surface still says running comes next, and the routes answer `501` for it
 rather than pretending.
+
+**The run is one state drawn in two columns** (founder, 2026-09-23: *"Design for responsive, past mobile
+breakpoint we should 2 column parameters + output preview"*). `useRun` owns the state; `RunControl` renders the
+button and the gate at the foot of the parameters column, `RunOutput` renders the phase, the failure and the
+result in the column beside it. The two columns are a **wrapping flex row**, so the breakpoint is the pane's own
+width — docked, split or fullscreen — and they stack in a narrow pane with no media query and no window
+measurement. The output column is drawn empty before a run rather than appearing after one, so the pane does not
+jump.
+
+**A number door is a stepper** (founder, 2026-09-23, with RunningHub's own form as the reference: *"for number
+input use the correct primitive"*): a bordered group with a square decrement, the value centred in tabular
+figures, and a square increment — the design the founder pasted, drawn from the harness's own `Button` and the
+theme aliases rather than by adding React Aria and Tailwind to a public plugin. Each click moves by the app's own
+`step` and stops at the app's own `min`/`max`, where that side's button goes dead. The minus is the character
+U+2212, because the harness's icon set carries no minus glyph (measured 2026-09-23).
 
 ## The install (S3)
 
@@ -575,7 +590,7 @@ trigger translated away**. Those four mutations were not re-run against the acco
 linked pane" one targets a note that no longer exists there — so treat them as the record of the earlier
 suite, not as a score for this one.
 
-`verify/start.mjs` (**209/209**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/start.mjs` (**217/217**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
 the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
 **one accordion section per provider in registry order, all four whether linked or not**, each header holding
@@ -588,6 +603,13 @@ as refresh does), an empty open section saying so and naming that glyph, a faile
 wearing the empty state and offering no add control at all, and a workflow's doors rendered as the app's own
 controls. It
 also drives the host half for real over temp directories: what may be listed, and what `readAdapter` refuses.
+Opening a workflow is checked through the founder's 2026-09-23 fixes as well: the way out is a **back arrow with
+its label** and room under it, the surface is a **wrapping two-column row** (doors and the run control in the
+first, the output column in the second, drawn empty before a run), and a **number door is the stepper** — the
+increment moves by the app's own `step`, and walking it down stops at the app's own floor with that button
+disabled. Mutation-tested the same day: **216/217** with the chevron removed, the margin under the back control
+zeroed, the floor taken off the decrement, or the empty-output marker flipped; **215/217** with the columns no
+longer wrapping.
 
 `verify/adapter.mjs` (**96/96**) drives both tools through the definitions the plugin actually registers, with
 a stubbed RunningHub that answers **per app id** — a URL-blind stub would let an adapter naming one app pass
