@@ -24,8 +24,8 @@
  *   GET    /plugins/generate/providers/<id>/workflows → what it has installed
  *   GET    /plugins/generate/providers/<id>/workflow?name=  → one workflow, whole
  *
- * THREE PROVIDERS (providers.js): Krea (image), RunningHub and Comfy Cloud
- * (workflows). Every route is provider-addressed, so a fourth provider is one
+ * THREE PROVIDERS (providers.js), in the order every surface shows them: RunningHub,
+ * Krea, Comfy Cloud. Every route is provider-addressed, so a fourth provider is one
  * object in that file.
  *
  * S3 ADDS THE INSTALL, and it is two tools and a skill, not a route:

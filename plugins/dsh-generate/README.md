@@ -48,13 +48,13 @@ a person manages the account at, the sentence that installs one of its workflows
 opens (which is how a key is validated before it is stored), where its data lives under the plugin root, and how
 to list and read its workflows.
 
-**Three are registered, in the order the surfaces show them — image providers first (founder, 2026-09-23:
-*"add image provider, then RunningHub … I have accounts at Krea API … I also have account Comfy Cloud"*):**
+**Three are registered, and the registry's own order is the order every surface shows them in (founder,
+2026-09-23: *"the order of providers is: RunningHub, Krea, Comfy Cloud"*):**
 
 | Provider | Family | Host | Key check | Key page |
 |---|---|---|---|---|
-| Krea | image | `api.krea.ai` | `GET /jobs`, `Authorization: Bearer` | krea.ai/settings/api-tokens |
 | RunningHub | workflow | `www.runninghub.ai` | `POST /uc/openapi/accountStatus`, `Authorization: Bearer` | runninghub.ai/call-api/bill-task?tab=keys |
+| Krea | image | `api.krea.ai` | `GET /jobs`, `Authorization: Bearer` | krea.ai/settings/api-tokens |
 | Comfy Cloud | workflow | `cloud.comfy.org` | `GET /api/user`, `X-API-Key` | platform.comfy.org/profile/api-keys |
 
 **Magnific was the fourth, registered and removed the same day.** It was taken for a one-month trial to test;
@@ -103,7 +103,7 @@ module background with a 32px input.
 | State | Dot | What the row says |
 |---|---|---|
 | linked and answered | green | the balance, when the provider has one — otherwise `Key saved` |
-| linked, unverified | amber | why: no active subscription, or an access check the provider never confirms |
+| linked, unverified | amber | why: no active subscription (Comfy Cloud), or an empty API balance (Krea) |
 | stored but refused | red | the key is no longer accepted; link a new one |
 | no key yet | hollow | `No key linked` |
 

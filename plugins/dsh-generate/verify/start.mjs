@@ -392,7 +392,7 @@ function stubHost({ units = [], file = null, failList = false, linked = true } =
     fetch: async (url, init = {}) => {
       calls.push({ url, method: (init.method || 'GET').toUpperCase() })
       if (url === PROVIDERS_API) {
-        // The registry's own order: krea, runninghub, comfycloud.
+        // The registry's own order: runninghub, krea, comfycloud.
         const unlinked = (provider) => ({
           ...provider,
           linked: false,
@@ -406,7 +406,6 @@ function stubHost({ units = [], file = null, failList = false, linked = true } =
         })
         return ok({
           providers: [
-            unlinked(OTHER_PROVIDERS[0]),
             {
               id: PROVIDER,
               label: 'RunningHub',
@@ -424,6 +423,7 @@ function stubHost({ units = [], file = null, failList = false, linked = true } =
               error: null,
               workflows: units.length,
             },
+            unlinked(OTHER_PROVIDERS[0]),
             unlinked(OTHER_PROVIDERS[1]),
           ],
         })
@@ -521,14 +521,14 @@ check(
     .filter((node) => node.props && node.props['data-generate-provider-card'])
     .map((node) => node.props['data-generate-provider-card'])
   check(
-    'the one settings page draws a row per provider, image providers first',
-    cardIds.join(',') === 'krea,runninghub,comfycloud',
+    'the one settings page draws a row per provider, in the registry order',
+    cardIds.join(',') === 'runninghub,krea,comfycloud',
     JSON.stringify(cardIds),
   )
   const dots = nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-dot'])
   check(
     'every row carries a credential dot that says which state it is in',
-    dots.length === 3 && dots.map((node) => node.props['data-generate-provider-dot']).join(',') === 'none,ok,none',
+    dots.length === 3 && dots.map((node) => node.props['data-generate-provider-dot']).join(',') === 'ok,none,none',
     JSON.stringify(dots.map((node) => node.props['data-generate-provider-dot'])),
   )
   check(

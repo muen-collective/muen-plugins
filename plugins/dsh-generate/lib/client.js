@@ -24,7 +24,8 @@
 //                 what the founder ruled out.
 //
 // ONE PLUGIN, SEVERAL PROVIDERS (founder, 2026-09-22). Three are registered in the host
-// half (Krea, RunningHub, Comfy Cloud), image providers first — Magnific was removed
+// half, in this order everywhere: RunningHub, Krea, Comfy Cloud (founder, 2026-09-23:
+// "the order of providers is: RunningHub, Krea, Comfy Cloud") — Magnific was removed
 // 2026-09-23 (founder: "krea and comfy cloud works, you can remove magnific"). The pane
 // is the hub: a meter per linked provider, then a card per installed workflow from every
 // provider, and a card opens that workflow's surface in the same pane. The provider

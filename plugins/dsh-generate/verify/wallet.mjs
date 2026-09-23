@@ -277,13 +277,13 @@ function mount(credentials) {
   )
   check(
     'and it claims every route the pane and the agent call',
-    ['krea', 'runninghub', 'comfycloud'].every(
+    ['runninghub', 'krea', 'comfycloud'].every(
       (id) =>
         !!server.match(PROVIDERS_PATH + '/' + id + '/key') &&
         !!server.match(PROVIDERS_PATH + '/' + id + '/workflows') &&
         !!server.match(PROVIDERS_PATH + '/' + id + '/workflow'),
     ),
-    ['krea', 'runninghub', 'comfycloud']
+    ['runninghub', 'krea', 'comfycloud']
       .map((id) => id + ':' + String(!!server.match(PROVIDERS_PATH + '/' + id + '/key')))
       .join(' '),
   )
@@ -304,8 +304,8 @@ function mount(credentials) {
   check('the provider list answers 200', res.statusCode === 200, res.statusCode)
   const ids = body && Array.isArray(body.providers) ? body.providers.map((provider) => provider.id) : []
   check(
-    'it names every provider this build ships, image providers first',
-    ids.join(',') === 'krea,runninghub,comfycloud',
+    'it names every provider this build ships, in the order the surfaces show them',
+    ids.join(',') === 'runninghub,krea,comfycloud',
     JSON.stringify(ids),
   )
   check(

@@ -16,21 +16,28 @@
  *      service exposes `register`, `registerFactory` and `inject` only), so "one page
  *      that several plugins contribute to" has no seam in this harness today.
  *
- * WHAT A PROVIDER OWNS: its id and label, the family it belongs to (`kind`, which is
- * all the settings page needs to order the list Image first and Workflows second),
- * the credential reference its key lives under, the account page that issues that
+ * WHAT A PROVIDER OWNS: its id and label, the family it belongs to (`kind`, which is the
+ * tag the settings row carries — Image or Workflows), the credential reference its key
+ * lives under, the account page that issues that
  * key, the page a person manages the account at, the prompt that installs one of its
  * workflows, how to read the account a key opens (which is how a key is validated
  * before it is stored), where its own data lives under the plugin root, and how to
  * list and read its workflows.
  *
- * THREE PROVIDERS, IN THE ORDER THE SURFACES SHOW THEM (founder, 2026-09-23: *"add
- * image provider, then RunningHub … I have accounts at Krea API … I also have account
- * Comfy Cloud"*):
+ * THREE PROVIDERS, AND THIS ARRAY IS THE ORDER EVERY SURFACE SHOWS THEM IN (founder,
+ * 2026-09-23: *"the order of providers is: RunningHub, Krea, Comfy Cloud"* — the host
+ * lists `PROVIDERS` in registry order and the settings page draws that list as it
+ * arrives, so the order here is the order on the page, and `kind` is a tag rather than
+ * a sort key):
  *
- *   krea         image      https://api.krea.ai
  *   runninghub   workflow   https://www.runninghub.ai
+ *   krea         image      https://api.krea.ai
  *   comfycloud   workflow   https://cloud.comfy.org
+ *
+ * RunningHub leads because it is the provider this plugin was built for and the one the
+ * workspace already runs; the order was image-first only while the registry was being
+ * filled (Krea and Magnific were added to it first, 2026-09-23) and the founder
+ * corrected it the same day.
  *
  * MAGNIFIC WAS REGISTERED AND REMOVED THE SAME DAY (2026-09-23). It was the fourth
  * provider, taken for a one-month trial to test; the founder tested Krea and Comfy
@@ -194,7 +201,8 @@ function accountOf(data) {
 export const runninghub = {
   id: 'runninghub',
   label: 'RunningHub',
-  /** What this provider makes. The settings page orders Image before Workflows. */
+  /** What this provider makes. The settings row tags it; the list order is the
+   * registry's, not this field's. */
   kind: 'workflow',
   /** The credential reference. A `CredentialRef` is the environment-variable-name
    * half of the credentials seam, so this string is also the name a person may
@@ -348,10 +356,12 @@ export const comfycloud = {
 }
 
 /**
- * Every provider this build speaks to, in the order the surfaces show them:
- * the image providers first, then the workflow providers (founder, 2026-09-23).
+ * Every provider this build speaks to, in the order the surfaces show them
+ * (founder, 2026-09-23: *"the order of providers is: RunningHub, Krea, Comfy
+ * Cloud"*). Reordering this array reorders the settings page, the pane's meters and
+ * every card list that follows them.
  */
-export const PROVIDERS = [krea, runninghub, comfycloud]
+export const PROVIDERS = [runninghub, krea, comfycloud]
 
 /**
  * One provider by id, or null.
