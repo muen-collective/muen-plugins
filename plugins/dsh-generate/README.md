@@ -34,7 +34,7 @@ prefix as `pathname === prefix || pathname.startsWith(prefix + '/')` (`@deepseek
 through to the SPA fallback as a 404 with an empty body. That was shipped on 2026-09-23 and broke every
 provider route at once; `verify/wallet.mjs` now runs its cases through a copy of the harness matcher, which
 is the check that would have caught it.
-| `ctx.skills` | `add-rh-workflow`, read from `skills/add-rh-workflow/SKILL.md` at apply time |
+| `ctx.skills` | two runtime skills, read from `skills/<name>/SKILL.md` at apply time: **`add-rh-workflow`** (install: name the doors, confirm, write the adapter) and **`design-generate-screen`** (design: which doors stand on the main screen, what they are called, what the button and the gate show) |
 
 ## Providers — one plugin, several of them
 
@@ -497,6 +497,29 @@ and epic 61 §2 does not need it while the first source holds (D16 is moot), so 
 `workflowId`: a ComfyUI workflow link or id is refused as an unrecognised app reference rather than
 half-read.
 
+### Designing the screen (`design-generate-screen`)
+
+The install produces a file; something still has to decide what a person sees. That is the second shipped
+skill, and it is why there are two: a model handed one long document does the mechanical half (read the app,
+write the fields) and skips the judgement half (which doors stand on the main screen, what they are called,
+what the button says). Split, each document's rules are read where they apply.
+
+The design skill is a pass over the adapter's authored fields against the pane's own rules:
+
+- **Five controls, and the app picks one.** `image`, `text`, `number`, `select` — the adapter's vocabulary —
+  plus `list`, which only a catalogue's array-of-objects field earns. A door the pane cannot draw is dropped,
+  not guessed at.
+- **Four doors on the main screen** (`house.mainDoors`), one of them `primary`; the rest behind the one
+  disclosure `advanced` means. Seeds and sampling knobs are advanced by default.
+- **The order is the work's order** — subject, references, notes — and `ui.order` beats everything.
+- **The words are the profile's**: `label`, `hint`, `title`, `blurb`, `ui.runLabel`, and `ui.expect` only when
+  the wait was measured or told.
+- **Five screens carry a workflow** and only one is per-workflow: the start-page card, the pane home, the
+  workflow surface, the payload gate, the run strip and result. The skill walks all five so a design does not
+  fight chrome it cannot change.
+- **It writes no plugin code.** A design that needs a shape the pane does not have is a plugin change, and the
+  skill says so rather than inventing one.
+
 ## Install
 
 ```
@@ -523,7 +546,7 @@ node verify/adapter.mjs          # the install: doors read, adapters written and
 node verify/models.mjs           # the Krea models: the catalogue, the profile layer, both routes
 node verify/run.mjs              # S5 + the upload: the payload builder (lists included), the gate the route
                                  # enforces, the poll, the record, and the asset route an image door calls
-node verify/skill.mjs            # the skill's order, and that the plugin has no write path
+node verify/skill.mjs            # both skills' order, and that the plugin has no write path
 node verify/start.mjs            # the hub: the cards, the surface, one settings page, and what may be listed
 node verify/mount.mjs --static   # registration only
 ```
@@ -552,7 +575,7 @@ trigger translated away**. Those four mutations were not re-run against the acco
 linked pane" one targets a note that no longer exists there — so treat them as the record of the earlier
 suite, not as a score for this one.
 
-`verify/start.mjs` (**168/168**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/start.mjs` (**205/205**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
 the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
 **one accordion section per provider in registry order, all four whether linked or not**, each header naming
@@ -564,7 +587,7 @@ wearing the empty state and offering no add control at all, and a workflow's doo
 controls. It
 also drives the host half for real over temp directories: what may be listed, and what `readAdapter` refuses.
 
-`verify/adapter.mjs` (**86/86**) drives both tools through the definitions the plugin actually registers, with
+`verify/adapter.mjs` (**96/96**) drives both tools through the definitions the plugin actually registers, with
 a stubbed RunningHub that answers **per app id** — a URL-blind stub would let an adapter naming one app pass
 against another app's doors, which is the confusion the pair check exists to catch. Its fixtures are trimmed
 copies of the committed S0 receipts, so the shapes are the shapes the live API returned, including the two
@@ -579,11 +602,18 @@ distinctly; an adapter with no `ui` block still passes; and no call creates the 
 seed label**, **84/86 when the derived values stop being compared** and **83/86 when the data root ignores
 `--profile`** — the checks fail on the defects they were written for.
 
-`verify/skill.mjs` (**36/36**) mounts the plugin against a recording skills registry and reads the text the
-host would serve: it is the shipped file byte for byte, the ask comes before the fetch, the confirmation comes
-before the write, the agent is told to use its own file tool, and the host half contains no `writeFile`,
-`mkdir` or LLM import at all. It scores **35/36 with the confirmation step renamed away** and **35/36 with the
-rule against invented authors removed**.
+`verify/skill.mjs` (**56/56**) mounts the plugin against a recording skills registry and reads the text the
+host would serve for **both** skills: each is the shipped file byte for byte, `add-rh-workflow`'s ask comes
+before its fetch and its confirmation before its write, `design-generate-screen`'s rules come before its steps
+and it carries the four rules the pane cannot bend (no node id or field name drawn, nothing spends without the
+gate, the app is the authority on numbers, four doors on the main screen), its five controls and its five
+screens are all named, it sends an uninstalled workflow back to the install skill, and the host half contains
+no `writeFile`, `mkdir` or LLM import at all. Mutation-tested the same day the design skill landed (**56
+checks**): **55/56 with the confirmation step renamed away**, **55/56 with the rule against invented authors
+removed**, **55/56 with the "no node id, no field name" rule removed**, **55/56 with the gate rule removed**,
+**55/56 with the four-door budget turned into "any number of doors"**, **55/56 with the opening design step
+renamed**, and **55/56 with the rules moved after the steps** — every one fails on the claim it breaks, and
+none of them takes a second check down with it.
 
 ## Not in this package, by rule
 

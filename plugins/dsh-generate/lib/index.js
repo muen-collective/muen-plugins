@@ -31,12 +31,15 @@
  * Krea, Comfy Cloud, Magnific. Every route is provider-addressed, so a fifth provider
  * is one object in that file.
  *
- * S3 ADDS THE INSTALL, and it is two tools and a skill, not a route:
+ * S3 ADDS THE INSTALL, and it is two tools and two skills, not a route:
  *
- *   rh_workflow_graph      reads an app's exposed doors from RunningHub
- *   rh_adapter_validate    checks a written adapter against the live app
- *   add-rh-workflow        the skill that names the doors and confirms before
- *                          anything is written
+ *   rh_workflow_graph       reads an app's exposed doors from RunningHub
+ *   rh_adapter_validate     checks a written adapter against the live app
+ *   add-rh-workflow         the skill that names the doors and confirms before
+ *                           anything is written
+ *   design-generate-screen  the skill that decides what the surface shows once
+ *                           an adapter exists: which doors stand on the main
+ *                           screen, what they are called, what the button says
  *
  * The install flow is the pane's, with no model at all (§2b, D15): the API already
  * answers with types, options, bounds, defaults and tooltips, the glossary covers
@@ -116,13 +119,35 @@ const MAX_UPLOAD_BYTES = 32 * 1024 * 1024
 const TOOL_GRAPH = 'rh_workflow_graph'
 const TOOL_VALIDATE = 'rh_adapter_validate'
 
-/** The skill that does the naming, shipped inside this package (§5 rule 4). */
-const SKILL_NAME = 'add-rh-workflow'
-const SKILL_DESCRIPTION =
-  'Add a RunningHub AI App to the Generate panel: read the app\'s exposed inputs, name each door in the user\'s words, confirm the list, then write and validate the adapter file.'
-const SKILL_WHEN_TO_USE =
-  'Use when the user wants to add, install or register a RunningHub workflow or AI App (they give a runninghub.ai app link or an app id), or says "add workflow".'
-const SKILL_FILE = fileURLToPath(new URL('../skills/add-rh-workflow/SKILL.md', import.meta.url))
+/**
+ * The skills shipped inside this package (§5 rule 4).
+ *
+ * TWO, AND THEY ARE A SEQUENCE. `add-rh-workflow` names the doors and confirms before
+ * anything is written — it produces the file. `design-generate-screen` decides what the
+ * surface then shows: which doors stand on the main screen, what they are called, what the
+ * button says, what the gate shows. Installing and designing were one document until the
+ * design half grew its own rules (the five controls, the four-door main screen, the five
+ * screens a workflow appears on), and a model reading one long document does the mechanical
+ * half and skips the judgement half.
+ */
+const SKILLS = [
+  {
+    name: 'add-rh-workflow',
+    description:
+      'Add a RunningHub AI App to the Generate panel: read the app\'s exposed inputs, name each door in the user\'s words, confirm the list, then write and validate the adapter file.',
+    whenToUse:
+      'Use when the user wants to add, install or register a RunningHub workflow or AI App (they give a runninghub.ai app link or an app id), or says "add workflow".',
+    file: fileURLToPath(new URL('../skills/add-rh-workflow/SKILL.md', import.meta.url)),
+  },
+  {
+    name: 'design-generate-screen',
+    description:
+      'Design the screens a workflow gets inside the Generate panel: which doors stand on the main screen, what each is called, the order and the advanced set, the run label, and what the payload gate and the run strip show.',
+    whenToUse:
+      'Use when the user wants to design, change or review how a workflow\'s screen looks in the Generate panel — which doors show, what they are called, what the button says — rather than to install one.',
+    file: fileURLToPath(new URL('../skills/design-generate-screen/SKILL.md', import.meta.url)),
+  },
+]
 
 function str(value) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
@@ -453,42 +478,46 @@ function mountTools(ctx, { base, paths, root }) {
 }
 
 /**
- * Register the shipped skill.
+ * Register the shipped skills.
  *
- * The skill travels inside this package (§5 rule 4: its own copy, never a
- * dependency on Muen's translation pack) and is read at apply time, so the host
- * process serves the same text that is in the repo. A missing file is reported and
- * skipped rather than thrown: a plugin that fails to load is worse than one
- * without its skill.
+ * Each travels inside this package (§5 rule 4: its own copy, never a dependency on
+ * Muen's translation pack) and is read at apply time, so the host process serves the
+ * same text that is in the repo. One skill that cannot be read is reported and skipped
+ * while the other still mounts: a plugin that fails to load is worse than one with a
+ * skill missing, and the two are independent installs in a profile.
  */
 function mountSkill(ctx) {
   const skills = typeof ctx.get === 'function' ? ctx.get('skills') : undefined
   if (!skills || typeof skills.register !== 'function') return false
-  let content
-  try {
-    content = readFileSync(SKILL_FILE, 'utf8')
-  } catch (error) {
-    if (ctx.logger && typeof ctx.logger.warn === 'function') {
-      ctx.logger.warn('generate: the skill file could not be read at ' + SKILL_FILE + ': ' + String((error && error.message) || error))
+  let mounted = false
+  for (const skill of SKILLS) {
+    let content
+    try {
+      content = readFileSync(skill.file, 'utf8')
+    } catch (error) {
+      if (ctx.logger && typeof ctx.logger.warn === 'function') {
+        ctx.logger.warn('generate: the skill file could not be read at ' + skill.file + ': ' + String((error && error.message) || error))
+      }
+      continue
     }
-    return false
+    ctx.effect(
+      () =>
+        skills.register({
+          name: skill.name,
+          description: skill.description,
+          whenToUse: skill.whenToUse,
+          invocation: { modelInvocable: true, userInvocable: true },
+          source: 'runtime',
+          provider: 'runninghub',
+          path: skill.file,
+          resourceBase: { kind: 'directory', path: dirname(skill.file) },
+          content,
+        }),
+      'generate: skill ' + skill.name,
+    )
+    mounted = true
   }
-  ctx.effect(
-    () =>
-      skills.register({
-        name: SKILL_NAME,
-        description: SKILL_DESCRIPTION,
-        whenToUse: SKILL_WHEN_TO_USE,
-        invocation: { modelInvocable: true, userInvocable: true },
-        source: 'runtime',
-        provider: 'runninghub',
-        path: SKILL_FILE,
-        resourceBase: { kind: 'directory', path: dirname(SKILL_FILE) },
-        content,
-      }),
-    'generate: skill ' + SKILL_NAME,
-  )
-  return true
+  return mounted
 }
 
 /**
