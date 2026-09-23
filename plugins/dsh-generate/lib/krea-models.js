@@ -12,15 +12,16 @@
  * has no equivalent of, because a read is free but a model's own schema is the only
  * source of truth about its doors.
  *
- * THE DOORS ARE KREA'S OWN, READ FROM KREA'S OPENAPI (2026-09-23,
- * `POST /generate/image/krea/krea-2/medium-turbo`, the page the founder's
- * `image/krea/krea-2/medium-turbo` SDK call resolves to). `additionalProperties: false`
- * and `required: [prompt, aspect_ratio, resolution]` are the API's, the `-100..100`
- * slider bounds and the `0.99` denoising default are the API's, and the creativity
- * default is this variant's own (`low`; the overview page documents `medium` for
- * `krea-2/medium` and `krea-2/large`, which is a different endpoint). Nothing here is a
- * product choice except the labels, the order, and which doors sit behind the surface's
- * one disclosure.
+ * THE DOORS ARE KREA'S OWN, READ FROM KREA'S OPENAPI (2026-09-23). The founder's two SDK
+ * calls, `image/krea/krea-2/medium-turbo` and `image/krea/krea-2/medium`, resolve to
+ * `POST /generate/image/krea/krea-2/medium-turbo` and `POST /generate/image/krea/krea-2/medium`.
+ * `additionalProperties: false` and `required: [prompt, aspect_ratio, resolution]` are the
+ * API's, the `-100..100` slider bounds and the `0.99` denoising default are the API's, and
+ * the creativity default is the endpoint schema's own `low` — on all three Krea 2 pages,
+ * including `krea-2/medium`, where the overview prose calls `medium` the default. The
+ * schema wins because the surface always sends the value it shows, so the disagreement is
+ * recorded on the door rather than resolved silently. Nothing here is a product choice
+ * except the labels, the order, and which doors sit behind the surface's one disclosure.
  *
  * THE FIELDS THAT ARE ARRAYS ARE NOT DOORS. `styles`, `image_style_references` and
  * `moodboards` are arrays of objects (a LoRA id with a strength, a URL with a strength, a
@@ -44,17 +45,150 @@ export const KREA_MODELS_FILE = '_models.json'
 /**
  * The models Krea documents, in the shape the pane's list and surface already read.
  *
- * One today: the founder named it on 2026-09-23 (*"add this Krea model"*, with the SDK
- * call for `image/krea/krea-2/medium-turbo`). The sibling variants (`krea-2/medium`,
- * `krea-2/large`) are one object each when they are wanted.
+ * Two today, each one named by the founder on 2026-09-23 with the SDK call for it: the
+ * turbo first, the regular variant second. They are listed in KREA'S OWN ORDER — Krea's
+ * model list, its overview and its API-reference navigation all put Medium before Turbo —
+ * the way the door names are Krea's. `krea-2/large` is one object here when it is wanted.
+ *
+ * THE CARD COPY IS KREA'S, TOO (founder, 2026-09-23: *"descriptions from Krea website"*).
+ * The titles are the names on Krea's own model cards and the blurbs are those cards'
+ * descriptions, so a card here says what Krea says it says. The per-generation prices on
+ * those cards (2, 9 and 20 coins) are deliberately not carried: the provider row already
+ * names the funding (a prepaid USD API balance), and this catalogue has no price field.
+ *
+ * EACH MODEL IS A WHOLE OBJECT, doors included, because a profile replaces one of these by
+ * name and a half-inherited model would be a model nobody wrote. The two Krea 2 bodies are
+ * identical today — the endpoints share one public request shape — and `verify/models.mjs`
+ * asserts that they are, so the day one endpoint diverges the difference shows up as a
+ * failing check rather than as a silent drift.
  */
 export const SHIPPED_KREA_MODELS = [
   {
     schema: KREA_MODELS_SCHEMA,
+    name: 'krea-2-medium',
+    title: 'Krea 2 Medium',
+    variant: 'Medium',
+    blurb: 'A smaller variant of Krea 2. Works best with illustrations and graphic design.',
+    group: 'Text to image',
+    /** Krea's own model, like the turbo: the card says no origin tag for this value. */
+    origin: 'krea',
+    /** The SDK's own slug, exactly as the founder's second call names it. */
+    model: 'image/krea/krea-2/medium',
+    /** Where the run slice posts it. Recorded here so it is not re-derived then. */
+    endpoint: '/generate/image/krea/krea-2/medium',
+    docs: 'https://www.krea.ai/docs/api-reference/krea/krea-2-medium',
+    doors: {
+      prompt: {
+        type: 'text',
+        label: 'Prompt',
+        multiline: true,
+        primary: true,
+        required: true,
+        hint: 'What to draw. The API requires it.',
+      },
+      aspect_ratio: {
+        type: 'select',
+        label: 'Aspect ratio',
+        options: ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:16'],
+        default: '1:1',
+        required: true,
+      },
+      resolution: {
+        type: 'select',
+        label: 'Resolution',
+        options: ['1K'],
+        default: '1K',
+        required: true,
+        hint: 'Krea 2 documents one resolution: 1K.',
+      },
+      creativity: {
+        type: 'select',
+        label: 'Creativity',
+        options: ['raw', 'low', 'medium', 'high'],
+        // This endpoint's schema declares `low`, as the turbo's and the large's do. The
+        // overview prose calls `medium` the default for krea-2/medium and krea-2/large;
+        // the schema wins, because the surface always sends the value it shows.
+        default: 'low',
+        hint: 'How far Krea expands on the prompt: raw renders only what you wrote; low fills obvious gaps; medium interprets; high takes creative liberty.',
+      },
+      // The three generative sliders, Krea's own numbers: an integer from -100 to 100,
+      // with 0 applying no slider LoRA at all.
+      intensity: {
+        type: 'number',
+        label: 'Intensity',
+        min: -100,
+        max: 100,
+        step: 1,
+        default: 0,
+        advanced: true,
+        hint: 'Stylization. Negative is muted and understated, positive is bold and heavily stylized.',
+      },
+      complexity: {
+        type: 'number',
+        label: 'Complexity',
+        min: -100,
+        max: 100,
+        step: 1,
+        default: 0,
+        advanced: true,
+        hint: 'How much the frame holds. Negative favors clean minimal compositions, positive favors dense ones.',
+      },
+      movement: {
+        type: 'number',
+        label: 'Movement',
+        min: -100,
+        max: 100,
+        step: 1,
+        default: 0,
+        advanced: true,
+        hint: 'Pose and camera energy. Negative keeps subjects static, positive adds motion.',
+      },
+      image_url: {
+        type: 'image',
+        label: 'Source image',
+        advanced: true,
+        hint: 'Optional. With one, generation starts from it instead of pure noise, and Strength decides how much changes.',
+      },
+      strength: {
+        type: 'number',
+        label: 'Strength',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        default: 0.99,
+        advanced: true,
+        hint: 'Denoising when a source image is given: 0 keeps it, 1 replaces it. No effect without one.',
+      },
+      seed: {
+        type: 'number',
+        label: 'Seed',
+        advanced: true,
+        hint: 'The same seed and prompt reproduce a generation.',
+      },
+    },
+    ui: {
+      runLabel: 'Generate',
+      order: [
+        'prompt',
+        'aspect_ratio',
+        'resolution',
+        'creativity',
+        'intensity',
+        'complexity',
+        'movement',
+        'image_url',
+        'strength',
+        'seed',
+      ],
+    },
+  },
+  {
+    schema: KREA_MODELS_SCHEMA,
     name: 'krea-2-medium-turbo',
-    title: 'Krea 2 Medium Turbo',
+    /** Krea's own card name for this endpoint, which the founder used too: "Krea 2 Turbo". */
+    title: 'Krea 2 Turbo',
     variant: 'Turbo',
-    blurb: 'Fastest Krea 2, at medium quality. Strongest on illustration, anime and painterly styles.',
+    blurb: 'The fastest Krea 2 model. Best for quickly iterating on expressive illustrations.',
     group: 'Text to image',
     /**
      * Whose model it is. The card says nothing for this value on purpose: "someone

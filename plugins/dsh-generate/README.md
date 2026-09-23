@@ -101,19 +101,38 @@ user authors one. So the models ship with the plugin, in `lib/krea-models.js`, e
 glossary ships in `lib/house.js`, and a profile extends that list the same way `_house.json` extends the
 glossary: **`<profile>/generate/krea/_models.json`** adds a model or replaces one by name.
 
-The first model is the founder's, added 2026-09-23 (*"add this Krea model"*, with the SDK call for
-`image/krea/krea-2/medium-turbo`):
+The models are the founder's, added one at a time on 2026-09-23, each with the SDK call that names
+it — `image/krea/krea-2/medium-turbo` (*"that last one was Krea 2 Turbo"*) and
+`image/krea/krea-2/medium` (*"this one is Krea 2 Medium"*). The cards carry **Krea's own names and
+descriptions** (*"descriptions from Krea website"*), and they are listed in Krea's own order:
+
+| Card | `model` / `endpoint` | Krea's own description |
+|---|---|---|
+| Krea 2 Medium | `image/krea/krea-2/medium` / `POST /generate/image/krea/krea-2/medium` | A smaller variant of Krea 2. Works best with illustrations and graphic design. |
+| Krea 2 Turbo | `image/krea/krea-2/medium-turbo` / `POST /generate/image/krea/krea-2/medium-turbo` | The fastest Krea 2 model. Best for quickly iterating on expressive illustrations. |
+
+Both endpoints accept the same public request body, so both cards carry the same ten doors —
+`verify/models.mjs` asserts that sameness, so the day one endpoint diverges the difference is a
+failing check and not a silent drift:
 
 | Fact | Value | Source |
 |---|---|---|
-| `model` / `endpoint` | `image/krea/krea-2/medium-turbo` / `POST /generate/image/krea/krea-2/medium-turbo` | Krea's OpenAPI |
-| Required doors | `prompt`, `aspect_ratio`, `resolution` | `required:` in that schema |
+| Required doors | `prompt`, `aspect_ratio`, `resolution` | `required:` in each schema |
 | `aspect_ratio` | one of `1:1`, `4:3`, `3:2`, `16:9`, `2.35:1`, `4:5`, `3:4`, `2:3`, `9:16` | `enum` |
 | `resolution` | `1K` | `enum` |
-| `creativity` | `raw` \| `low` \| `medium` \| `high`, default `low` | this variant's own default |
+| `creativity` | `raw` \| `low` \| `medium` \| `high`, default `low` | the endpoint schema's own default |
 | `intensity`, `complexity`, `movement` | integer `-100`..`100`, default `0` | the generative-slider docs |
 | `image_url`, `strength` | image; `0`..`1`, default `0.99` | the img2img fields |
 | `seed` | number, optional | — |
+
+`creativity` is the one place Krea's own pages disagree: all three Krea 2 endpoint schemas declare
+`low`, while the overview prose calls `medium` the default for `krea-2/medium` and `krea-2/large`.
+The schema wins, because the surface always sends the value it shows, and the disagreement is
+recorded on the door rather than resolved silently.
+
+The per-generation prices on Krea's own cards (2, 9 and 20 coins) are deliberately not carried: the
+provider row already names the funding — a prepaid USD API balance — and this catalogue has no
+price field.
 
 **Three fields are deliberately not doors.** `styles`, `image_style_references` and `moodboards` are arrays of
 objects (a LoRA id with a strength, a URL with a strength, a moodboard uuid), and the surface has four
