@@ -161,7 +161,49 @@ const PRIMITIVES = {
   IconRefreshOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'refresh', ...props }),
   IconCheckOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'check', ...props }),
   IconInfoOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'info', ...props }),
+  IconPlusOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'plus', ...props }),
+  /**
+   * The real atoms the add control is built from. `Button` keeps its props on the
+   * node, so a check can read the label and call the click. `CodeBlock` is drawn the
+   * shape the primitive draws: a header bar with the language slot and the Copy
+   * control, over the body — `showHeader` stays on the node so a check can tell
+   * whether the owner asked for that bar or drew a copy control of its own.
+   */
+  Button: (props) => REACT.createElement('button', { type: 'button', 'data-stub': 'button', ...props }, props.icon, props.children),
+  CodeBlock: (props) =>
+    REACT.createElement(
+      'div',
+      { 'data-stub': 'code-block', showHeader: props.showHeader !== false, copyLabel: props.copyLabel, copiedLabel: props.copiedLabel },
+      props.showHeader === false
+        ? null
+        : REACT.createElement(
+            'div',
+            { 'data-stub': 'code-header' },
+            REACT.createElement('span', { 'data-stub': 'code-lang' }, props.lang || ''),
+            REACT.createElement('button', { type: 'button', 'data-stub': 'code-copy' }, props.copyLabel || ''),
+          ),
+      REACT.createElement('pre', { 'data-stub': 'code' }, props.code),
+    ),
   Modal: () => null,
+  /**
+   * The settings hide switch. The real one is a 36×20 button whose label lives in
+   * `aria-label`, so the stub keeps the props a check reads and lets the click be
+   * driven the way the primitive drives it.
+   */
+  Switch: (props) =>
+    REACT.createElement(
+      'button',
+      {
+        type: 'button',
+        role: 'switch',
+        'aria-checked': props.checked,
+        label: props.label,
+        title: props.title,
+        'data-stub': 'switch',
+        onClick: () => props.onChange(!props.checked),
+      },
+      props.children,
+    ),
 }
 
 // ── the walker ───────────────────────────────────────────────────────────────
@@ -325,6 +367,10 @@ const KREA = {
   doorCount: 7,
 }
 const QWEN = { ...KREA, name: 'qwen-edit', title: 'Qwen 2.1 Edit', origin: 'community', doorCount: 3 }
+/** A workflow that names no known model: the card must fall back to the glyph. */
+const PLAIN = { ...KREA, name: 'plain-app', title: 'Some Community App', origin: 'community', doorCount: 2 }
+/** A second one-colour mark, so the mask path is not Krea's alone. */
+const MINIMAX = { ...KREA, name: 'minimax-fl2v', title: 'First-LastFrames2Video Minimax H3', doorCount: 5 }
 
 /** The file the one-workflow route hands back, in the shape `readAdapter` builds. */
 const KREA_FILE = {
@@ -338,6 +384,9 @@ const KREA_FILE = {
   runLabel: 'Generate image',
   expect: '',
   order: ['value', 'aspectRatio', 'megapixels', 'scaleBy', 'steps', 'cfg', 'denoise'],
+  // The authored starting values, as `readAdapter` flattens them out of the file's
+  // `ui` block: megapixels opens at 2 even though the app declares 1.
+  defaults: { megapixels: 2 },
   doors: {
     value: { nodeId: '63', fieldName: 'value', type: 'text', label: 'Prompt', primary: true, multiline: true },
     aspectRatio: {
@@ -396,13 +445,20 @@ const OTHER_PROVIDERS = [
   },
 ]
 
-function stubHost({ units = [], file = null, failList = false, linked = true } = {}) {
+function stubHost({ units = [], file = null, failList = false, linked = true, note = null, hidden = [] } = {}) {
   const calls = []
   const ok = (body) => ({ ok: true, status: 200, json: async () => body })
   return {
     calls,
     fetch: async (url, init = {}) => {
       calls.push({ url, method: (init.method || 'GET').toUpperCase() })
+      // The settings toggle: the host records what the page asked for, so a check can
+      // prove the switch reached the route rather than only moving on screen.
+      const hiddenParts = String(url).split('/')
+      if (hiddenParts[hiddenParts.length - 1] === 'hidden') {
+        const id = hiddenParts[hiddenParts.length - 2]
+        return ok({ id, hidden: JSON.parse((init && init.body) || '{}').hidden === true, hiddenIds: [] })
+      }
       if (url === PROVIDERS_API) {
         // The registry's own order: runninghub, krea, comfycloud, magnific.
         const unlinked = (provider) => ({
@@ -432,14 +488,14 @@ function stubHost({ units = [], file = null, failList = false, linked = true } =
               writable: true,
               source: linked ? 'file' : null,
               account: linked ? { coins: 8600, money: 27.473, currency: 'USD', running: 0 } : null,
-              note: null,
+              note: linked ? note : null,
               error: null,
               workflows: units.length,
             },
             unlinked(OTHER_PROVIDERS[0]),
             unlinked(OTHER_PROVIDERS[1]),
             unlinked(OTHER_PROVIDERS[2]),
-          ],
+          ].map((provider) => ({ ...provider, hidden: hidden.includes(provider.id) })),
         })
       }
       // Every provider's workflow route answers, because the pane and the open card
@@ -539,6 +595,75 @@ check(
     cardIds.join(',') === 'runninghub,krea,comfycloud,magnific',
     JSON.stringify(cardIds),
   )
+
+  // The hide switch (founder, 2026-09-23). ON means the Generate panel draws the
+  // provider, so the switch is reversible from the row it was thrown on — and the
+  // hidden row still carries its key state, because hiding is not unlinking.
+  {
+    const hiddenStub = stubHost({ units: [KREA], hidden: ['magnific'] })
+    const realFetch = globalThis.fetch
+    globalThis.fetch = hiddenStub.fetch
+    let hiddenTree
+    let posted = null
+    try {
+      hiddenTree = await settle(settings.component, { t }, 'settings-hidden')
+      // The click happens WHILE the stub is installed: the handler posts, and a check
+      // that restored the real fetch first would only prove that the click was ignored.
+      const before = hiddenStub.calls.length
+      const wrap = nodesOf(hiddenTree).find((node) => node.props && node.props['data-generate-provider-hide'] === 'krea')
+      const target = wrap ? byAttr(wrap, 'data-stub', 'switch') : null
+      if (target) target.props.onClick()
+      posted = hiddenStub.calls.slice(before).find((call) => String(call.url).endsWith('/hidden')) || null
+    } finally {
+      globalThis.fetch = realFetch
+    }
+    const switchFor = (id) => {
+      const wrap = nodesOf(hiddenTree).find((node) => node.props && node.props['data-generate-provider-hide'] === id)
+      return wrap ? byAttr(wrap, 'data-stub', 'switch') : null
+    }
+    check(
+      'every provider row carries the hide switch',
+      ['runninghub', 'krea', 'comfycloud', 'magnific'].every((id) => switchFor(id) !== null),
+      JSON.stringify(nodesOf(hiddenTree).filter((node) => node.props && node.props['data-generate-provider-hide']).map((node) => node.props['data-generate-provider-hide'])),
+    )
+    check(
+      'the switch is on for the providers the panel draws, and off for the hidden one',
+      (switchFor('krea') || { props: {} }).props['aria-checked'] === true && (switchFor('magnific') || { props: {} }).props['aria-checked'] === false,
+      JSON.stringify(['krea', 'magnific'].map((id) => [id, switchFor(id) && switchFor(id).props['aria-checked']])),
+    )
+    check(
+      'the switch is named, because a bare toggle says nothing about what it does',
+      (switchFor('magnific') || { props: {} }).props.label === EN['settings.hide.label'] &&
+        (switchFor('magnific') || { props: {} }).props.title === EN['settings.hide.hint'],
+      JSON.stringify(switchFor('magnific') && switchFor('magnific').props),
+    )
+    check(
+      'a hidden provider says so on its own row, since the panel cannot explain an absent section',
+      !!byAttr(hiddenTree, 'data-generate-provider-hidden-tag', 'magnific') && !byAttr(hiddenTree, 'data-generate-provider-hidden-tag', 'krea'),
+      JSON.stringify(nodesOf(hiddenTree).filter((node) => node.props && node.props['data-generate-provider-hidden-tag']).map((node) => node.props['data-generate-provider-hidden-tag'])),
+    )
+    check(
+      'the switch is the last control in the row: identity, then the action, then the display preference',
+      (() => {
+        const row = byAttr(hiddenTree, 'data-generate-provider-card', 'krea')
+        if (!row) return false
+        const flat = nodesOf(row)
+        const buttonAt = flat.findIndex((node) => node.props && node.props['data-generate-provider-toggle'] === 'krea')
+        const switchAt = flat.findIndex((node) => node.props && node.props['data-generate-provider-hide'] === 'krea')
+        // It is also the rightmost thing in its own flex row, which is what makes it
+        // right-justified: `rowActions` is pushed right by a left margin and draws its
+        // children in order.
+        return buttonAt !== -1 && switchAt !== -1 && buttonAt < switchAt
+      })(),
+      JSON.stringify(['krea'].map((id) => nodesOf(byAttr(hiddenTree, 'data-generate-provider-card', id) || { children: [], props: {} }).filter((node) => node.props && (node.props['data-generate-provider-toggle'] || node.props['data-generate-provider-hide'])).map((node) => node.props['data-generate-provider-toggle'] || node.props['data-generate-provider-hide']))),
+    )
+    const before = hiddenStub.calls.length
+    check(
+      'clicking the switch posts the new state to that provider\'s own route',
+      !!posted && posted.method === 'POST',
+      JSON.stringify(posted) + ' ' + JSON.stringify(hiddenStub.calls.slice(before)),
+    )
+  }
   const dots = nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-dot'])
   check(
     'every row carries a credential dot that says which state it is in',
@@ -667,6 +792,7 @@ async function pane(state, { params, key = 'pane' } = {}) {
 const home = await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })
 const empty = await pane({ units: [] }, { key: 'pane-empty' })
 const failed = await pane({ units: [], failList: true }, { key: 'pane-failed' })
+const noted = await pane({ units: [KREA], note: 'subscription-inactive' }, { key: 'pane-noted' })
 const opened = await pane({ units: [KREA], file: KREA_FILE }, { params: { unit: KREA.name, provider: PROVIDER }, key: 'pane-opened' })
 
 if (SHOW) {
@@ -760,6 +886,74 @@ check(
   sectionIds(home.tree).join(',') === 'runninghub,krea,comfycloud,magnific',
   JSON.stringify(sectionIds(home.tree)),
 )
+
+// Hiding a provider is a display preference, not a link (founder, 2026-09-23: *"I want a
+// toggle inside settings to hide providers that I don't use much for less visual
+// clutter"*). The panel draws the ones switched on, and it says what happened when that
+// is none of them rather than looking like an install that lost its workflows.
+{
+  const hidOne = await pane({ units: [KREA, QWEN], hidden: ['krea'] }, { key: 'pane-hidden-one' })
+  check(
+    'a provider switched off in Settings is not drawn in the panel',
+    sectionIds(hidOne.tree).join(',') === 'runninghub,comfycloud,magnific',
+    JSON.stringify(sectionIds(hidOne.tree)),
+  )
+  check(
+    'and the section count follows what is drawn, not the registry',
+    (byAttr(hidOne.tree, 'data-generate-sections') || { props: {} }).props['data-generate-sections'] === '3',
+    JSON.stringify((byAttr(hidOne.tree, 'data-generate-sections') || { props: {} }).props),
+  )
+  const hidOwner = await pane({ units: [KREA, QWEN], hidden: ['runninghub'] }, { key: 'pane-hidden-owner' })
+  check(
+    'hiding the provider that holds the workflows takes its cards out with it',
+    !byAttr(hidOwner.tree, 'data-generate-unit', KREA.name) && !byAttr(hidOwner.tree, 'data-generate-unit', QWEN.name),
+    'a hidden section must not leave its cards behind',
+  )
+  const hidAll = await pane({ units: [KREA, QWEN], hidden: ['runninghub', 'krea', 'comfycloud', 'magnific'] }, { key: 'pane-hidden-all' })
+  check(
+    'with every provider switched off the panel says so, and names the page holding the switches',
+    !!byAttr(hidAll.tree, 'data-generate-all-hidden', 'yes') &&
+      textIn(hidAll.tree).includes(EN['pane.hidden.title']) &&
+      textIn(hidAll.tree).includes(EN['pane.hidden.body']),
+    textIn(hidAll.tree).slice(0, 200),
+  )
+}
+
+// The switch and the panel are on screen at the same time: Settings is a dialog over
+// the app, so the pane behind it never unmounts while a switch is thrown. They used to
+// hold a copy of the provider list each, which is why a hide only showed up after an
+// app restart (founder, 2026-09-23: *"I tested toggle and it works if I restart"*).
+// One shared list now, so the click reaches the panel that is already mounted.
+{
+  const stub = stubHost({ units: [KREA, QWEN] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  let paneTree
+  try {
+    // The panel first, then Settings over it — the order the app mounts them in.
+    paneTree = await settle(paneSlot.component, { t }, 'shared-pane')
+    const settingsTree = await settle(settingsSlots[0].component, { t }, 'shared-settings')
+    const wrap = nodesOf(settingsTree).find((node) => node.props && node.props['data-generate-provider-hide'] === 'krea')
+    const target = wrap ? byAttr(wrap, 'data-stub', 'switch') : null
+    if (target) target.props.onClick()
+    // Drawn again under the SAME key: nothing remounts and the panel asks the host for
+    // nothing, so whatever it draws now is what the click did.
+    const readsBefore = stub.calls.filter((call) => call.url === PROVIDERS_API).length
+    paneTree = await settle(paneSlot.component, { t }, 'shared-pane')
+    check(
+      'the panel is not re-read to show the hide: the switch moves the list every surface holds',
+      stub.calls.filter((call) => call.url === PROVIDERS_API).length === readsBefore,
+      JSON.stringify(stub.calls.map((call) => call.url)),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+  check(
+    'a switch thrown in Settings reaches the panel already on screen, without a restart',
+    sectionIds(paneTree).join(',') === 'runninghub,comfycloud,magnific',
+    JSON.stringify(sectionIds(paneTree)),
+  )
+}
 check(
   'a section header names its provider and says what the section holds',
   (() => {
@@ -799,6 +993,279 @@ check(
   'a card under the wrong provider is a card that runs somewhere else',
 )
 
+// The section header's status light, and the wallet as the header's own second row
+// (founder, 2026-09-23: *"move the wall balance to row 2 below accordion title. change
+// icon to status indictor; green=ready, amber=key good-no workflow, red=no key"*).
+// Three states, one per fact the pane knows before a section is opened, and the balance
+// reads under the name it belongs to instead of in a strip above the accordion.
+{
+  const lightOf = (tree, id) => {
+    const head = byAttr(tree, 'data-generate-section-toggle', id)
+    return head ? byAttr(head, 'data-generate-section-state') : null
+  }
+  const lightState = (tree, id) => (lightOf(tree, id) ? lightOf(tree, id).props['data-generate-section-state'] : null)
+  const lightWords = (tree, id) => (lightOf(tree, id) ? lightOf(tree, id).props.title : null)
+  const heads = ['runninghub', 'krea', 'comfycloud', 'magnific']
+
+  check(
+    'a section that can run wears a green light, and the light carries its own sentence',
+    lightState(home.tree, PROVIDER) === 'ready' && lightWords(home.tree, PROVIDER) === EN['pane.light.ready'],
+    JSON.stringify([lightState(home.tree, PROVIDER), lightWords(home.tree, PROVIDER)]),
+  )
+  check(
+    'a key with nothing installed is amber, not green: a key is not a workflow',
+    lightState(empty.tree, PROVIDER) === 'keyOnly' && lightWords(empty.tree, PROVIDER) === EN['pane.light.keyOnly'],
+    JSON.stringify([lightState(empty.tree, PROVIDER), lightWords(empty.tree, PROVIDER)]),
+  )
+  check(
+    'a provider with no key is red, which is the one thing its section can say',
+    lightState(home.tree, 'krea') === 'noKey' && lightWords(home.tree, 'krea') === EN['pane.light.noKey'],
+    JSON.stringify([lightState(home.tree, 'krea'), lightWords(home.tree, 'krea')]),
+  )
+  check(
+    'an unconfirmed key is amber with its own sentence, never amber claiming an empty section',
+    lightState(noted.tree, PROVIDER) === 'unchecked' && lightWords(noted.tree, PROVIDER) === EN['settings.linked.unverified'],
+    JSON.stringify([lightState(noted.tree, PROVIDER), lightWords(noted.tree, PROVIDER)]),
+  )
+  check(
+    'the colour is never the only carrier: every light has a sentence for its state',
+    heads.every((id) => typeof lightWords(home.tree, id) === 'string' && lightWords(home.tree, id) !== ''),
+    JSON.stringify(heads.map((id) => lightWords(home.tree, id))),
+  )
+  check(
+    'a provider that was refused or is no longer linked is not drawn as ready',
+    lightState(home.tree, PROVIDER) === 'ready' && !heads.some((id) => id !== PROVIDER && lightState(home.tree, id) === 'ready'),
+    JSON.stringify(heads.map((id) => [id, lightState(home.tree, id)])),
+  )
+
+  const header = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
+  const balanceRow = byAttr(home.tree, 'data-generate-provider-strip', PROVIDER)
+  const balanceRows = nodesOf(home.tree).filter((node) => node.props && node.props['data-generate-provider-strip'])
+  check(
+    'the wallet balance is the header\'s own row, inside the section it belongs to',
+    !!header && !!balanceRow && nodesOf(header).includes(balanceRow) && textIn(balanceRow).includes('8,600'),
+    balanceRow ? textIn(balanceRow) : 'no balance row',
+  )
+  check(
+    'the strip above the accordion is gone: one balance row per provider, each in its header',
+    balanceRows.length === heads.length &&
+      heads.every((id) => {
+        const head = byAttr(home.tree, 'data-generate-section-toggle', id)
+        const row = byAttr(home.tree, 'data-generate-provider-strip', id)
+        return !!head && !!row && nodesOf(head).includes(row)
+      }),
+    JSON.stringify(balanceRows.map((node) => node.props['data-generate-provider-strip'])),
+  )
+  check(
+    'name · balance · count is the order the header owes',
+    (() => {
+      if (!header || !balanceRow) return false
+      const flat = nodesOf(header)
+      const nameAt = flat.findIndex((node) => textIn(node) === 'RunningHub')
+      const balanceAt = flat.indexOf(balanceRow)
+      const metaAt = flat.findIndex((node) => node.props && node.props['data-generate-section-meta'] === PROVIDER)
+      return nameAt !== -1 && balanceAt !== -1 && metaAt !== -1 && nameAt < balanceAt && balanceAt < metaAt
+    })(),
+    header ? textIn(header) : 'no header',
+  )
+  check(
+    'an unlinked provider says its state in words rather than drawing an empty wallet',
+    textIn(byAttr(home.tree, 'data-generate-provider-strip', 'krea')).includes(EN['wallet.notLinked']),
+    textIn(byAttr(home.tree, 'data-generate-provider-strip', 'krea')),
+  )
+  check(
+    'the way out to the account page is the glyph beside the provider\'s name',
+    (() => {
+      const link = byAttr(home.tree, 'data-generate-account', PROVIDER)
+      if (!link || !header || !nodesOf(header).includes(link)) return false
+      // Row 1: the name, then the glyph, and only then the balance of row 2.
+      const flat = nodesOf(header)
+      const nameAt = flat.findIndex((node) => textIn(node) === 'RunningHub')
+      const linkAt = flat.indexOf(link)
+      const balanceAt = flat.indexOf(balanceRow)
+      return nameAt !== -1 && linkAt !== -1 && balanceAt !== -1 && nameAt < linkAt && linkAt < balanceAt
+    })(),
+    'the glyph travels with the name it belongs to, not below it',
+  )
+  check(
+    'a click on the way out does not fold the section it sits in',
+    (() => {
+      const link = byAttr(home.tree, 'data-generate-account', PROVIDER)
+      if (!link || typeof link.props.onClick !== 'function') return false
+      let stopped = false
+      link.props.onClick({ stopPropagation: () => { stopped = true } })
+      return stopped
+    })(),
+    'the header is the toggle, and the link inside it is not',
+  )
+  check(
+    'the glyph is labelled, because an icon alone names nothing',
+    (() => {
+      const link = byAttr(home.tree, 'data-generate-account', PROVIDER)
+      return !!link && link.props.title === EN['settings.account'] && link.props['aria-label'] === EN['settings.account']
+    })(),
+    byAttr(home.tree, 'data-generate-account', PROVIDER) ? JSON.stringify(byAttr(home.tree, 'data-generate-account', PROVIDER).props.title) : 'no glyph',
+  )
+  check(
+    'the header is the toggle, keyboard included, since it is a role and not a button',
+    (() => {
+      if (!header || header.props.role !== 'button' || header.props.tabIndex !== 0) return false
+      if (typeof header.props.onKeyDown !== 'function') return false
+      let prevented = 0
+      header.props.onKeyDown({ key: 'Enter', preventDefault: () => { prevented += 1 } })
+      header.props.onKeyDown({ key: 'a', preventDefault: () => { prevented += 1 } })
+      // Enter folds the section and is stopped from doing anything else; a letter is
+      // not the toggle's key and gets no such treatment.
+      return prevented === 1
+    })(),
+    header ? JSON.stringify({ role: header.props.role, tabIndex: header.props.tabIndex }) : 'no header',
+  )
+
+  // The model marks (founder, 2026-09-23: *"can you use logo for Krea WF"*, then the
+  // Qwen mark from Wikimedia Commons). A one-colour mark is a MASK painted in the
+  // card's own colour, so it needs no dark-theme inverse; a mark that carries its own
+  // colours is drawn as an image, because a mask would read its white negative space
+  // as opaque and fill the mark in. A workflow that names no known model keeps the
+  // generic branch glyph.
+  check(
+    "a Krea workflow wears the Krea mark, as a mask in the card's own colour",
+    (() => {
+      const card = byAttr(home.tree, 'data-generate-unit', KREA.name)
+      const mark = card ? byAttr(card, 'data-generate-mark') : null
+      if (!mark) return false
+      const s = mark.props.style
+      // `currentColor` is the whole point: one asset, both themes.
+      return (
+        mark.type === 'span' &&
+        typeof s.WebkitMaskImage === 'string' &&
+        s.WebkitMaskImage.startsWith('url("data:image/png;base64,') &&
+        s.maskImage === s.WebkitMaskImage &&
+        s.backgroundColor === 'currentColor' &&
+        !nodesOf(card).some((node) => node.type === 'img')
+      )
+    })(),
+    'a mask paints the shape from the file\'s alpha, so the file\'s own colour is irrelevant',
+  )
+  check(
+    "a Qwen workflow wears LobeHub's Color mark: the gradient as it came, not a mask",
+    (() => {
+      const card = byAttr(home.tree, 'data-generate-unit', QWEN.name)
+      const mark = card ? byAttr(card, 'data-generate-mark') : null
+      if (!mark) return false
+      // The founder picked Color over Avatar (2026-09-23), so the tile is gone: an
+      // image, its own gradient, and no avatar node anywhere on the card.
+      return (
+        mark.type === 'img' &&
+        mark.props.alt === '' &&
+        String(mark.props.src).startsWith('data:image/svg+xml;base64,') &&
+        mark.props.style.objectFit === 'contain' &&
+        !mark.props.style.WebkitMaskImage &&
+        !byAttr(card, 'data-generate-avatar-mark')
+      )
+    })(),
+    'the -color file their Color component renders: own colours, no tile',
+  )
+  // Its own fixture, so the panes above keep their unit counts: a workflow whose name
+  // names no known model must still get a card, with the generic glyph.
+  const plainPane = await pane({ units: [PLAIN] }, { key: 'pane-plain' })
+  check(
+    'a workflow that names no known model keeps the generic glyph',
+    (() => {
+      const card = byAttr(plainPane.tree, 'data-generate-unit', PLAIN.name)
+      return !!card && !byAttr(card, 'data-generate-mark')
+    })(),
+    'the mark is a bonus, not a requirement: an unknown app still gets a card',
+  )
+  const minimaxPane = await pane({ units: [MINIMAX] }, { key: 'pane-minimax' })
+  check(
+    'a MiniMax workflow wears the MiniMax Color mark: its own gradient, not a mask',
+    (() => {
+      const card = byAttr(minimaxPane.tree, 'data-generate-unit', MINIMAX.name)
+      const mark = card ? byAttr(card, 'data-generate-mark') : null
+      if (!mark) return false
+      return (
+        mark.type === 'img' &&
+        mark.props.alt === '' &&
+        String(mark.props.src).startsWith('data:image/svg+xml;base64,') &&
+        mark.props.style.objectFit === 'contain' &&
+        !mark.props.style.WebkitMaskImage
+      )
+    })(),
+    'the founder picked Color over the mono mark, so no workflow is on the mask path but Krea',
+  )
+
+  const refresh = byAttr(home.tree, 'data-generate-refresh', PROVIDER)
+  check(
+    'the refresh control lives in the header, right of the balance, and the pane keeps no foot row for it',
+    (() => {
+      if (!refresh || !header || !nodesOf(header).includes(refresh)) return false
+      const flat = nodesOf(header)
+      const balanceAt = flat.indexOf(balanceRow)
+      const refreshAt = flat.indexOf(refresh)
+      // Left to right: name, balance, then the control that re-reads it. The label is
+      // no longer drawn anywhere, because the foot-of-pane button that carried it is
+      // gone (founder, 2026-09-23: *"refresh the balance move to header"*).
+      return balanceAt !== -1 && refreshAt !== -1 && balanceAt < refreshAt && !textIn(home.tree).includes('Refresh the balance')
+    })(),
+    header ? textIn(header) : 'no header',
+  )
+  check(
+    'the refresh is named for what it does, since it is drawn as a glyph',
+    !!refresh && refresh.props.title === EN['wallet.refresh'] && refresh.props['aria-label'] === EN['wallet.refresh'],
+    refresh ? JSON.stringify({ title: refresh.props.title, label: refresh.props['aria-label'] }) : 'no refresh control',
+  )
+  check(
+    'the refresh is its own control, not the header toggle it sits inside',
+    !!refresh && typeof refresh.props.onClick === 'function' && !!header && refresh.props.onClick !== header.props.onClick,
+    'a refresh that folded the section would be the toggle twice',
+  )
+
+  // ONE SECTION IS ONE CARD (founder, 2026-09-23): the card is the section, so opening
+  // one grows that card instead of stacking a second one under the header.
+  check(
+    'the section is the card: the border and radius are the section\'s, and the header keeps none of its own',
+    (() => {
+      const wrap = byAttr(home.tree, 'data-generate-section-wrap', PROVIDER)
+      if (!wrap || !header) return false
+      const box = wrap.props.style
+      const head = header.props.style
+      return box.borderRadius === 12 &&
+        box.background === 'var(--dsw-alias-bg-layer-1)' &&
+        /^\.5px solid /.test(box.border) &&
+        head.border === 'none' &&
+        head.background === 'transparent'
+    })(),
+    byAttr(home.tree, 'data-generate-section-wrap', PROVIDER)
+      ? JSON.stringify(byAttr(home.tree, 'data-generate-section-wrap', PROVIDER).props.style)
+      : 'no section',
+  )
+  check(
+    'the open body is held inside that same card, under the header',
+    (() => {
+      const wrap = byAttr(home.tree, 'data-generate-section-wrap', PROVIDER)
+      const body = byAttr(home.tree, 'data-generate-section-body', PROVIDER)
+      return !!wrap && !!body && nodesOf(wrap).includes(header) && nodesOf(wrap).includes(body)
+    })(),
+    'a body outside the card would be the second card the change removed',
+  )
+
+  // The workflow card is the harness's start-page card at the size that card actually
+  // has (the guide's `.entry`: 380px wide, a 56px floor, 24px radius, a half-pixel
+  // border), so a card keeps its size inside the section card.
+  check(
+    'a workflow card is the start-page card at its own size: 380 wide, 56 tall, 24 radius',
+    (() => {
+      const card = byAttr(home.tree, 'data-generate-unit', KREA.name)
+      if (!card) return false
+      const s = card.props.style
+      return s.width === 380 && s.maxWidth === '100%' && s.minHeight === 56 && s.borderRadius === 24 && /^\.5px solid /.test(s.border)
+    })(),
+    byAttr(home.tree, 'data-generate-unit', KREA.name)
+      ? JSON.stringify(byAttr(home.tree, 'data-generate-unit', KREA.name).props.style)
+      : 'no card',
+  )
+}
+
 // Opening a section is what makes its cards reachable, and the accordion holds one
 // open at a time: opening Krea's must close RunningHub's.
 {
@@ -824,10 +1291,10 @@ check(
   }
 }
 
-// The dashed add card is the pane's one install control (founder, 2026-09-23: "use +
-// workflow empty card w dashed border, click on it to get code snippet to copy/paste to
-// composer"). Its click has to yield THAT provider's own prompt, because the phrase the
-// agent's skill answers to names the provider.
+// The add control is the pane's one install control, and it is the harness's own
+// Button (founder, 2026-09-23: "+ workflow is a button primitive", "click on + workflow
+// is a code snippet primitive"). Its click has to yield THAT provider's own prompt,
+// because the phrase the agent's skill answers to names the provider.
 {
   const real = globalThis.fetch
   globalThis.fetch = stubHost({ units: [] }).fetch
@@ -835,9 +1302,9 @@ check(
     const first = await settle(paneSlot.component, { t }, 'pane-add-card')
     const card = byAttr(first, 'data-generate-add-card', PROVIDER)
     check(
-      'a provider with nothing installed carries the dashed add card',
-      !!card && textIn(card).includes(EN['pane.add.card']) && textIn(card).includes(EN['pane.add.card.hint']),
-      card ? textIn(card) : 'no add card',
+      'a provider with nothing installed carries the add button, hinting what its click does',
+      !!card && textIn(card).includes(EN['pane.add.card']) && card.props.title === EN['pane.add.card.hint'],
+      card ? JSON.stringify({ label: textIn(card), title: card.props.title }) : 'no add control',
     )
     check(
       'the prompt is not on screen until the card is clicked',
@@ -847,12 +1314,46 @@ check(
     if (card) card.props.onClick()
     const after = await settle(paneSlot.component, { t }, 'pane-add-card')
     check(
-      "clicking the add card yields that provider's own prompt, with Copy beside it",
+      "clicking the add control yields that provider's own prompt",
       textIn(after).includes(EN['settings.workflows.add']) &&
-        !!byAttr(after, 'data-generate-add-prompt', PROVIDER) &&
-        !!byAttr(after, 'data-generate-copy-prompt', PROVIDER) &&
-        textIn(byAttr(after, 'data-generate-add-prompt', PROVIDER)) === 'add this RunningHub workflow <app link>',
+        (() => {
+          const block = byAttr(after, 'data-generate-add-prompt', PROVIDER)
+          const code = block ? nodesOf(block).find((node) => node.props && node.props['data-stub'] === 'code') : null
+          return !!code && textIn(code).trim() === 'add this RunningHub workflow <app link>'
+        })(),
       textIn(after).slice(0, 240),
+    )
+    check(
+      'the add control is the Button primitive, carrying the plus as its icon',
+      !!card &&
+        card.props['data-stub'] === 'button' &&
+        !!nodesOf(card).find((node) => node.props && node.props['data-stub'] === 'plus'),
+      card ? JSON.stringify({ stub: card.props['data-stub'], title: card.props.title }) : 'no add control',
+    )
+    check(
+      "the snippet is the primitive whole: its own header bar, and its own Copy on the right",
+      (() => {
+        const block = byAttr(after, 'data-generate-add-prompt', PROVIDER)
+        if (!block) return false
+        const inner = nodesOf(block).find((node) => node.props && node.props['data-stub'] === 'code-block')
+        const header = nodesOf(block).find((node) => node.props && node.props['data-stub'] === 'code-header')
+        const copy = nodesOf(block).find((node) => node.props && node.props['data-stub'] === 'code-copy')
+        // The header is ON (the owner asked for the primitive's own bar), the Copy
+        // control is the primitive's, it carries our words, and the pane draws no
+        // second copy control of its own beside the block.
+        return (
+          !!inner &&
+          inner.props.showHeader === true &&
+          !!header &&
+          !!copy &&
+          textIn(copy) === EN['settings.workflows.copy'] &&
+          !byAttr(after, 'data-generate-copy-prompt', PROVIDER)
+        )
+      })(),
+      (() => {
+        const block = byAttr(after, 'data-generate-add-prompt', PROVIDER)
+        return block ? JSON.stringify(nodesOf(block).filter((node) => node.props && node.props['data-stub']).map((node) => node.props['data-stub'])) : 'no snippet'
+      })(),
     )
   } finally {
     globalThis.fetch = real
@@ -894,19 +1395,29 @@ check(
   byAttr(opened.tree, 'data-generate-advanced') ? textIn(byAttr(opened.tree, 'data-generate-advanced')) : 'no disclosure',
 )
 check(
-  "a door control carries the app's own bounds and default",
+  "a door control carries the app's own bounds, and opens where the adapter says",
   (() => {
     const megapixels = byAttr(opened.tree, 'data-generate-door', 'megapixels')
     return (
       !!megapixels &&
       megapixels.props.type === 'number' &&
-      megapixels.props.value === 1 &&
+      // The fixture authors 2 for this door while the app declares 1: the bounds stay
+      // the app's, the starting value is the owner's (`ui.defaults`).
+      megapixels.props.value === 2 &&
       megapixels.props.min === 0.1 &&
       megapixels.props.max === 16 &&
       megapixels.props.step === 0.1
     )
   })(),
   JSON.stringify(byAttr(opened.tree, 'data-generate-door', 'megapixels') && byAttr(opened.tree, 'data-generate-door', 'megapixels').props),
+)
+check(
+  'a door the adapter says nothing about still opens on the app\'s own default',
+  (() => {
+    const scale = byAttr(opened.tree, 'data-generate-door', 'scaleBy')
+    return !!scale && scale.props.value === 1
+  })(),
+  JSON.stringify(byAttr(opened.tree, 'data-generate-door', 'scaleBy') && byAttr(opened.tree, 'data-generate-door', 'scaleBy').props),
 )
 check(
   "a select door offers the app's own options and starts on its default",
@@ -960,7 +1471,7 @@ check(
 // ── nothing installed, and a host that cannot answer ────────────────────────
 
 check(
-  'nothing installed: the open section holds the dashed add card, not a paragraph',
+  'nothing installed: the open section holds the add button, not a paragraph',
   (() => {
     const box = byAttr(empty.tree, 'data-generate-none', PROVIDER)
     return !!box && textIn(box).includes(EN['pane.add.card']) && !!byAttr(box, 'data-generate-add-card', PROVIDER)
@@ -1017,6 +1528,11 @@ for (const key of [
   'pane.section.count',
   'pane.add.card',
   'pane.add.card.hint',
+  // The section header's light (founder, 2026-09-23): each state's sentence is the
+  // dot's own tooltip, so a missing key here is a raw id on hover.
+  'pane.light.ready',
+  'pane.light.keyOnly',
+  'pane.light.noKey',
   // The notes a provider can attach to a stored key. Each one is rendered as
   // `t('note.' + provider.note)` from the host's row, so a missing key here shows the
   // raw id to the user — which is what a note without copy looks like.

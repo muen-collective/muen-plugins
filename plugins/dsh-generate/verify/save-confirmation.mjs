@@ -143,6 +143,19 @@ const PRIMITIVES = {
   IconRefreshOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'refresh', ...props }),
   IconCheckOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'check', ...props }),
   IconInfoOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'info', ...props }),
+  IconPlusOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'plus', ...props }),
+  /** The settings hide switch: a 36×20 button whose label lives in `aria-label`. */
+  Switch: (props) =>
+    REACT.createElement('button', { type: 'button', role: 'switch', 'aria-checked': props.checked, label: props.label, 'data-stub': 'switch', onClick: () => props.onChange(!props.checked) }, props.children),
+  /** The atoms the add control is built from, stood in for the same way. */
+  Button: (props) => REACT.createElement('button', { type: 'button', ...props }, props.icon, props.children),
+  CodeBlock: (props) =>
+    REACT.createElement(
+      'div',
+      { 'data-stub': 'code-block' },
+      props.showHeader === false ? null : REACT.createElement('div', { 'data-stub': 'code-header' }),
+      REACT.createElement('pre', { 'data-stub': 'code' }, props.code),
+    ),
   /**
    * The harness's dialog, stood in for. The real one portals to `document.body`
    * behind a mask; the property under test is what the dialog is asked to show

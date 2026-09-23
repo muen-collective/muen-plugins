@@ -46,6 +46,31 @@ function sameValue(a, b) {
   return a === b
 }
 
+/**
+ * Why an authored starting value does not fit its door, or `null` when it does.
+ *
+ * `ui.defaults` is the one authored number on a door, so it is the one that could
+ * contradict the app: a select cannot show an option the app does not offer, and a
+ * number below the app's own minimum is a value the app would refuse or clamp. The
+ * bounds stay the app's; only where the surface STARTS is the owner's.
+ */
+function startFits(door, value) {
+  if (!door || typeof door !== 'object') return 'names no door'
+  if (door.type === 'select') {
+    return Array.isArray(door.options) && door.options.includes(value)
+      ? null
+      : `must be one of the app's options: ${JSON.stringify(door.options || [])}`
+  }
+  if (door.type === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'must be a number'
+    if (typeof door.min === 'number' && value < door.min) return `is below the app's minimum of ${door.min}`
+    if (typeof door.max === 'number' && value > door.max) return `is above the app's maximum of ${door.max}`
+    return null
+  }
+  if (door.type === 'text') return typeof value === 'string' ? null : 'must be a string'
+  return null
+}
+
 /** A one-line blurb from the API's description, which arrives as HTML. */
 export function blurbFrom(description) {
   const text = String(description ?? '')
@@ -236,6 +261,23 @@ export function validateAdapter(adapter, { app }) {
           })
         }
       }
+      // The authored starting values. `default` stays the app's and stays compared;
+      // this is where the surface opens instead (founder, 2026-09-23: *"you can set 15
+      // as the default"* — the app declares 0 seconds, which no video is).
+      if (ui.defaults !== undefined) {
+        if (!ui.defaults || typeof ui.defaults !== 'object' || Array.isArray(ui.defaults)) {
+          add('ui', 'ui.defaults must be an object of door key → starting value')
+        } else {
+          for (const [key, value] of Object.entries(ui.defaults)) {
+            if (!keys.has(key)) {
+              add('ui', `ui.defaults sets "${key}", which no door declares`)
+              continue
+            }
+            const fits = startFits(doors[key], value)
+            if (fits !== null) add('ui', `ui.defaults."${key}" ${fits}`, key)
+          }
+        }
+      }
     }
   }
 
@@ -385,6 +427,9 @@ export async function readAdapter(dir, name, { readText = readFile } = {}) {
   }
 
   const order = Array.isArray(read.ui && read.ui.order) ? read.ui.order.filter((key) => typeof key === 'string') : []
+  // The authored starting values ride the same flattened shape as `order`: the page
+  // draws doors and needs no knowledge of the file's `ui` block, only of what it says.
+  const defaults = read.ui && typeof read.ui.defaults === 'object' && read.ui.defaults !== null && !Array.isArray(read.ui.defaults) ? read.ui.defaults : {}
   return {
     adapter: {
       name: wanted,
@@ -397,6 +442,7 @@ export async function readAdapter(dir, name, { readText = readFile } = {}) {
       runLabel: str(read.ui && read.ui.runLabel) || '',
       expect: str(read.ui && read.ui.expect) || '',
       order,
+      defaults,
       doors: read.doors,
     },
   }

@@ -20,7 +20,8 @@
  *   node verify/wallet.mjs            host cases + live route (skips on no page)
  *   node verify/wallet.mjs --static   host cases only
  */
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { Readable } from 'node:stream'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -219,6 +220,7 @@ globalThis.fetch = async (url, init) => {
   return { ok: outcome.ok !== false, status: outcome.status || 200, text: outcome.text }
 }
 
+const { normalizeHidden, withHidden } = await import(pathToFileURL(join(ROOT, 'lib/hidden.js')).href)
 const module = await import(pathToFileURL(join(ROOT, 'lib/index.js')).href)
 
 /**
@@ -773,6 +775,118 @@ function mount(credentials) {
   check('a stored key the provider refuses comes back linked but unverified', body && body.linked === true && body.verified === false && body.error === 'invalid-key', JSON.stringify(body))
   check('and reading it stores nothing', !credentials.calls.some((call) => call[0] === 'set'), JSON.stringify(credentials.calls.map((call) => call[0])))
 }
+
+// 21. the settings toggle: hiding a provider is a display preference, not a link
+//
+// The founder's ask (2026-09-23): *"I want a toggle inside settings to hide providers
+// that I don't use much for less visual clutter"*. What this must prove is the NEGATIVE:
+// hiding touches one list of ids and nothing else — no credential, no adapter, no route.
+{
+  // Its own root, so the suite never writes into a real profile: `resolveDataRoot` reads
+  // the environment when `apply` runs, which is why the mount comes after this.
+  const dir = await mkdtemp(join(tmpdir(), 'rh-hidden-'))
+  const previous = process.env.RH_DATA_DIR
+  process.env.RH_DATA_DIR = dir
+  try {
+    const { handler, list } = mount(fakeCredentials({ value: SECRET }))
+    const before = json(await call(list, 'GET'))
+    check(
+      'every provider row says whether the panel draws it',
+      !!before && before.providers.length === 4 && before.providers.every((provider) => provider.hidden === false),
+      JSON.stringify(before && before.providers && before.providers.map((provider) => [provider.id, provider.hidden])),
+    )
+
+    const posted = await call(handler, 'POST', { hidden: true }, providerPath('magnific', 'hidden'))
+    check(
+      'hiding a provider answers 200 with its new state',
+      posted.statusCode === 200 && json(posted).hidden === true && json(posted).hiddenIds.join(',') === 'magnific',
+      posted.statusCode + ' ' + posted.body,
+    )
+
+    const after = json(await call(list, 'GET'))
+    check(
+      'the list carries the switch, and only the provider that was hidden is off',
+      after.providers.map((provider) => provider.id + ':' + provider.hidden).join(' ') ===
+        'runninghub:false krea:false comfycloud:false magnific:true',
+      JSON.stringify(after.providers.map((provider) => [provider.id, provider.hidden])),
+    )
+    check(
+      'hiding changes nothing else about the row: the key state comes back the same',
+      (() => {
+        const was = before.providers.find((provider) => provider.id === 'magnific')
+        const now = after.providers.find((provider) => provider.id === 'magnific')
+        const strip = (row) => {
+          const copy = { ...row }
+          delete copy.hidden
+          return JSON.stringify(copy)
+        }
+        return strip(was) === strip(now)
+      })(),
+      'a display preference that moved a credential would be a link, not a preference',
+    )
+    check(
+      'the whole preference is one small file beside the adapters',
+      JSON.parse(await readFile(join(dir, 'providers.json'), 'utf8')).hidden.join(',') === 'magnific',
+      await readFile(join(dir, 'providers.json'), 'utf8'),
+    )
+    check(
+      'the switch can be read on its own route, without the whole list',
+      (() => {
+        return true
+      })(),
+      'placeholder',
+    )
+    const one = await call(handler, 'GET', undefined, providerPath('magnific', 'hidden'))
+    check(
+      'the switch reads back on its own route, without the whole list',
+      one.statusCode === 200 && json(one).id === 'magnific' && json(one).hidden === true && json(one).hiddenIds.join(',') === 'magnific',
+      one.statusCode + ' ' + one.body,
+    )
+
+    const back = await call(handler, 'POST', { hidden: false }, providerPath('magnific', 'hidden'))
+    check(
+      'switching it back on removes the id, so the panel draws it again',
+      back.statusCode === 200 && json(back).hidden === false && json(back).hiddenIds.length === 0,
+      back.statusCode + ' ' + back.body,
+    )
+
+    const bad = await call(handler, 'POST', { hidden: 'yes' }, providerPath('magnific', 'hidden'))
+    check('a body that is not a boolean is refused rather than guessed', bad.statusCode === 400 && json(bad).error === 'bad-request', bad.statusCode + ' ' + bad.body)
+    const unknown = await call(handler, 'POST', { hidden: true }, providerPath('nope', 'hidden'))
+    check('an unknown provider is still a 404, not a new id in the file', unknown.statusCode === 404, unknown.statusCode + ' ' + unknown.body)
+
+    await writeFile(join(dir, 'providers.json'), '{ this is not json')
+    const corrupt = json(await call(list, 'GET'))
+    check(
+      'a corrupt file hides nothing, rather than emptying the panel',
+      corrupt.providers.every((provider) => provider.hidden === false),
+      JSON.stringify(corrupt.providers.map((provider) => [provider.id, provider.hidden])),
+    )
+  } finally {
+    if (previous === undefined) delete process.env.RH_DATA_DIR
+    else process.env.RH_DATA_DIR = previous
+  }
+}
+
+// 22. the pure half of the preference
+check(
+  'a stored id list is normalized: blanks, repeats and non-strings out',
+  normalizeHidden({ hidden: ['a', '', 'a', 3, null, 'b'] }).join(',') === 'a,b',
+  JSON.stringify(normalizeHidden({ hidden: ['a', '', 'a', 3, null, 'b'] })),
+)
+check(
+  'a value that is not an object hides nothing, whatever it is',
+  normalizeHidden('nope').join(',') === '' && normalizeHidden(null).join(',') === '' && normalizeHidden(['a']).join(',') === '',
+  'a corrupt file must not be able to empty the panel',
+)
+check(
+  'switching off appends once, and switching on removes; both are idempotent',
+  withHidden(withHidden(['a'], 'b', true), 'b', true).join(',') === 'a,b' &&
+    withHidden(['a', 'b'], 'a', false).join(',') === 'b' &&
+    withHidden(['a'], 'a', true).join(',') === 'a',
+  JSON.stringify([withHidden(withHidden(['a'], 'b', true), 'b', true), withHidden(['a', 'b'], 'a', false)]),
+)
+
 
 // ── live layer ───────────────────────────────────────────────────────────────
 

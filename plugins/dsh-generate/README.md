@@ -289,7 +289,7 @@ start page card; icon + label + 2nd row (no thumbnails)"*):
 
 | Screen | What it is |
 |---|---|
-| home | the wallet strip, then **one accordion section per provider — all four, in registry order** — each header carrying the provider's glyph, its name and `family · count`; the open section holds that provider's workflows as cards, then its dashed add card; under the sections, where the key is managed |
+| home | the wallet strip, then **one accordion section per provider — every one in the registry, in registry order, minus the ones switched off in Settings → Generate** — each header carrying the provider's glyph, its name and `family · count`; the open section holds that provider's workflows as cards, then its dashed add card; under the sections, where the key is managed |
 | a workflow card | the harness's own start-page card: **glyph + title + one line**, no thumbnail. The second row is whose app it is (when that is a fact), then the blurb; a workflow with no description falls back to the provider's name. The provider is not on the card — the section header names it, and `data-generate-provider` carries the fact in the DOM |
 | the dashed add card | the empty state, and the add path for a section that already has workflows. One click reveals **that provider's own install prompt** (`addPrompt`) with Copy beside it — the sentence the agent's skill answers to |
 | a workflow | its surface, in the same pane: **doors as controls** in `ui.order` with the primary door first, the app's tooltip under each, `advanced` doors behind one disclosure, the app's own bounds/options/defaults on every control, and a way back to the list |
@@ -300,6 +300,22 @@ by itself: landing on four closed rows would hide the thing the pane exists for.
 Providers are drawn whether or not they are linked, because a section is where its add
 card lives — an install that showed only the providers that already work could never be
 filled.
+
+### Hiding a provider, and why the switch is live
+
+**Asked for by the founder on 2026-09-23:** *"I want a toggle inside settings to hide providers that I don't
+use much for less visual clutter."* Every row in `Settings → Generate` carries a switch at its far right, ON
+meaning "draw this provider in the panel"; a row switched off says **Hidden** on itself, because an absent
+section explains nothing. Hiding is a display preference and never a link: the key stays in credentials, the
+adapters stay on disk, the row stays on the page. The one file it writes is `<root>/providers.json`
+(`{ "hidden": ["magnific"] }`), and an id nobody recognises is kept rather than forgotten — Magnific left the
+registry and came back once already.
+
+The switch and the panel are on screen at the same time (Settings is a dialog over the app), so the provider
+list is **one store both surfaces subscribe to**, not a copy each. That is the fix for the founder's
+2026-09-23 report — *"I tested toggle and it works if I restart"*: holding a copy each, the switch moved its
+own row while the pane behind it went on drawing the provider until the app restarted. A local change now
+marks the list newer than any read already in flight, so a slow host answer cannot undo a switch just thrown.
 
 **No node id and no field name is ever drawn** (E7's acceptance gate): those belong
 to the payload gate, as JSON to read, which is the next slice with the run strip and

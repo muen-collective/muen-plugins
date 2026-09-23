@@ -321,6 +321,46 @@ check('parseFieldData reads a JSON string', parseFieldData('["FLOAT", {"min": 1}
 check('parseFieldData survives an unreadable string', parseFieldData('not json') === null)
 check('a COMBO is a select', controlFor('LIST', '["COMBO", {"options": ["a", "b"]}]') === 'select')
 check('an IMAGE whose first element is an array is an image', controlFor('IMAGE', '[["a.png"], {"image_upload": true}]') === 'image')
+// The API's other shape, met on KSampler's scheduler and sampler_name and on
+// UNETLoader's weight_dtype: the options are the first element, with no kind token in
+// front. The image door above keeps its filename list out of the menu, which is the
+// difference the type decides.
+check(
+  'a bare option list on a LIST is a select',
+  controlFor('LIST', '[["simple", "karras"], {"advanced": true}]') === 'select',
+  String(controlFor('LIST', '[["simple", "karras"], {"advanced": true}]')),
+)
+check(
+  'a bare option list on an untyped door is still a select, not a hidden door',
+  controlFor(null, '[["default", "fp8_e4m3fn"]]') === 'select',
+  String(controlFor(null, '[["default", "fp8_e4m3fn"]]')),
+)
+check(
+  'the select derived from a bare list carries the options it selects between',
+  (() => {
+    const doors = deriveDoors([
+      { nodeId: '482', fieldName: 'scheduler', fieldType: 'LIST', fieldData: '[["simple", "karras"], {"advanced": true}]' },
+    ], SHIPPED_HOUSE)
+    const door = doors[0]
+    return door && door.type === 'select' && door.supported === true && door.options.join(',') === 'simple,karras' && door.advanced === true
+  })(),
+  JSON.stringify(deriveDoors([
+    { nodeId: '482', fieldName: 'scheduler', fieldType: 'LIST', fieldData: '[["simple", "karras"], {"advanced": true}]' },
+  ], SHIPPED_HOUSE)[0] || null),
+)
+check(
+  'an image whose first element is an array never grows a menu',
+  (() => {
+    const doors = deriveDoors([
+      { nodeId: '470', fieldName: 'image', fieldType: 'IMAGE', fieldData: '[["a.png"], {"image_upload": true}]' },
+    ], SHIPPED_HOUSE)
+    const door = doors[0]
+    return door && door.type === 'image' && door.options === undefined
+  })(),
+  JSON.stringify(deriveDoors([
+    { nodeId: '470', fieldName: 'image', fieldType: 'IMAGE', fieldData: '[["a.png"], {"image_upload": true}]' },
+  ], SHIPPED_HOUSE)[0] || null),
+)
 check('a STRING is text', controlFor('STRING', '["STRING", {}]') === 'text')
 check('a FLOAT is a number', controlFor('FLOAT', '["FLOAT", {}]') === 'number')
 check('a LIST with no options is hidden, not guessed', controlFor('LIST', '["LIST", {}]') === null)
@@ -509,6 +549,57 @@ const badOrder = JSON.parse(JSON.stringify(good))
 badOrder.ui.order = ['prompt', 'ghost']
 const badOrderResult = await validate.execute({ adapter: badOrder }, {})
 check('ui.order may only name declared doors', badOrderResult.problems.some((problem) => problem.code === 'ui'), JSON.stringify(badOrderResult.problems))
+
+// ui.defaults: the one authored number on a door, so the one that could contradict the
+// app's bounds. The app-derived `default` stays compared, untouched. The doors are found
+// rather than named, so this keeps testing the rule if the fixture's app changes.
+{
+  const keys = Object.keys(good.doors)
+  const numberKey = keys.find((key) => good.doors[key].type === 'number' && typeof good.doors[key].max === 'number')
+  const selectKey = keys.find((key) => good.doors[key].type === 'select' && Array.isArray(good.doors[key].options) && good.doors[key].options.length > 0)
+  const withDefaults = (defaults) => {
+    const copy = JSON.parse(JSON.stringify(good))
+    copy.ui = { ...(copy.ui || {}), defaults }
+    return validateAdapter(copy, { app: readAgain.app })
+  }
+  const uiProblems = (defaults) => withDefaults(defaults).problems.filter((problem) => problem.code === 'ui')
+
+  check(
+    'an authored starting value inside the app\'s bounds is accepted',
+    numberKey !== undefined && uiProblems({ [numberKey]: good.doors[numberKey].max }).length === 0,
+    JSON.stringify({ numberKey, problems: numberKey === undefined ? [] : uiProblems({ [numberKey]: good.doors[numberKey].max }) }),
+  )
+  check(
+    'ui.defaults may only name declared doors',
+    uiProblems({ ghost: 1 }).some((problem) => String(problem.detail).includes('ghost')),
+    JSON.stringify(uiProblems({ ghost: 1 })),
+  )
+  check(
+    "an authored value above the app's own maximum is refused",
+    numberKey !== undefined && uiProblems({ [numberKey]: good.doors[numberKey].max + 1 }).some((problem) => String(problem.detail).includes('maximum')),
+    JSON.stringify({ numberKey, problems: numberKey === undefined ? [] : uiProblems({ [numberKey]: 1e9 }) }),
+  )
+  check(
+    'an authored value of the wrong kind is refused rather than rendered as NaN',
+    numberKey !== undefined && uiProblems({ [numberKey]: 'forty' }).some((problem) => String(problem.detail).includes('number')),
+    JSON.stringify({ numberKey, problems: numberKey === undefined ? [] : uiProblems({ [numberKey]: 'forty' }) }),
+  )
+  check(
+    "an authored value that is not one of the app's own options is refused",
+    selectKey !== undefined && uiProblems({ [selectKey]: 'not an option the app offers' }).some((problem) => String(problem.detail).includes('options')),
+    JSON.stringify({ selectKey, problems: selectKey === undefined ? [] : uiProblems({ [selectKey]: 'nope' }) }),
+  )
+  check(
+    'the derived default is still compared, so an authored starting value never excuses drift',
+    (() => {
+      const drifted = JSON.parse(JSON.stringify(good))
+      drifted.ui = { ...(drifted.ui || {}), defaults: numberKey === undefined ? {} : { [numberKey]: good.doors[numberKey].max } }
+      if (numberKey !== undefined) drifted.doors[numberKey].default = 12345
+      return validateAdapter(drifted, { app: readAgain.app }).problems.some((problem) => problem.code === 'derived-drift')
+    })(),
+    'the app still owns the number; the surface only chooses where to start',
+  )
+}
 
 const wrongApp = JSON.parse(JSON.stringify(good))
 wrongApp.source.appId = '2071662900963532802'

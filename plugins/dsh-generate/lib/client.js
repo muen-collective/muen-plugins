@@ -77,13 +77,20 @@ window.__ModuleLoader__.load({
       IconCheckOutline16,
       IconInfoOutline14,
       // The pane's own glyphs: a chevron per accordion header, a flow glyph on a
-      // workflow card, an image glyph on an image provider's header, and the plus on
-      // the dashed add card.
+      // workflow card, and the plus on the dashed add card. The image provider's own
+      // glyph is gone with the header icon it used to fill: the header draws the
+      // section's status light instead (founder, 2026-09-23).
       IconChevronDownOutline14,
       IconChevronRightOutline14,
       IconBranchOutline16,
-      IconEnhanceOutline16,
       IconPlusOutline16,
+      // The add control and the snippet it reveals are the harness's own atoms, not
+      // copies: `Button` draws the capsule and `CodeBlock` draws the prompt, the same
+      // pair a start-page control and an agent's code answer are made of. `Switch` is
+      // the settings toggle that hides a provider from the panel.
+      Button,
+      CodeBlock,
+      Switch,
       Modal,
     } = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
@@ -123,6 +130,11 @@ window.__ModuleLoader__.load({
       'surface.image.choose': 'Choose an image',
       'pane.loading': 'Checking your wallet…',
       'pane.first.title': 'Link your RunningHub account',
+      // Every provider switched off in Settings. The pane says so rather than looking
+      // like an install that lost its workflows, and it names the page holding the
+      // switches — the one place this state can be undone.
+      'pane.hidden.title': 'Every provider is hidden',
+      'pane.hidden.body': 'Settings → Generate lists all of them. Switch one back on to see its workflows here.',
       'pane.first.body': 'Paste your API key. It is checked now, and it stays on this machine.',
       // The pane links a key; only Settings → Generate changes or removes one. A
       // person who meets the field here would otherwise never learn where the key
@@ -149,7 +161,7 @@ window.__ModuleLoader__.load({
       // add" note any more — the card under the workflows IS that sentence.
       'pane.section.none': 'No workflows yet',
       'pane.section.count': 'installed',
-      'pane.add.card': '+ Workflow',
+      'pane.add.card': 'Workflow',
       'pane.add.card.hint': 'Click for the prompt you paste in chat',
       // A host that did not answer is not an empty install, and saying so is the
       // difference between "add a workflow" and "something is wrong".
@@ -191,6 +203,13 @@ window.__ModuleLoader__.load({
       'wallet.notLinked': 'No key linked',
       'wallet.fromEnvironment': 'from your environment',
       'wallet.fromStore': 'stored on this machine',
+      // The accordion's status light (founder, 2026-09-23): green when the section
+      // is ready to run, amber when the key is good but nothing is installed, red
+      // when there is no key at all. A colour alone is not a fact, so each state
+      // also carries its own sentence for the dot's tooltip.
+      'pane.light.ready': 'Ready: the key is linked and a workflow is installed',
+      'pane.light.keyOnly': 'Key linked, no workflow installed yet',
+      'pane.light.noKey': 'No key linked',
       // ONE settings page for every provider (founder, 2026-09-22), so the title is
       // the surface's and each provider's own name is drawn on its own row. The page
       // is the Models → Providers shape (founder, 2026-09-23: *"use the models settings
@@ -204,6 +223,12 @@ window.__ModuleLoader__.load({
       'settings.row.setup': 'Set up',
       'settings.row.edit': 'Edit',
       'settings.row.close': 'Close',
+      // The hide switch (founder, 2026-09-23): ON means the Generate panel draws this
+      // provider, so hiding is the act and the switch is reversible from the row it is
+      // on. The tag is what explains an absent section.
+      'settings.hide.label': 'Show in the Generate panel',
+      'settings.hide.hint': 'Hidden providers keep their key and their workflows. Bring one back to see it in the panel again.',
+      'settings.hide.tag': 'Hidden',
       'settings.account': 'Account',
       'settings.linked': 'Key saved',
       'settings.linked.unverified': 'Saved, not checked',
@@ -278,6 +303,8 @@ window.__ModuleLoader__.load({
       'surface.image.choose': '选择图片',
       'pane.loading': '正在检查密钥…',
       'pane.first.title': '连接服务商账户',
+      'pane.hidden.title': '所有提供方都已隐藏',
+      'pane.hidden.body': '在 Settings → Generate 中可以看到全部提供方，打开其中一个开关即可在此显示它的工作流。',
       'pane.first.body': '粘贴你的 API 密钥。现在就会校验，并且只保存在这台机器上。',
       'pane.first.manage': '之后可以在「设置 → 生成」里修改或移除这个密钥。设置菜单位于左侧边栏底部。',
       'pane.linked.manage': '在「设置 → 生成」里修改或移除密钥。设置菜单位于左侧边栏底部。',
@@ -285,7 +312,7 @@ window.__ModuleLoader__.load({
       'pane.add.hint': '要添加工作流，在对话里对智能体说：「add this RunningHub workflow <app link>」。',
       'pane.section.none': '还没有工作流',
       'pane.section.count': '个已安装',
-      'pane.add.card': '+ 工作流',
+      'pane.add.card': '工作流',
       'pane.add.card.hint': '点击获取可粘贴到对话里的指令',
       'pane.list.failed': '无法读取已安装的工作流。',
       'key.label.suffix': 'API 密钥',
@@ -313,6 +340,9 @@ window.__ModuleLoader__.load({
       'wallet.notLinked': '未连接密钥',
       'wallet.fromEnvironment': '来自环境变量',
       'wallet.fromStore': '保存在本机',
+      'pane.light.ready': '就绪：密钥已连接，且已安装工作流',
+      'pane.light.keyOnly': '密钥已连接，尚未安装工作流',
+      'pane.light.noKey': '未连接密钥',
       'settings.title': '生成',
       'settings.body': '每个服务商的密钥都保存在这台机器上，浏览器不会看到它。',
       'settings.kind.image': '图像',
@@ -320,6 +350,9 @@ window.__ModuleLoader__.load({
       'settings.row.setup': '设置',
       'settings.row.edit': '编辑',
       'settings.row.close': '收起',
+      'settings.hide.label': '在 Generate 面板中显示',
+      'settings.hide.hint': '隐藏的提供方仍保留密钥与工作流，重新打开开关即可在面板中看到它。',
+      'settings.hide.tag': '已隐藏',
       'settings.account': '账户',
       'settings.linked': '密钥已保存',
       'settings.linked.unverified': '已保存，未校验',
@@ -552,22 +585,6 @@ window.__ModuleLoader__.load({
         borderRadius: 6,
         cursor: 'pointer',
       },
-      strip: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '8px 10px',
-        background: 'var(--dsw-alias-bg-layer-1)',
-        borderBottom: '1px solid var(--dsw-alias-border-l1)',
-        fontSize: 12,
-        color: 'var(--dsw-alias-label-primary)',
-      },
-      /** A strip row's provider name. Drawn only when more than one is linked. */
-      stripLabel: {
-        fontWeight: 600,
-        whiteSpace: 'nowrap',
-        color: 'var(--dsw-alias-label-secondary)',
-      },
       /**
        * THE SETTINGS PAGE, IN THE MODELS → PROVIDERS SHAPE (founder, 2026-09-23:
        * *"use the models settings design for generate settings"*).
@@ -644,6 +661,22 @@ window.__ModuleLoader__.load({
         color: 'var(--dsw-alias-label-secondary)',
         border: '.5px solid var(--dsw-alias-border-l3)',
         borderRadius: 4,
+      },
+      /** The same tag, quieter: this provider is not drawn in the panel right now. */
+      rowTagHidden: {
+        flex: 'none',
+        padding: '1px 6px',
+        fontSize: 11,
+        lineHeight: '16px',
+        color: 'var(--dsw-alias-label-tertiary)',
+        border: '.5px dashed var(--dsw-alias-border-l2)',
+        borderRadius: 4,
+      },
+      /** The hide switch's own cell in the row head, so the wrapper can be tagged. */
+      hideSwitch: {
+        flex: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
       },
       rowActions: {
         display: 'inline-flex',
@@ -836,11 +869,11 @@ window.__ModuleLoader__.load({
         color: 'var(--dsw-alias-label-secondary)',
         overflowWrap: 'anywhere',
       },
-      stripValue: {
+      balanceValue: {
         fontWeight: 600,
         whiteSpace: 'nowrap',
       },
-      stripNote: {
+      balanceNote: {
         flex: 1,
         minWidth: 0,
         overflow: 'hidden',
@@ -879,9 +912,18 @@ window.__ModuleLoader__.load({
         gap: 8,
         padding: '14px 12px 2px',
       },
+      /**
+       * ONE SECTION IS ONE CARD (founder, 2026-09-23): the header and the body it opens
+       * share a single border and radius, so expanding a section grows that card rather
+       * than stacking a second one under it. The header keeps no card of its own.
+       */
       section: {
         display: 'flex',
         flexDirection: 'column',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '.5px solid var(--dsw-alias-border-l4)',
+        borderRadius: 12,
+        overflow: 'hidden',
       },
       sectionHead: {
         display: 'flex',
@@ -893,19 +935,48 @@ window.__ModuleLoader__.load({
         textAlign: 'left',
         font: 'inherit',
         color: 'inherit',
-        background: 'var(--dsw-alias-bg-layer-1)',
-        border: '.5px solid var(--dsw-alias-border-l4)',
-        borderRadius: 12,
+        background: 'transparent',
+        border: 'none',
         cursor: 'pointer',
       },
-      sectionIcon: {
+      sectionLight: {
         flex: 'none',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         width: 26,
         height: 26,
+      },
+      /**
+       * Row 2 of a section header: the wallet balance, moved out of the strip that
+       * used to sit above the accordion (founder, 2026-09-23: *"move the wall balance
+       * to row 2 below accordion title"*). It reads inside the header so the section's
+       * name and its money are one fact.
+       */
+      sectionBalance: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        minWidth: 0,
+        fontSize: 12,
+        lineHeight: '18px',
         color: 'var(--dsw-alias-label-secondary)',
+        overflow: 'hidden',
+      },
+      /** Row 1 of a header: the provider's name and the way out to its own page. */
+      sectionTitleRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        minWidth: 0,
+      },
+      /** The way out: a glyph beside the name, not a word under it. */
+      sectionAccountIcon: {
+        flex: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+        color: 'var(--dsw-alias-label-tertiary)',
+        textDecoration: 'none',
       },
       sectionText: {
         display: 'flex',
@@ -938,7 +1009,7 @@ window.__ModuleLoader__.load({
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
-        padding: '8px 2px 2px',
+        padding: '2px 12px 12px',
       },
       sectionCards: {
         display: 'flex',
@@ -963,7 +1034,11 @@ window.__ModuleLoader__.load({
         display: 'flex',
         alignItems: 'center',
         gap: 14,
-        width: '100%',
+        // The start-page card's own size (the guide's `.entry`): 380px wide, floored at
+        // 56px tall. The width is the point — the card keeps its size inside the section
+        // card instead of stretching to it.
+        width: 380,
+        maxWidth: '100%',
         boxSizing: 'border-box',
         minHeight: 56,
         padding: '14px 20px',
@@ -976,12 +1051,6 @@ window.__ModuleLoader__.load({
         cursor: 'pointer',
       },
       startCardHover: { background: 'var(--dsw-alias-interactive-bg-hover)' },
-      /** The empty state: the same card, dashed, carrying nothing but the plus. */
-      startCardDashed: {
-        background: 'transparent',
-        border: '1px dashed var(--dsw-alias-border-l2)',
-        color: 'var(--dsw-alias-label-secondary)',
-      },
       startCardIcon: {
         flex: 'none',
         display: 'flex',
@@ -990,6 +1059,29 @@ window.__ModuleLoader__.load({
         width: 26,
         height: 26,
         color: 'var(--dsw-alias-label-secondary)',
+      },
+      /**
+       * A one-colour mark, painted in the card's own colour: `currentColor` under a
+       * mask. One asset, both themes, no inverse to keep in step.
+       */
+      startCardMark: {
+        display: 'block',
+        width: 24,
+        height: 24,
+        backgroundColor: 'currentColor',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+      },
+      /** A mark that carries its own colours: drawn as it came, on every theme. */
+      startCardLogo: {
+        display: 'block',
+        width: 24,
+        height: 24,
+        objectFit: 'contain',
       },
       startCardText: {
         display: 'flex',
@@ -1012,11 +1104,15 @@ window.__ModuleLoader__.load({
         overflow: 'hidden',
         textOverflow: 'ellipsis',
       },
-      /** What the add card's click reveals: the sentence, the prompt, and Copy. */
+      /** What the add control's click reveals: the sentence, the snippet, and Copy. */
       addWrap: {
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
+      },
+      /** The revealed prompt: the primitive draws it, this only carries the attribute. */
+      promptBlock: {
+        minWidth: 0,
       },
       addPrompt: {
         display: 'flex',
@@ -1104,6 +1200,75 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * ONE PROVIDER LIST, READ BY EVERY SURFACE THAT DRAWS IT.
+     *
+     * Settings → Generate owns the hide switch and the Generate pane owns the sections,
+     * and the two are mounted at once: Settings is a dialog over the app
+     * (`dsh-client-ui-settings-general`, `role="dialog"`), so the pane behind it never
+     * unmounts while a switch is thrown. Each held a private copy fetched when it
+     * mounted, so a flipped switch moved the row it lives on and the pane kept drawing
+     * the provider anyway — the only thing that made the pane ask again was restarting
+     * the app (founder, 2026-09-23: *"I tested toggle and it works if I restart"*).
+     * The list lives here now: one read, every mounted surface subscribed, so a hide
+     * lands in the pane on the click and a key linked in the pane reaches the Settings
+     * row the same way.
+     *
+     * READS STILL HAPPEN PER MOUNT, because the host is the one place that knows whether
+     * a stored key still works. Concurrent mounts share a request, `force` asks again
+     * (that is the Refresh control), and `mark` is what keeps a read that started before
+     * a local change from publishing over it: the row a person just switched is newer
+     * than a list already in flight.
+     */
+    const providerStore = (() => {
+      let state = { phase: 'loading', providers: [] }
+      let revision = 0
+      let inflight = null
+      const listeners = new Set()
+
+      const publish = (next) => {
+        state = next
+        for (const listener of Array.from(listeners)) listener()
+      }
+
+      const ask = async () => {
+        try {
+          const response = await fetch(PROVIDERS_API, { headers: { accept: 'application/json' } })
+          const body = await response.json()
+          if (!response.ok || !body || !Array.isArray(body.providers)) return { phase: 'failed', providers: [] }
+          return { phase: 'ready', providers: body.providers }
+        } catch {
+          return { phase: 'failed', providers: [] }
+        }
+      }
+
+      return {
+        read: () => state,
+        subscribe(listener) {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+        load({ force = false } = {}) {
+          if (inflight !== null && !force) return inflight
+          const mark = revision
+          inflight = ask().then((next) => {
+            inflight = null
+            if (mark === revision) publish(next)
+            return next
+          })
+          return inflight
+        },
+        /** Replace one provider's row without dropping the others. */
+        replace(row) {
+          revision += 1
+          publish({
+            ...state,
+            providers: state.providers.map((provider) => (provider.id === row.id ? { ...provider, ...row } : provider)),
+          })
+        },
+      }
+    })()
+
+    /**
      * Every provider, with the state of its key.
      *
      * THE KEY NEVER REACHES THIS HALF (§12 rule 2): a save posts the value once and
@@ -1112,7 +1277,7 @@ window.__ModuleLoader__.load({
      * rather than secrets.
      */
     function useProviders() {
-      const [state, setState] = React.useState({ phase: 'loading', providers: [] })
+      const [state, setState] = React.useState(providerStore.read())
       const [busy, setBusy] = React.useState(false)
       // The last save's outcome, held by the surface rather than by the field: a
       // successful link replaces the field with the account view, so a confirmation
@@ -1120,38 +1285,43 @@ window.__ModuleLoader__.load({
       // several providers "which key was just linked" is part of the fact.
       const [confirmed, setConfirmed] = React.useState(null)
 
-      const load = React.useCallback(async (apply) => {
-        try {
-          const response = await fetch(PROVIDERS_API, { headers: { accept: 'application/json' } })
-          const body = await response.json()
-          if (!response.ok || !body || !Array.isArray(body.providers)) {
-            apply({ phase: 'failed', providers: [] })
-            return
-          }
-          apply({ phase: 'ready', providers: body.providers })
-        } catch {
-          apply({ phase: 'failed', providers: [] })
-        }
+      // Subscribed before the read below starts, so a list that lands while this
+      // surface is mounting still reaches it.
+      React.useEffect(() => providerStore.subscribe(() => setState(providerStore.read())), [])
+
+      // The host is asked once per mount, the way it always was.
+      React.useEffect(() => {
+        providerStore.load()
       }, [])
 
-      React.useEffect(() => {
-        let live = true
-        load((next) => {
-          if (live) setState(next)
-        })
-        return () => {
-          live = false
-        }
-      }, [load])
-
       /** Replace one provider's row without dropping the others. */
-      const replace = React.useCallback(
-        (row) =>
-          setState((current) => ({
-            ...current,
-            providers: current.providers.map((provider) => (provider.id === row.id ? { ...provider, ...row } : provider)),
-          })),
-        [],
+      const replace = providerStore.replace
+
+      /**
+       * The settings toggle: hide a provider from the panel, or bring it back.
+       *
+       * Optimistic, because the switch is the control the person is looking at: it moves
+       * on the click and returns if the host refuses, which reads as "that did not
+       * stick" rather than as a control that ignores you. Nothing else in the row
+       * changes — a hidden provider keeps its key, its account and its adapters.
+       */
+      const setHidden = React.useCallback(
+        async (id, hidden) => {
+          replace({ id, hidden })
+          try {
+            const response = await fetch(providerUrl(id, 'hidden'), {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', accept: 'application/json' },
+              body: JSON.stringify({ hidden }),
+            })
+            if (!response.ok) throw new Error('refused')
+            return { ok: true, error: null }
+          } catch {
+            replace({ id, hidden: !hidden })
+            return { ok: false, error: 'unreachable' }
+          }
+        },
+        [replace],
       )
 
       const save = React.useCallback(
@@ -1213,9 +1383,10 @@ window.__ModuleLoader__.load({
 
       /** A new keystroke makes the previous confirmation stale. */
       const forget = React.useCallback(() => setConfirmed(null), [])
-      const reload = React.useCallback(() => load(setState), [load])
+      // Refresh asks again rather than taking whatever read is already in flight.
+      const reload = React.useCallback(() => providerStore.load({ force: true }), [])
 
-      return { phase: state.phase, providers: state.providers, busy, load: reload, save, unlink, confirmed, forget }
+      return { phase: state.phase, providers: state.providers, busy, load: reload, save, unlink, setHidden, confirmed, forget }
     }
 
     /**
@@ -1472,55 +1643,6 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The meter (§9): what is left, whose environment it came from, and the way out to
-     * top up — ONE ROW PER PROVIDER.
-     *
-     * Several providers is the point of the plugin now, so a single balance would have
-     * to pick one and be wrong about the others. With one provider this draws exactly
-     * what it always did.
-     *
-     * `showLabel` is what keeps that true: with one provider the row reads as a plain
-     * balance, and only when there are several does the provider's name appear.
-     */
-    function ProviderStrip({ t, provider, showLabel }) {
-      const parts = balanceParts(t, provider)
-      return h(
-        'div',
-        { style: S.strip, 'data-generate-provider-strip': provider.id },
-        showLabel ? h('span', { style: S.stripLabel }, provider.label) : null,
-        // A provider with no balance endpoint says `Key saved` rather than claiming an
-        // empty wallet: Krea and Comfy Cloud have no balance route at all.
-        h(
-          'span',
-          { style: S.stripValue },
-          parts.length ? parts.join(' · ') : provider.linked ? t('settings.linked') : t('wallet.notLinked'),
-        ),
-        h(
-          'span',
-          {
-            style: S.stripNote,
-            // The note's own text is the contract the verify reads; matching the
-            // phrase across the page would also hit the replace hint, which says
-            // "the one stored on this machine" for a different reason.
-            'data-generate-source': provider.source || 'none',
-          },
-          provider.writable === false ? t('settings.readOnly') : null,
-          provider.writable !== false && provider.source === STORED_SOURCE ? t('wallet.fromStore') : null,
-          provider.writable !== false && ENVIRONMENT_SOURCES.includes(provider.source) ? t('wallet.fromEnvironment') : null,
-          provider.note ? t('note.' + provider.note) : null,
-        ),
-        provider.accountUrl
-          ? h(
-              'a',
-              { href: provider.accountUrl, target: '_blank', rel: 'noreferrer', style: S.link },
-              t('settings.account'),
-              h(IconRightUpOutline16, { size: 12 }),
-            )
-          : null,
-      )
-    }
-
-    /**
      * One workflow, whole, for the surface that renders its doors.
      *
      * The pane mounts this per open unit, keyed by provider and name, so switching
@@ -1585,6 +1707,22 @@ window.__ModuleLoader__.load({
       return ''
     }
 
+    /**
+     * What a door starts at on THIS surface: an authored starting value when the adapter
+     * names one, and the app's own default otherwise.
+     *
+     * THE APP OWNS THE BOUNDS, THE OWNER OWNS THE STARTING VALUE (founder, 2026-09-23:
+     * *"you can set 15 as the default"* — the MiniMax H3 app declares `default: 0` on its
+     * duration door, and no video is zero seconds). That is why `ui.defaults` sits
+     * beside the derived `default` instead of overwriting it: the validator keeps
+     * comparing `default` with the app, so a re-check still notices when the app moves,
+     * and the starting value is a product choice that survives that comparison.
+     */
+    function startFor(key, door, defaults) {
+      const authored = defaults && Object.prototype.hasOwnProperty.call(defaults, key) ? defaults[key] : undefined
+      return authored === undefined ? defaultFor(door) : authored
+    }
+
     /** One card on the pane's first screen: the whole card opens that workflow. */
     /**
      * Inline styles carry no `:hover`, and the start-page card's hover background is
@@ -1594,6 +1732,126 @@ window.__ModuleLoader__.load({
     function useHover() {
       const [hover, setHover] = React.useState(false)
       return [hover, { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) }]
+    }
+
+    /**
+     * THE MODEL MARKS. A workflow card wears the mark of the model it runs when its
+     * name says which model that is, and the generic branch glyph when it does not
+     * (founder, 2026-09-23: *"can you use logo for Krea WF"*, then LobeHub's icon set
+     * as the source of AI logos).
+     *
+     * TWO TREATMENTS, because the marks are two kinds of picture:
+     *
+     * - A ONE-COLOUR mark is drawn as a CSS MASK over `currentColor`, so it takes the
+     *   card's own text colour and needs NO dark-theme inverse. A raw black PNG is what
+     *   would have needed one; a second white copy would be a second asset to keep in
+     *   step. Only its alpha is read, so the file's own colour is irrelevant.
+     * - A MARK THAT CARRIES ITS OWN COLOURS is drawn as an image. Qwen is this one: the
+     *   founder first asked for LobeHub's `<Qwen.Avatar>`, then picked the gradient mark
+     *   instead (2026-09-23: *"qwen should be purple … `<Qwen.Color size={56} />` this
+     *   one is better"*), so the tile is gone and the mark keeps its own gradient.
+     *   Masking it would read its transparent counters as opaque and fill the mark in.
+     *
+     * Krea is the only mask: its 96px PNG has a transparent field and its alpha is the
+     * shape. MiniMax and Qwen are drawn as images — the `-color` files, which is what
+     * LobeHub's `Color` components render (`<Minimax.Color size={56} />`,
+     * `<Qwen.Color size={56} />`; founder, 2026-09-23, picking Color over the mono and
+     * Avatar forms for both).
+     */
+    const KREA_MARK =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAMAAADVRocKAAACE1BMVEVMaXEAAAAAAAAAAAAAAA'
+      + 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+      + 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+      + 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+      + 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+      + 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+      + 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+      + 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+      + 'AAAAAAAAAAAAAAAABUSV8qAAAAsHRSTlMA5ynv0OFlLQQsARGBCR9mtPbHOEQGMmQgf4gz0YalBUOEqjq5KCdHJKdQIwr42B'
+      + 'DdG3HpipMuJfPSzoliNA5b8Rqa5o0xdyq7Pi/02o6twmd0tzn9y988+rKe9fvX04BCwOQTi075PWwevMgPma9ykBZoo7Zrru'
+      + 'AZmI8HbaxfVwsVsamf63Yd6lV1xRhY4gxaIlGbYcxwl9zuvVICYHlB5Um+kjfVeky4fKJqw2/BRp5YuwMAAAAJcEhZcwAAA+'
+      + 'gAAAPoAbV7UmsAAAP0SURBVGje7ZrnV9RAFMUDCywCIm0XkCK9KdJVBEV67yooKkVFpYu99957772/P1FSVkI2b3Zehj2HD7'
+      + '5PkN9y70mYzLy5s5L0vxZ4xXT32B043vkxqXG5ZfH15RGg1FBClhlf96BZ5e+vLbOiHwu6OnjFiJ1rdbivnCyf5QNza8lcnm'
+      + 'DAESto+qngVrv0fIsb3lBJ0U8HkwqZ5adM8JrFBAMfMwOIcuGTpriBXz/BVACuani/OYYzvPpjiABEq7wKwfm8Bh2YwWYFB2'
+      + 'IYIjkN1qIKMTLOQXEJpwEqAHdlnIziFj79UNzgtcyzUbyRz8COGyyVeRrOA7kMFuECsTIfxfkyUQNlnD7FufAjimOOUsgVNQ'
+      + 'hX1iDc4LaoQZmMC3GDdlGDPBmX4gbHBA0KZVqL60OAmMGIQtsYBrWSyDDdocAehj4Eixh8VWERQ99PEjDQ1vwLrBs4btkg/7'
+      + 'q23pax9GGA06B+dh1/lD3Vv/fdfhcpYeoD74Lmqz3RH76GTu8nW38rqWdpqDdefggeinfBlDIAbI2Ga4Gvqj3pcy/5MwZpc3'
+      + '7PiwtoA8+1l7+tq9N+CK5I3G7rBc4it7/LU4BSl6n6ISR5GHYQ9W/Q9HknUo7ey7ziifqJRH1YRdPfTdUPId6AP1G/lKifSb'
+      + '2BSqJBGFF/gPoKDNP0o6n6BTT9fvIcsYqkv1TyrkGyhQyhkqD/y1IKksut/8VazMI7TH1Wq8tGk+SdF+1ikPLps9WwT/LCVN'
+      + 'GbqS2wfQArqQYck92Utt/LsTZWPU3XYaHaB1t1eytS+bHkD9tdid521yXyQwqKwNSbW2+6PlSnu3yIPFbNI53spJf/QrEhPd'
+      + 'i2mOywesKwR/2dnKprYI37/W/8yotct3vudEqLbcOztztGqjqjQvW7+Hr3zA6CuA2a4CD7wzkR6BaRdxPY/AeltTXbzP/7/h'
+      + 'QDgEG72dhKqmI02akkg5leqiPDAKbZb98BosFM2TYllhR3Jo25yIH56a/dN+J+09rMU8M0iJKs7/Q3VqiM2dJ/kESihAlWJk'
+      + 'xr8OysBrp7HqIELAx57vEhOQXjnDr1PfdanAOwU8bxuMETUQPljGISNxicl1DwHm7g7+1YM1zYQDlsWunFYFaJlttx7qDEOW'
+      + 'ivzugsT4jG+59l/l14PsUFKtgHFJs5DT6hCsrB6H0Uj3MaPGaPcwdqsIfTIA8T0LLNrQg+wr3sF5sLXNLwUcTgFn/vVcReEi'
+      + 'dFjxrNXwVd4nFe9LBUinQXKNbzLvfj3oL5PbA2hsyjxANr45F7l9s+b51+jxJOziuUKDlgk/rnRTXppl8aGLepPO2FpS8NqJ'
+      + 'uEPW+cjJu/42yMLJD+1wKvv0m/OYkd9ceRAAAAAElFTkSuQmCC'
+    const QWEN_MARK =
+      'data:image/svg+xml;base64,PHN2ZyBoZWlnaHQ9IjFlbSIgc3R5bGU9ImZsZXg6bm9uZTtsaW5lLWhlaWdodDoxIiB2aW'
+      + 'V3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIxZW0iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHRpdGxlPl'
+      + 'F3ZW48L3RpdGxlPjxwYXRoIGQ9Ik0xMi42MDQgMS4zNGMuMzkzLjY5Ljc4NCAxLjM4MiAxLjE3NCAyLjA3NWEuMTguMTggMC'
+      + 'AwMC4xNTcuMDkxaDUuNTUyYy4xNzQgMCAuMzIyLjExLjQ0Ni4zMjdsMS40NTQgMi41N2MuMTkuMzM3LjI0LjQ3OC4wMjQuOD'
+      + 'M3LS4yNi40My0uNTEzLjg2NC0uNzYgMS4zbC0uMzY3LjY1OGMtLjEwNi4xOTYtLjIyMy4yOC0uMDQuNTEybDIuNjUyIDQuNj'
+      + 'M3Yy4xNzIuMzAxLjExMS40OTQtLjA0My43Ny0uNDM3Ljc4NS0uODgyIDEuNTY0LTEuMzM1IDIuMzQtLjE1OS4yNzItLjM1Mi'
+      + '4zNzUtLjY4LjM3LS43NzctLjAxNi0xLjU1Mi0uMDEtMi4zMjcuMDE2YS4wOTkuMDk5IDAgMDAtLjA4MS4wNSA1NzUuMDk3ID'
+      + 'U3NS4wOTcgMCAwMS0yLjcwNSA0Ljc0Yy0uMTY5LjI5My0uMzguMzYzLS43MjUuMzY0LS45OTcuMDAzLTIuMDAyLjAwNC0zLj'
+      + 'AxNy4wMDJhLjUzNy41MzcgMCAwMS0uNDY1LS4yNzFsLTEuMzM1LTIuMzIzYS4wOS4wOSAwIDAwLS4wODMtLjA0OUg0Ljk4Mm'
+      + 'MtLjI4NS4wMy0uNTUzLS4wMDEtLjgwNS0uMDkybC0xLjYwMy0yLjc3YS41NDMuNTQzIDAgMDEtLjAwMi0uNTRsMS4yMDctMi'
+      + '4xMmEuMTk4LjE5OCAwIDAwMC0uMTk3IDU1MC45NTEgNTUwLjk1MSAwIDAxLTEuODc1LTMuMjcybC0uNzktMS4zOTVjLS4xNi'
+      + '0uMzEtLjE3My0uNDk2LjA5NS0uOTY1LjQ2NS0uODEzLjkyNy0xLjYyNSAxLjM4Ny0yLjQzNi4xMzItLjIzNC4zMDQtLjMzNC'
+      + '41ODQtLjMzNWEzMzguMyAzMzguMyAwIDAxMi41ODktLjAwMS4xMjQuMTI0IDAgMDAuMTA3LS4wNjNsMi44MDYtNC44OTVhLj'
+      + 'Q4OC40ODggMCAwMS40MjItLjI0NmMuNTI0LS4wMDEgMS4wNTMgMCAxLjU4My0uMDA2TDExLjcwNCAxYy4zNDEtLjAwMy43Mj'
+      + 'QuMDMyLjkuMzR6bS0zLjQzMi40MDNhLjA2LjA2IDAgMDAtLjA1Mi4wM0w2LjI1NCA2Ljc4OGEuMTU3LjE1NyAwIDAxLS4xMz'
+      + 'UuMDc4SDMuMjUzYy0uMDU2IDAtLjA3LjAyNS0uMDQxLjA3NGw1LjgxIDEwLjE1NmMuMDI1LjA0Mi4wMTMuMDYyLS4wMzQuMD'
+      + 'YzbC0yLjc5NS4wMTVhLjIxOC4yMTggMCAwMC0uMi4xMTZsLTEuMzIgMi4zMWMtLjA0NC4wNzgtLjAyMS4xMTguMDY4LjExOG'
+      + 'w1LjcxNi4wMDhjLjA0NiAwIC4wOC4wMi4xMDQuMDYxbDEuNDAzIDIuNDU0Yy4wNDYuMDgxLjA5Mi4wODIuMTM5IDBsNS4wMD'
+      + 'YtOC43Ni43ODMtMS4zODJhLjA1NS4wNTUgMCAwMS4wOTYgMGwxLjQyNCAyLjUzYS4xMjIuMTIyIDAgMDAuMTA3LjA2MmwyLj'
+      + 'c2My0uMDJhLjA0LjA0IDAgMDAuMDM1LS4wMi4wNDEuMDQxIDAgMDAwLS4wNGwtMi45LTUuMDg2YS4xMDguMTA4IDAgMDEwLS'
+      + '4xMTNsLjI5My0uNTA3IDEuMTItMS45NzdjLjAyNC0uMDQxLjAxMi0uMDYyLS4wMzUtLjA2Mkg5LjJjLS4wNTkgMC0uMDczLS'
+      + '4wMjYtLjA0My0uMDc3bDEuNDM0LTIuNTA1YS4xMDcuMTA3IDAgMDAwLS4xMTRMOS4yMjUgMS43NzRhLjA2LjA2IDAgMDAtLj'
+      + 'A1My0uMDMxem02LjI5IDguMDJjLjA0NiAwIC4wNTguMDIuMDM0LjA2bC0uODMyIDEuNDY1LTIuNjEzIDQuNTg1YS4wNTYuMD'
+      + 'U2IDAgMDEtLjA1LjAyOS4wNTguMDU4IDAgMDEtLjA1LS4wMjlMOC40OTggOS44NDFjLS4wMi0uMDM0LS4wMS0uMDUyLjAyOC'
+      + '0uMDU0bC4yMTYtLjAxMiA2LjcyMi0uMDEyeiIgZmlsbD0idXJsKCNsb2JlLWljb25zLXF3ZW4tX1JfMF8pIiBmaWxsLXJ1bG'
+      + 'U9Im5vbnplcm8iPjwvcGF0aD48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImxvYmUtaWNvbnMtcXdlbi1fUl8wXyIgeDE9Ij'
+      + 'AlIiB4Mj0iMTAwJSIgeTE9IjAlIiB5Mj0iMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2MzM2RTciIHN0b3'
+      + 'Atb3BhY2l0eT0iLjg0Ij48L3N0b3A+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNkY2OUY3IiBzdG9wLW9wYW'
+      + 'NpdHk9Ii44NCI+PC9zdG9wPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg=='
+    const MINIMAX_MARK =
+      'data:image/svg+xml;base64,PHN2ZyBoZWlnaHQ9IjFlbSIgc3R5bGU9ImZsZXg6bm9uZTtsaW5lLWhlaWdodDoxIiB2aW'
+      + 'V3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIxZW0iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHRpdGxlPk'
+      + '1pbmltYXg8L3RpdGxlPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0ibG9iZS1pY29ucy1taW5pbWF4LV9SXzBfIiB4MT0iMC'
+      + 'UiIHgyPSIxMDAuMTgyJSIgeTE9IjUwLjA1NyUiIHkyPSI1MC4wNTclIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPS'
+      + 'IjRTIxNjdFIj48L3N0b3A+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjRkU2MDNDIj48L3N0b3A+PC9saW5lYX'
+      + 'JHcmFkaWVudD48L2RlZnM+PHBhdGggZD0iTTE2LjI3OCAyYzEuMTU2IDAgMi4wOTMuOTI3IDIuMDkzIDIuMDd2MTIuNTAxYS'
+      + '43NC43NCAwIDAwLjc0NC43MDkuNzQuNzQgMCAwMC43NDMtLjcwOVY5LjA5OWEyLjA2IDIuMDYgMCAwMTIuMDcxLTIuMDQ5QT'
+      + 'IuMDYgMi4wNiAwIDAxMjQgOS4xdjYuNTYxYS42NDkuNjQ5IDAgMDEtLjY1Mi42NDUuNjQ5LjY0OSAwIDAxLS42NTMtLjY0NV'
+      + 'Y5LjFhLjc2Mi43NjIgMCAwMC0uNzY2LS43NTguNzYyLjc2MiAwIDAwLS43NjYuNzU4djcuNDcyYTIuMDM3IDIuMDM3IDAgMD'
+      + 'EtMi4wNDggMi4wMjYgMi4wMzcgMi4wMzcgMCAwMS0yLjA0OC0yLjAyNnYtMTIuNWEuNzg1Ljc4NSAwIDAwLS43ODgtLjc1My'
+      + '43ODUuNzg1IDAgMDAtLjc4OS43NTJsLS4wMDEgMTUuOTA0QTIuMDM3IDIuMDM3IDAgMDExMy40NDEgMjJhMi4wMzcgMi4wMz'
+      + 'cgMCAwMS0yLjA0OC0yLjAyNlYxOC4wNGMwLS4zNTYuMjkyLS42NDUuNjUyLS42NDUuMzYgMCAuNjUyLjI4OS42NTIuNjQ1dj'
+      + 'EuOTM0YzAgLjI2My4xNDIuNTA2LjM3Mi42MzguMjMuMTMxLjUxNC4xMzEuNzQ0IDBhLjczNC43MzQgMCAwMC4zNzItLjYzOF'
+      + 'Y0LjA3YzAtMS4xNDMuOTM3LTIuMDcgMi4wOTMtMi4wN3ptLTUuNjc0IDBjMS4xNTYgMCAyLjA5My45MjcgMi4wOTMgMi4wN3'
+      + 'YxMS41MjNhLjY0OC42NDggMCAwMS0uNjUyLjY0NS42NDguNjQ4IDAgMDEtLjY1Mi0uNjQ1VjQuMDdhLjc4NS43ODUgMCAwMC'
+      + '0uNzg5LS43OC43ODUuNzg1IDAgMDAtLjc4OS43OHYxNC4wMTNhMi4wNiAyLjA2IDAgMDEtMi4wNyAyLjA0OCAyLjA2IDIuMD'
+      + 'YgMCAwMS0yLjA3MS0yLjA0OFY5LjFhLjc2Mi43NjIgMCAwMC0uNzY2LS43NTguNzYyLjc2MiAwIDAwLS43NjYuNzU4djMuOG'
+      + 'EyLjA2IDIuMDYgMCAwMS0yLjA3MSAyLjA0OUEyLjA2IDIuMDYgMCAwMTAgMTIuOXYtMS4zNzhjMC0uMzU3LjI5Mi0uNjQ2Lj'
+      + 'Y1Mi0uNjQ2LjM2IDAgLjY1My4yOS42NTMuNjQ2VjEyLjljMCAuNDE4LjM0My43NTcuNzY2Ljc1N3MuNzY2LS4zMzkuNzY2LS'
+      + '43NTdWOS4wOTlhMi4wNiAyLjA2IDAgMDEyLjA3LTIuMDQ4IDIuMDYgMi4wNiAwIDAxMi4wNzEgMi4wNDh2OC45ODRjMCAuND'
+      + 'E5LjM0My43NTguNzY3Ljc1OC40MjMgMCAuNzY2LS4zMzkuNzY2LS43NThWNC4wN2MwLTEuMTQzLjkzNy0yLjA3IDIuMDkzLT'
+      + 'IuMDd6IiBmaWxsPSJ1cmwoI2xvYmUtaWNvbnMtbWluaW1heC1fUl8wXykiIGZpbGwtcnVsZT0ibm9uemVybyI+PC9wYXRoPj'
+      + 'wvc3ZnPg=='
+    /**
+     * Matched against what the workflow calls itself — its title and the app name it
+     * was installed from — case-insensitively. First match wins, so a more specific
+     * entry goes above a broader one.
+     */
+    const BRAND_MARKS = [
+      { match: /krea/i, src: KREA_MARK, mode: 'mask' },
+      { match: /qwen/i, src: QWEN_MARK, mode: 'image' },
+      { match: /minimax/i, src: MINIMAX_MARK, mode: 'image' },
+    ]
+    function markFor(unit) {
+      const haystack = String(unit.title || '') + ' ' + String(unit.webappName || '')
+      return BRAND_MARKS.find((entry) => entry.match.test(haystack)) || null
     }
 
     /**
@@ -1609,6 +1867,7 @@ window.__ModuleLoader__.load({
      */
     function UnitCard({ t, unit, onOpen }) {
       const [hover, hoverProps] = useHover()
+      const mark = markFor(unit)
       return h(
         'button',
         {
@@ -1619,7 +1878,21 @@ window.__ModuleLoader__.load({
           onClick: () => onOpen(unit.provider, unit.name),
           ...hoverProps,
         },
-        h('span', { style: S.startCardIcon }, h(IconBranchOutline16, { size: 24 })),
+        h(
+          'span',
+          { style: S.startCardIcon },
+          // The mark wears the unit's name for anyone reading the DOM, and is hidden
+          // from the reading order because the card's own title already says it.
+          mark === null
+            ? h(IconBranchOutline16, { size: 24 })
+            : mark.mode === 'mask'
+              ? h('span', {
+                  style: { ...S.startCardMark, WebkitMaskImage: `url("${mark.src}")`, maskImage: `url("${mark.src}")` },
+                  'data-generate-mark': unit.name,
+                  'aria-hidden': true,
+                })
+              : h('img', { style: S.startCardLogo, src: mark.src, alt: '', 'data-generate-mark': unit.name, 'aria-hidden': true }),
+        ),
         h(
           'span',
           { style: S.startCardText },
@@ -1659,11 +1932,11 @@ window.__ModuleLoader__.load({
       const [values, setValues] = React.useState({})
       const [showAdvanced, setShowAdvanced] = React.useState(false)
 
-      // Depends on the adapter arriving: the doors are what the defaults come from.
+      // Depends on the adapter arriving: the doors are what the starting values come from.
       React.useEffect(() => {
         if (phase !== 'ready' || !adapter) return
         const start = {}
-        for (const key of Object.keys(adapter.doors)) start[key] = defaultFor(adapter.doors[key])
+        for (const key of Object.keys(adapter.doors)) start[key] = startFor(key, adapter.doors[key], adapter.defaults)
         setValues(start)
       }, [phase])
 
@@ -1693,7 +1966,7 @@ window.__ModuleLoader__.load({
 
       const control = (key) => {
         const door = adapter.doors[key]
-        const value = values[key] === undefined ? defaultFor(door) : values[key]
+        const value = values[key] === undefined ? startFor(key, door, adapter.defaults) : values[key]
         const shared = { style: S.input, id: 'generate-door-' + key, 'data-generate-door': key, onChange: set(key) }
         if (door.type === 'select') {
           return h(
@@ -1765,71 +2038,68 @@ window.__ModuleLoader__.load({
      * showing an empty list.
      */
     /**
-     * The dashed add card: how a workflow arrives.
+     * How a workflow arrives, as two of the harness's own atoms: the control is
+     * `Button` and the prompt it reveals is `CodeBlock` (founder, 2026-09-23: *"+ workflow
+     * is a button primitive"*, *"click on + workflow is a code snippet primitive"*).
      *
      * A plugin cannot put text into the conversation composer and a slash command
      * cannot start a turn (measured 2026-09-22), so the pane cannot hand the job to
      * chat itself. What it can do is hand over the sentence: one click reveals the
      * provider's own install prompt — the phrase the agent's skill answers to — with
-     * Copy beside it (founder, 2026-09-23: *"use + workflow empty card w dashed border,
-     * click on it to get code snippet to copy/paste to composer"*).
+     * Copy beside it.
+     *
+     * The snippet is the CODE BLOCK and not a `<code>` on a styled row, so the prompt
+     * arrives in the same shape as every other code answer in this UI. The primitive's
+     * own header is off: the Copy control below is the owner's, which is the case its
+     * `showHeader` documents.
      *
      * It rides at the foot of every section, not only an empty one: a provider with
      * three workflows still needs a way to gain a fourth, and this is the only place in
      * the pane that says how.
      */
     function AddWorkflowCard({ t, provider }) {
-      const [hover, hoverProps] = useHover()
       const [shown, setShown] = React.useState(false)
-      const [copied, setCopied] = React.useState(false)
-
-      const copy = async () => {
-        try {
-          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-            await navigator.clipboard.writeText(provider.addPrompt)
-            setCopied(true)
-          }
-        } catch {
-          // The prompt is on screen either way; a refused clipboard is not an error
-          // worth a message of its own.
-        }
-      }
 
       return h(
         'div',
         { style: S.addWrap, 'data-generate-add-wrap': provider.id },
         h(
-          'button',
+          Button,
           {
-            type: 'button',
-            style: { ...S.startCard, ...S.startCardDashed, ...(hover ? S.startCardHover : {}) },
+            variant: 'outline',
+            size: 'md',
+            icon: h(IconPlusOutline16, { size: 16 }),
+            // A capsule, not a card: it stays its own width inside the section. The
+            // second line the old card carried is the tooltip here, because a capsule
+            // has one row to say the label in.
+            style: { alignSelf: 'flex-start' },
+            title: t('pane.add.card.hint'),
             'data-generate-add-card': provider.id,
             'aria-expanded': shown ? 'true' : 'false',
             onClick: () => setShown(!shown),
-            ...hoverProps,
           },
-          h('span', { style: S.startCardIcon }, h(IconPlusOutline16, { size: 24 })),
-          h(
-            'span',
-            { style: S.startCardText },
-            h('span', { style: S.startCardTitle }, t('pane.add.card')),
-            h('span', { style: S.startCardLine }, t('pane.add.card.hint')),
-          ),
+          t('pane.add.card'),
         ),
         shown
           ? h(
               'div',
               { style: S.addPrompt, 'data-generate-add-open': provider.id },
               h('div', { style: S.hint, 'data-generate-add-hint': 'yes' }, t('settings.workflows.add')),
+              // The snippet is the primitive WHOLE, its header included: that bar — the
+              // language slot on the left, Copy on the right — is what every code
+              // snippet in this UI wears, and the primitive owns the click that copies
+              // (founder, 2026-09-23: *"code snippet primitive in dsh looks like this"*).
+              // No `lang`: the prompt is a sentence for the composer, not a language, so
+              // the header carries the Copy control and invents no label. The primitive
+              // drops unknown props, so the wrapper carries this pane's own attribute.
               h(
                 'div',
-                { style: S.promptRow },
-                h('code', { style: S.promptCode, 'data-generate-add-prompt': provider.id }, provider.addPrompt),
-                h(
-                  'button',
-                  { type: 'button', style: S.secondary, 'data-generate-copy-prompt': provider.id, onClick: copy },
-                  copied ? t('settings.workflows.copied') : t('settings.workflows.copy'),
-                ),
+                { style: S.promptBlock, 'data-generate-add-prompt': provider.id },
+                h(CodeBlock, {
+                  code: provider.addPrompt,
+                  copyLabel: t('settings.workflows.copy'),
+                  copiedLabel: t('settings.workflows.copied'),
+                }),
               ),
             )
           : null,
@@ -1847,35 +2117,139 @@ window.__ModuleLoader__.load({
      * showing the empty state, because "nothing installed" and "nothing answered" are
      * different facts.
      */
-    function ProviderSection({ t, provider, units, failed, open, onToggle, onOpen }) {
+    function ProviderSection({ t, provider, units, failed, open, onToggle, onOpen, onRefresh }) {
       const kind = provider.kind === 'image' ? t('settings.kind.image') : t('settings.kind.workflow')
       // "Workflows · 2 installed", not "Workflows · 2 workflows installed": the header
       // already said the family, so the count says only the number.
       const meta = kind + ' · ' + (units.length === 0 ? t('pane.section.none') : units.length + ' ' + t('pane.section.count'))
+      // The header's light (founder, 2026-09-23): green when the section is ready to
+      // run, amber when a key is there and the section still is not ready — nothing
+      // installed yet, or a key the provider never confirmed — and red when there is no
+      // usable key. Three colours, four sentences: the colour is the state, the sentence
+      // is its tooltip, and an unconfirmed key is not the same fact as an empty section.
+      const look = providerState(provider).state
+      const light = look === 'none' || look === 'refused' ? 'noKey' : look === 'ok' ? (units.length > 0 ? 'ready' : 'keyOnly') : 'unchecked'
+      const lightStyle = { ready: S.dotOk, keyOnly: S.dotWarn, unchecked: S.dotWarn, noKey: S.dotBad }[light]
+      const lightText = {
+        ready: t('pane.light.ready'),
+        keyOnly: t('pane.light.keyOnly'),
+        // The settings row's own words for the same fact: a third sentence for
+        // "amber because nothing is installed" would be a lie on a section that has
+        // workflows and an unconfirmed key.
+        unchecked: t('settings.linked.unverified'),
+        noKey: t('pane.light.noKey'),
+      }[light]
+      // The wallet, read once: the balance where the provider has a balance route, and
+      // the sentence the read produced where it has none.
+      const parts = balanceParts(t, provider)
       return h(
         'div',
         { style: S.section, 'data-generate-section-wrap': provider.id },
+        // The header is the section's toggle and it also holds the way out to the
+        // provider's own page. A <button> may not contain a link, so the row carries the
+        // button's ROLE rather than its tag: one toggle, with the account anchor inside.
         h(
-          'button',
+          'div',
           {
-            type: 'button',
+            role: 'button',
+            tabIndex: 0,
             style: S.sectionHead,
             'data-generate-section': provider.id,
             'data-generate-section-toggle': provider.id,
             'aria-expanded': open ? 'true' : 'false',
             onClick: onToggle,
+            onKeyDown: (event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.preventDefault()
+              onToggle()
+            },
           },
+          // ROW 1's marker: the status light, where the header used to draw the kind.
           h(
             'span',
-            { style: S.sectionIcon },
-            h(provider.kind === 'image' ? IconEnhanceOutline16 : IconBranchOutline16, { size: 22 }),
+            { style: S.sectionLight },
+            h('span', {
+              style: { ...S.dot, ...lightStyle },
+              title: lightText,
+              'data-generate-section-state': light,
+              'aria-hidden': true,
+            }),
           ),
           h(
             'span',
             { style: S.sectionText },
-            h('span', { style: S.sectionTitle }, provider.label),
+            h(
+              'span',
+              { style: S.sectionTitleRow },
+              h('span', { style: S.sectionTitle }, provider.label),
+              // The way out to the provider's own page: the glyph beside the name it
+              // belongs to, instead of a word lower down (founder, 2026-09-23). The row
+              // is the toggle, so this click must not fold the section.
+              provider.accountUrl
+                ? h(
+                    'a',
+                    {
+                      href: provider.accountUrl,
+                      target: '_blank',
+                      rel: 'noreferrer',
+                      style: S.sectionAccountIcon,
+                      title: t('settings.account'),
+                      'aria-label': t('settings.account'),
+                      'data-generate-account': provider.id,
+                      onClick: (event) => event.stopPropagation(),
+                    },
+                    h(IconRightUpOutline16, { size: 12 }),
+                  )
+                : null,
+            ),
+            // ROW 2: the wallet balance, moved out of the strip that used to sit above
+            // the accordion (founder, 2026-09-23: *"move the wall balance to row 2 below
+            // accordion title"*).
+            h(
+              'span',
+              { style: S.sectionBalance, 'data-generate-provider-strip': provider.id },
+              // A provider with no balance endpoint says `Key saved` rather than
+              // claiming an empty wallet: Krea and Comfy Cloud have no balance route.
+              h(
+                'span',
+                { style: S.balanceValue },
+                parts.length ? parts.join(' · ') : provider.linked ? t('settings.linked') : t('wallet.notLinked'),
+              ),
+              h(
+                'span',
+                {
+                  style: S.balanceNote,
+                  // The note's own text is the contract the verify reads; matching the
+                  // phrase across the page would also hit the replace hint, which says
+                  // "the one stored on this machine" for a different reason.
+                  'data-generate-source': provider.source || 'none',
+                },
+                provider.writable === false ? t('settings.readOnly') : null,
+                provider.writable !== false && provider.source === STORED_SOURCE ? t('wallet.fromStore') : null,
+                provider.writable !== false && ENVIRONMENT_SOURCES.includes(provider.source) ? t('wallet.fromEnvironment') : null,
+                provider.note ? t('note.' + provider.note) : null,
+              ),
+            ),
+            // ROW 3: what the section holds.
             h('span', { style: S.sectionMeta, 'data-generate-section-meta': provider.id }, meta),
           ),
+          // The balance's own control, right-justified in the row: the same two reads
+          // the foot of the pane used to offer, now beside the number they refresh
+          // (founder, 2026-09-23: *"refresh the balance move to header"*). The row is the
+          // toggle, so this click is not the section's.
+          h(Button, {
+            variant: 'ghost',
+            size: 'sm',
+            icon: h(IconRefreshOutline16, { size: 14 }),
+            title: t('wallet.refresh'),
+            'aria-label': t('wallet.refresh'),
+            'data-generate-refresh': provider.id,
+            style: { flex: 'none' },
+            onClick: (event) => {
+              event.stopPropagation()
+              onRefresh()
+            },
+          }),
           h('span', { style: S.sectionChevron }, h(open ? IconChevronDownOutline14 : IconChevronRightOutline14, { size: 14 })),
         ),
         open
@@ -1929,25 +2303,46 @@ window.__ModuleLoader__.load({
         return h('div', { style: S.root, 'data-generate-pane': 'loading' }, h('div', { style: S.empty }, h('div', { style: S.body }, t('pane.loading'))))
       }
 
-      const linked = providers.providers.filter((provider) => provider.linked)
+      // A provider the owner hid is not drawn HERE (founder, 2026-09-23: *"hide providers
+      // that I don't use much for less visual clutter"*). Hiding is a display preference
+      // and not a link: the key stays in credentials, the adapters stay on disk, and the
+      // switch that brings it back is on the row in Settings → Generate.
+      const shown = providers.providers.filter((provider) => provider.hidden !== true)
+
+      // Every one of them hidden: an empty pane would read as "my workflows are gone",
+      // so it says what happened and where the switches are. The settings page lists all
+      // four whatever this file says, which is what keeps the state reversible.
+      if (shown.length === 0) {
+        return h(
+          'div',
+          { style: S.root, 'data-generate-pane': 'hidden' },
+          h(
+            'div',
+            { style: S.empty, 'data-generate-all-hidden': 'yes' },
+            h(GenerateMark, null),
+            h('div', { style: S.title }, t('pane.hidden.title')),
+            h('div', { style: S.body }, t('pane.hidden.body')),
+          ),
+        )
+      }
+
+      const linked = shown.filter((provider) => provider.linked)
       // The first-run form belongs to a WORKFLOW provider: the pane is where workflows
       // run, RunningHub and Comfy Cloud are the two that have them, and with four
       // providers registered "the first one" would otherwise be an image provider the
       // pane has nothing to run. When every workflow provider is already linked it falls
       // back to the first unlinked provider, then to the first in the registry.
       const first =
-        providers.providers.find((provider) => provider.kind === 'workflow' && !provider.linked) ||
-        providers.providers.find((provider) => !provider.linked) ||
-        providers.providers[0] ||
+        shown.find((provider) => provider.kind === 'workflow' && !provider.linked) ||
+        shown.find((provider) => !provider.linked) ||
+        shown[0] ||
         null
-      const several = providers.providers.length > 1
       // The accordion's own bookkeeping: which units belong to which provider, and
       // which section is open before anyone has clicked. The default is the first
       // provider that actually has workflows — landing on four closed rows would hide
       // the thing the pane exists for — and failing that, the first provider.
       const unitsOf = (id) => units.units.filter((unit) => unit.provider === id)
-      const openDefault =
-        (providers.providers.find((provider) => unitsOf(provider.id).length > 0) || providers.providers[0] || {}).id || null
+      const openDefault = (shown.find((provider) => unitsOf(provider.id).length > 0) || shown[0] || {}).id || null
       const open = openId === null ? openDefault : openId
 
       // No provider linked yet: the pane asks for the first one's key. That is the
@@ -1995,10 +2390,9 @@ window.__ModuleLoader__.load({
         'div',
         { style: S.root, 'data-generate-pane': active === null ? 'home' : 'unit' },
         // The link just happened. The dialog says the key works, that the provider
-        // answered, and where the balance went; the strip below it is the thing the
-        // dialog is pointing at.
+        // answered, and where the balance went; the section header's own row is the
+        // thing the dialog is pointing at.
         saved && active === null ? h(SaveDialog, { t, provider: saved, onClose: providers.forget }) : null,
-        linked.map((provider) => h(ProviderStrip, { key: provider.id, t, provider, showLabel: several })),
         linked
           .filter((provider) => provider.error)
           .map((provider) =>
@@ -2017,29 +2411,41 @@ window.__ModuleLoader__.load({
         // open at a time — opening a second closes the first, which is what keeps a
         // four-provider pane short enough to read.
         active === null
-          ? units.phase === 'failed'
-            ? h(
-                'div',
-                { style: S.empty, 'data-generate-list-failed': 'yes' },
-                h(GenerateMark, null),
-                h('div', { style: S.title }, t('pane.list.failed')),
-              )
-            : h(
-                'div',
-                { style: S.sections, 'data-generate-sections': String(providers.providers.length) },
-                providers.providers.map((provider) =>
-                  h(ProviderSection, {
-                    key: provider.id,
-                    t,
-                    provider,
-                    units: unitsOf(provider.id),
-                    failed: units.failed.indexOf(provider.id) !== -1,
-                    open: open === provider.id,
-                    onToggle: () => setOpenId(open === provider.id ? '' : provider.id),
-                    onOpen: (id, name) => setChosen({ provider: id, name }),
-                  }),
-                ),
-              )
+          ? h(
+              'div',
+              { style: S.sections, 'data-generate-sections': String(shown.length) },
+              // A host that cannot answer says so, and the sections under the sentence
+              // still carry each provider's light and its balance: a failed workflow read
+              // is not a reason to hide what the wallet says.
+              units.phase === 'failed'
+                ? h(
+                    'div',
+                    { style: S.empty, 'data-generate-list-failed': 'yes' },
+                    h(GenerateMark, null),
+                    h('div', { style: S.title }, t('pane.list.failed')),
+                  )
+                : null,
+              shown.map((provider) =>
+                h(ProviderSection, {
+                  key: provider.id,
+                  t,
+                  provider,
+                  units: unitsOf(provider.id),
+                  // A read that failed for everyone fills no section with an empty state
+                  // and offers no add card, because neither fact is known.
+                  failed: units.phase === 'failed' || units.failed.indexOf(provider.id) !== -1,
+                  open: open === provider.id,
+                  onToggle: () => setOpenId(open === provider.id ? '' : provider.id),
+                  onOpen: (id, name) => setChosen({ provider: id, name }),
+                  // Both reads again, from the section's own header: the wallet statuses
+                  // and the installed lists.
+                  onRefresh: () => {
+                    providers.load()
+                    units.reload()
+                  },
+                }),
+              ),
+            )
           : h(WorkflowSurface, {
               key: active.provider + '/' + active.name,
               t,
@@ -2054,35 +2460,12 @@ window.__ModuleLoader__.load({
               // The directions sit under the screen they explain, not at the top of
               // the pane: this is the surface a person returns to when they rotate
               // the key. How to ADD a workflow is no longer a sentence here — it lives
-              // on the dashed card in each section, which is also the control that
+              // on the add button in each section, which is also the control that
               // hands over the prompt.
               h(Note, {
                 text: t('pane.linked.manage'),
                 attrs: { 'data-generate-manage-hint': 'yes' },
               }),
-            )
-          : null,
-        active === null
-          ? h(
-              'div',
-              { style: { ...S.row, justifyContent: 'center', paddingBottom: 20 } },
-              h(
-                'button',
-                {
-                  type: 'button',
-                  style: S.ghost,
-                  // Both reads again: the provider statuses and the installed lists.
-                  onClick: () => {
-                    providers.load()
-                    units.reload()
-                  },
-                  disabled: providers.busy,
-                  title: t('wallet.refresh'),
-                },
-                h(IconRefreshOutline16, { size: 12 }),
-                ' ',
-                t('wallet.refresh'),
-              ),
             )
           : null,
       )
@@ -2332,7 +2715,7 @@ window.__ModuleLoader__.load({
 
     /** One provider's row: its dot, its name, its family, its state, what it costs and
      * its card. */
-    function ProviderRow({ t, provider, open, busy, onToggle, onSave, onRemove, onEdit }) {
+    function ProviderRow({ t, provider, open, busy, onToggle, onSave, onRemove, onEdit, onHide }) {
       const look = providerState(provider)
       const summary = providerSummary(t, provider)
       return h(
@@ -2347,6 +2730,11 @@ window.__ModuleLoader__.load({
             { style: S.rowIdentity },
             h('span', { style: S.rowName }, provider.label),
             h('span', { style: S.rowTag }, t(provider.kind === 'image' ? 'settings.kind.image' : 'settings.kind.workflow')),
+            // The row says it is hidden, because the switch alone would leave a person
+            // wondering where the section went.
+            provider.hidden === true
+              ? h('span', { style: S.rowTagHidden, 'data-generate-provider-hidden-tag': provider.id }, t('settings.hide.tag'))
+              : null,
           ),
           h(
             'span',
@@ -2361,6 +2749,20 @@ window.__ModuleLoader__.load({
                 onClick: onToggle,
               },
               open ? t('settings.row.close') : provider.linked ? t('settings.row.edit') : t('settings.row.setup'),
+            ),
+            // The switch sits at the far right of the row (founder, 2026-09-23: *"swap
+            // position of the toggle switch / button. toggle is right justify"*), so the
+            // row reads left to right as identity, action, then the display preference.
+            // Its wrapper carries the tag, because the primitive takes no stray props.
+            h(
+              'span',
+              { style: S.hideSwitch, 'data-generate-provider-hide': provider.id },
+              h(Switch, {
+                checked: provider.hidden !== true,
+                label: t('settings.hide.label'),
+                title: t('settings.hide.hint'),
+                onChange: (shown) => onHide(!shown),
+              }),
             ),
           ),
         ),
@@ -2422,7 +2824,7 @@ window.__ModuleLoader__.load({
      */
     function GenerateSettings(props) {
       const t = translatorOf(props)
-      const { phase, providers, busy, save, unlink, confirmed, forget } = useProviders()
+      const { phase, providers, busy, save, unlink, setHidden, confirmed, forget } = useProviders()
       // Which card is open. `undefined` means "the page has not been touched", which is
       // what lets the first-run posture open the first unlinked provider's card — the
       // same posture Models gives a provider with no key anywhere. No effect is needed
@@ -2505,6 +2907,7 @@ window.__ModuleLoader__.load({
               onSave: (key) => save(provider.id, key),
               onRemove: () => askRemove(provider.id),
               onEdit: edited,
+              onHide: (hidden) => setHidden(provider.id, hidden),
             }),
           ),
         ),

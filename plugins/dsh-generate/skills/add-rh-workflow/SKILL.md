@@ -112,7 +112,12 @@ same name with a new `appId` moves nothing in the UI). Start from the object
   gave them
 - `doors` — the app's `nodeId`, `fieldName`, and every derived value, byte for byte;
   your `label`, `advanced`, `primary` and ordering on top
-- `ui` — `runLabel`, `expect`, `presets`, `order`
+- `ui` — `runLabel`, `expect`, `presets`, `order`, `defaults`
+  - `defaults` is the one authored number on a door: where the surface OPENS, keyed by door key
+    (`"defaults": { "duration": 15 }`). The app's own `default` stays on the door and stays compared by
+    the validator; use `defaults` when the app's declared default is a placeholder nobody would start
+    at. The value must still fit the door — an option the app offers for a select, inside the app's
+    own min/max for a number.
 - `provenance.dryRun` — `""` for now; step 6 decides it
 
 Use your ordinary file write tool. Nothing writes this file for you.

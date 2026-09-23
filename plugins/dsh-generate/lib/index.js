@@ -16,13 +16,16 @@
  * (S2's single wallet route became the per-provider key route when the plugin turned
  * provider-neutral):
  *
- *   GET    /plugins/generate/providers                → every provider: its key state
- *                                                       and its installed workflows
+ *   GET    /plugins/generate/providers                → every provider: its key state,
+ *                                                       its installed workflows, and
+ *                                                       whether the panel draws it
  *   GET    /plugins/generate/providers/<id>/key       → that provider's key state
  *   POST   /plugins/generate/providers/<id>/key       → { key } — check, then store
  *   DELETE /plugins/generate/providers/<id>/key       → unlink
  *   GET    /plugins/generate/providers/<id>/workflows → what it has installed
  *   GET    /plugins/generate/providers/<id>/workflow?name=  → one workflow, whole
+ *   GET    /plugins/generate/providers/<id>/hidden    → whether the panel draws it
+ *   POST   /plugins/generate/providers/<id>/hidden    → { hidden } — the settings toggle
  *
  * FOUR PROVIDERS (providers.js), in the order every surface shows them: RunningHub,
  * Krea, Comfy Cloud, Magnific. Every route is provider-addressed, so a fifth provider
@@ -72,6 +75,7 @@ import { parseAppRef, readAppDoors } from './doors.js'
 import { loadHouse } from './house.js'
 import { ADAPTER_SCHEMA, adapterFromDoors, validateAdapter } from './adapter.js'
 import { PROVIDERS, normalizeKey, providerById, runninghub } from './providers.js'
+import { readHidden, withHidden, writeHidden } from './hidden.js'
 import { resolveDataRoot } from './paths.js'
 
 /** Matches the row id in cordis.patch.yml. */
@@ -539,8 +543,9 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  /** Every provider, with its key state and how many workflows it has installed. */
+  /** Every provider, with its key state, how many workflows it has, and its switch. */
   const providerList = async () => {
+    const hidden = await readHidden(root.root)
     const rows = []
     for (const provider of PROVIDERS) {
       const status = await keyStatus(provider)
@@ -554,9 +559,41 @@ export function apply(ctx, config = {}) {
         // state is what this route is for, and the workflow count is a courtesy.
         workflows = null
       }
-      rows.push({ ...status, workflows })
+      rows.push({ ...status, workflows, hidden: hidden.includes(provider.id) })
     }
     return { providers: rows }
+  }
+
+  /**
+   * The settings toggle: whether the Generate panel draws this provider.
+   *
+   * It writes one id to one small file and changes nothing else — no credential is
+   * touched, no adapter is moved, no route stops answering for it. The row itself stays
+   * in Settings, which is what makes the switch reversible from where it was thrown.
+   */
+  const providerHidden = async (provider, req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+
+    if (method === 'GET') {
+      const hidden = await readHidden(root.root)
+      send(res, 200, { id: provider.id, hidden: hidden.includes(provider.id), hiddenIds: hidden })
+      return
+    }
+
+    if (method !== 'POST') {
+      methodNotAllowed(res, 'GET, POST')
+      return
+    }
+
+    const body = await readJsonBody(req)
+    if (body === undefined || typeof body.hidden !== 'boolean') {
+      send(res, 400, { error: 'bad-request', detail: '"hidden" must be true or false' })
+      return
+    }
+
+    const current = await readHidden(root.root)
+    const next = await writeHidden(root.root, withHidden(current, provider.id, body.hidden))
+    send(res, 200, { id: provider.id, hidden: body.hidden, hiddenIds: next })
   }
 
   /** One provider's key: read, link, or remove. The wallet route, per provider. */
@@ -726,6 +763,11 @@ export function apply(ctx, config = {}) {
 
     if (action === 'key') {
       await providerKey(provider, req, res)
+      return
+    }
+
+    if (action === 'hidden') {
+      await providerHidden(provider, req, res)
       return
     }
 

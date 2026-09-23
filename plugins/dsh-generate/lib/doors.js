@@ -115,7 +115,14 @@ export function parseFieldData(fieldData) {
   if (!Array.isArray(parsed)) return null
   const kind = typeof parsed[0] === 'string' ? parsed[0] : null
   const opts = parsed.length > 1 && typeof parsed[1] === 'object' && parsed[1] !== null ? parsed[1] : {}
-  return { kind, opts }
+  // The API's OTHER shape, met on KSampler's scheduler and sampler_name and on
+  // UNETLoader's weight_dtype: the options ARE the first element, with no kind token in
+  // front of them. It is kept SEPARATE from `opts.options` rather than folded in,
+  // because for an IMAGE door that same first element is the filename currently loaded
+  // — a picture, not a menu — and only `controlFor` knows the type.
+  const bareOptions =
+    Array.isArray(parsed[0]) && parsed[0].length > 0 && parsed[0].every((option) => typeof option === 'string') ? parsed[0] : null
+  return { kind, opts, bareOptions }
 }
 
 /**
@@ -129,9 +136,17 @@ export function parseFieldData(fieldData) {
  */
 export function controlFor(fieldType, fieldData) {
   const spec = parseFieldData(fieldData)
-  const options = spec && Array.isArray(spec.opts.options) ? spec.opts.options : null
-  if (options && options.length > 0) return 'select'
   const type = String(fieldType ?? '').toUpperCase()
+  const options = spec
+    ? Array.isArray(spec.opts.options)
+      ? spec.opts.options
+      : // A bare option list is a menu on everything except an image door, where it is
+        // the file that door is holding.
+        type !== 'IMAGE' && Array.isArray(spec.bareOptions)
+        ? spec.bareOptions
+        : null
+    : null
+  if (options && options.length > 0) return 'select'
   if (type === 'IMAGE') return 'image'
   if (type === 'INT' || type === 'FLOAT' || type === 'NUMBER') return 'number'
   if (type === 'STRING') return 'text'
@@ -199,6 +214,12 @@ export function deriveDoor(node, index, house, used = new Set()) {
     ['multiline', 'multiline'],
   ]) {
     if (opts[from] !== undefined) door[to] = opts[from]
+  }
+  // A bare option list is this door's menu unless the door is an image, where that same
+  // element is the file it holds (the rule `controlFor` applies, carried through here
+  // so a select derived from it also carries the options it selects between).
+  if (door.options === undefined && type !== 'image' && spec && Array.isArray(spec.bareOptions)) {
+    door.options = spec.bareOptions
   }
   if (house.hint === 'tooltip' && typeof opts.tooltip === 'string' && opts.tooltip.trim() !== '') {
     door.hint = opts.tooltip.trim()
