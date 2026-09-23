@@ -1224,26 +1224,49 @@ check(
   )
 }
 check(
-  'a section header names its provider and says what the section holds',
+  'a section header names its provider, and the subheader under it says what the section holds',
   (() => {
     const head = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
-    const text = head ? textIn(head) : ''
-    return text.includes('RunningHub') && text.includes(EN['settings.kind.workflow']) && text.includes('2')
+    const band = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
+    const headText = head ? textIn(head) : ''
+    const bandText = band ? textIn(band) : ''
+    return (
+      headText.includes('RunningHub') &&
+      !headText.includes(EN['settings.kind.workflow']) &&
+      bandText.includes(EN['settings.kind.workflow']) &&
+      bandText.includes('2')
+    )
   })(),
-  byAttr(home.tree, 'data-generate-section-toggle', PROVIDER) ? textIn(byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)) : 'no header',
+  (() => {
+    const head = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
+    const band = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
+    return 'header: ' + (head ? textIn(head) : 'none') + ' / subheader: ' + (band ? textIn(band) : 'none')
+  })(),
 )
 check(
-  'an image provider\'s section draws like every other one: the name, and the shared count line',
+  'an image provider\'s section draws like every other one: the name above, the shared count line below',
   (() => {
     const head = byAttr(home.tree, 'data-generate-section-toggle', 'krea')
-    const text = head ? textIn(head) : ''
+    const band = byAttr(home.tree, 'data-generate-section-sub', 'krea')
+    const headText = head ? textIn(head) : ''
+    const bandText = band ? textIn(band) : ''
     // The family TAG ("Image") is the Settings row's, and stays there. On the pane a
     // Krea section counts in the same words as RunningHub's (founder, 2026-09-23:
-    // *"use same naming on Krea accordion (and all accordions)"*), so the header says
-    // the shared family word and never the kind tag.
-    return text.includes('Krea') && text.includes(EN['pane.section.family']) && text.includes(EN['pane.section.none']) && !text.includes(EN['settings.kind.image'])
+    // *"use same naming on Krea accordion (and all accordions)"*), so the subheader
+    // says the shared family word and neither row ever carries the kind tag.
+    return (
+      headText.includes('Krea') &&
+      !headText.includes(EN['settings.kind.image']) &&
+      bandText.includes(EN['pane.section.family']) &&
+      bandText.includes(EN['pane.section.none']) &&
+      !bandText.includes(EN['settings.kind.image'])
+    )
   })(),
-  byAttr(home.tree, 'data-generate-section-toggle', 'krea') ? textIn(byAttr(home.tree, 'data-generate-section-toggle', 'krea')) : 'no header',
+  (() => {
+    const head = byAttr(home.tree, 'data-generate-section-toggle', 'krea')
+    const band = byAttr(home.tree, 'data-generate-section-sub', 'krea')
+    return 'header: ' + (head ? textIn(head) : 'none') + ' / subheader: ' + (band ? textIn(band) : 'none')
+  })(),
 )
 check(
   'the section that has workflows opens by itself; the empty ones stay shut',
@@ -1312,66 +1335,119 @@ check(
   )
 
   const header = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
+  const sub = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
   const balanceRow = byAttr(home.tree, 'data-generate-provider-strip', PROVIDER)
   const balanceRows = nodesOf(home.tree).filter((node) => node.props && node.props['data-generate-provider-strip'])
   check(
-    'the wallet balance is the header\'s own row, inside the section it belongs to',
-    !!header && !!balanceRow && nodesOf(header).includes(balanceRow) && textIn(balanceRow).includes('8,600'),
+    'the wallet balance is the subheader\'s own row, inside the section it belongs to',
+    !!header && !!sub && !!balanceRow && nodesOf(sub).includes(balanceRow) && !nodesOf(header).includes(balanceRow) && textIn(balanceRow).includes('8,600'),
     balanceRow ? textIn(balanceRow) : 'no balance row',
   )
   check(
-    'the strip above the accordion is gone: one balance row per provider, each in its header',
+    'the strip above the accordion is gone: one balance row per provider, each in its subheader',
     balanceRows.length === heads.length &&
       heads.every((id) => {
-        const head = byAttr(home.tree, 'data-generate-section-toggle', id)
+        const band = byAttr(home.tree, 'data-generate-section-sub', id)
         const row = byAttr(home.tree, 'data-generate-provider-strip', id)
-        return !!head && !!row && nodesOf(head).includes(row)
+        return !!band && !!row && nodesOf(band).includes(row)
       }),
     JSON.stringify(balanceRows.map((node) => node.props['data-generate-provider-strip'])),
   )
-  // The header is TWO ROWS, and the count line lives in the right cluster (founder,
-  // 2026-09-23: *"the accordion title should only be 2 rows. Move Workflows 3
-  // installed to left of + icon"*). Both claims are structural, so both are checked
-  // against the tree rather than against the stylesheet: the text column has exactly
-  // two children (the name row and the balance row) and holds no count line, and the
-  // count line sits between that column and the add glyph.
-  const parentOf = (root, node) => nodesOf(root).find((candidate) => candidate.children.includes(node)) || null
+  // THE SUBHEADER (founder, 2026-09-23: *"the accordion header for generate is too
+  // cluttered. remove the wallet balance, workflows counter, add/refresh icons.
+  // make a subheader with separator top/bottom and move these elements into it"*).
+  // The claims are structural, checked against the tree and the band's own style:
+  // the band sits between the header and the body inside the same card, it carries a
+  // hairline above and below, the header keeps none of what moved, and a collapsed
+  // section shows it too — the band is not behind the toggle.
   check(
-    'the count line is the header\'s right cluster, immediately left of the add glyph',
+    'the subheader sits between the header and the body, with a separator above and below',
+    (() => {
+      if (!header || !sub) return false
+      const wrap = byAttr(home.tree, 'data-generate-section-wrap', PROVIDER)
+      if (!wrap || !nodesOf(wrap).includes(sub)) return false
+      const order = nodesOf(wrap)
+      const headAt = order.indexOf(header)
+      const subAt = order.indexOf(sub)
+      const body = byAttr(home.tree, 'data-generate-section-body', PROVIDER)
+      const bodyAt = body ? order.indexOf(body) : -1
+      const style = sub.props.style || {}
+      return (
+        headAt !== -1 &&
+        subAt > headAt &&
+        (bodyAt === -1 || subAt < bodyAt) &&
+        typeof style.borderTop === 'string' &&
+        style.borderTop.startsWith('1px solid') &&
+        typeof style.borderBottom === 'string' &&
+        style.borderBottom.startsWith('1px solid')
+      )
+    })(),
+    sub ? JSON.stringify(sub.props.style) : 'no subheader',
+  )
+  check(
+    'the header keeps none of what moved: no balance, no count line, no add, no refresh',
     (() => {
       if (!header) return false
-      const flat = nodesOf(header)
-      const metaAt = flat.findIndex((node) => node.props && node.props['data-generate-section-meta'] === PROVIDER)
-      const addAt = flat.findIndex((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
-      const textAt = balanceRow ? flat.indexOf(parentOf(header, balanceRow)) : -1
-      return metaAt !== -1 && addAt !== -1 && textAt !== -1 && textAt < metaAt && metaAt < addAt
+      return !nodesOf(header).some(
+        (node) =>
+          node.props &&
+          (node.props['data-generate-provider-strip'] !== undefined ||
+            node.props['data-generate-section-meta'] !== undefined ||
+            node.props['data-generate-add-button'] !== undefined ||
+            node.props['data-generate-refresh'] !== undefined),
+      )
     })(),
     header ? textIn(header) : 'no header',
   )
   check(
-    'the header\'s text column is the name row and the balance row, and nothing else',
+    'a collapsed section still shows its subheader: the band is not behind the toggle',
     (() => {
-      if (!header || !balanceRow) return false
-      const column = parentOf(header, balanceRow)
-      if (!column || column.children.length !== 2) return false
-      // The count line is not one of the two, and neither is the add glyph.
-      return !nodesOf(column).some(
+      const band = byAttr(home.tree, 'data-generate-section-sub', 'krea')
+      return !!band && !byAttr(home.tree, 'data-generate-section-body', 'krea') && !!byAttr(band, 'data-generate-provider-strip')
+    })(),
+    'krea is shut on the home screen',
+  )
+  const parentOf = (root, node) => nodesOf(root).find((candidate) => candidate.children.includes(node)) || null
+  check(
+    'the count line is the subheader\'s right cluster, immediately left of the add glyph',
+    (() => {
+      if (!sub) return false
+      const flat = nodesOf(sub)
+      const metaAt = flat.findIndex((node) => node.props && node.props['data-generate-section-meta'] === PROVIDER)
+      const addAt = flat.findIndex((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
+      const textAt = balanceRow ? flat.indexOf(balanceRow) : -1
+      return metaAt !== -1 && addAt !== -1 && textAt !== -1 && textAt < metaAt && metaAt < addAt
+    })(),
+    sub ? textIn(sub) : 'no subheader',
+  )
+  check(
+    'the header\'s text column is the name row, and nothing else',
+    (() => {
+      if (!header) return false
+      const column = header.children.find((child) => child && typeof child !== 'string' && textIn(child).includes('RunningHub'))
+      if (!column || column.children.length !== 1) return false
+      // The count line and the add glyph are not in the header at all any more.
+      return !nodesOf(header).some(
         (node) => node.props && (node.props['data-generate-section-meta'] || node.props['data-generate-add-button']),
       )
     })(),
     (() => {
-      const column = header && balanceRow ? parentOf(header, balanceRow) : null
+      const column = header
+        ? header.children.find((child) => child && typeof child !== 'string' && textIn(child).includes('RunningHub'))
+        : null
       return column ? String(column.children.length) + ' child(ren)' : 'no column'
     })(),
   )
   check(
-    'name · balance is the order the header owes',
+    'name in the header, balance beneath it in the band: the order the section owes',
     (() => {
-      if (!header || !balanceRow) return false
-      const flat = nodesOf(header)
-      const nameAt = flat.findIndex((node) => textIn(node) === 'RunningHub')
-      const balanceAt = flat.indexOf(balanceRow)
-      return nameAt !== -1 && balanceAt !== -1 && nameAt < balanceAt
+      if (!header || !sub || !balanceRow) return false
+      const nameAt = nodesOf(header).findIndex((node) => textIn(node) === 'RunningHub')
+      const order = nodesOf(byAttr(home.tree, 'data-generate-section-wrap', PROVIDER))
+      const headAt = order.indexOf(header)
+      const subAt = order.indexOf(sub)
+      const balanceAt = order.indexOf(balanceRow)
+      return nameAt !== -1 && headAt !== -1 && subAt > headAt && balanceAt > subAt && nodesOf(sub).includes(balanceRow)
     })(),
     header ? textIn(header) : 'no header',
   )
@@ -1412,12 +1488,12 @@ check(
     (() => {
       const link = byAttr(home.tree, 'data-generate-account', PROVIDER)
       if (!link || !header || !nodesOf(header).includes(link)) return false
-      // Row 1: the name, then the glyph, and only then the balance of row 2.
+      // The name, then the glyph — both still in the header. The balance that used
+      // to follow them in row 2 lives in the subheader now.
       const flat = nodesOf(header)
       const nameAt = flat.findIndex((node) => textIn(node) === 'RunningHub')
       const linkAt = flat.indexOf(link)
-      const balanceAt = flat.indexOf(balanceRow)
-      return nameAt !== -1 && linkAt !== -1 && balanceAt !== -1 && nameAt < linkAt && linkAt < balanceAt
+      return nameAt !== -1 && linkAt !== -1 && nameAt < linkAt && !flat.includes(balanceRow)
     })(),
     'the glyph travels with the name it belongs to, not below it',
   )
@@ -1529,19 +1605,21 @@ check(
   )
 
   const refresh = byAttr(home.tree, 'data-generate-refresh', PROVIDER)
+  const refreshBand = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
   check(
-    'the refresh control lives in the header, right of the balance, and the pane keeps no foot row for it',
+    'the refresh control lives in the subheader, right of the balance, and the pane keeps no foot row for it',
     (() => {
-      if (!refresh || !header || !nodesOf(header).includes(refresh)) return false
-      const flat = nodesOf(header)
+      if (!refresh || !refreshBand || !nodesOf(refreshBand).includes(refresh)) return false
+      const flat = nodesOf(refreshBand)
       const balanceAt = flat.indexOf(balanceRow)
       const refreshAt = flat.indexOf(refresh)
-      // Left to right: name, balance, then the control that re-reads it. The label is
-      // no longer drawn anywhere, because the foot-of-pane button that carried it is
-      // gone (founder, 2026-09-23: *"refresh the balance move to header"*).
+      // Left to right: balance, count line, then the control that re-reads it. The
+      // label is no longer drawn anywhere, because the foot-of-pane button that
+      // carried it is gone (founder, 2026-09-23: *"refresh the balance move to
+      // header"*, and the band that later emptied the header kept it).
       return balanceAt !== -1 && refreshAt !== -1 && balanceAt < refreshAt && !textIn(home.tree).includes('Refresh the balance')
     })(),
-    header ? textIn(header) : 'no header',
+    refreshBand ? textIn(refreshBand) : 'no subheader',
   )
   check(
     'the refresh is named for what it does, since it is drawn as a glyph',
@@ -1549,24 +1627,26 @@ check(
     refresh ? JSON.stringify({ label: refresh.props['aria-label'], tooltip: tooltipOn(home.tree, 'data-generate-refresh', PROVIDER)?.props.label }) : 'no refresh control',
   )
   check(
-    'the refresh is its own control, not the header toggle it sits inside',
+    'the refresh is its own control, not the section toggle above it',
     !!refresh && typeof refresh.props.onClick === 'function' && !!header && refresh.props.onClick !== header.props.onClick,
     'a refresh that folded the section would be the toggle twice',
   )
   // The add glyph moved out of the body and next to refresh (founder, 2026-09-23:
-  // *"move + workflow button as an icon button next to refresh"*). The order is pinned
-  // rather than the presence, so a later edit that puts it back in the body fails.
+  // *"move + workflow button as an icon button next to refresh"*), and both then
+  // moved together into the subheader. The order is pinned rather than the
+  // presence, so a later edit that puts it back in the body fails.
   check(
     'the add glyph sits beside the refresh it was moved next to, on its left',
     (() => {
-      if (!header) return false
-      const flat = nodesOf(header)
+      const band = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
+      if (!band) return false
+      const flat = nodesOf(band)
       const addAt = flat.findIndex((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
       const refreshAt = flat.indexOf(refresh)
       return addAt !== -1 && refreshAt !== -1 && addAt < refreshAt
     })(),
     JSON.stringify(
-      nodesOf(header || { children: [] })
+      nodesOf(byAttr(home.tree, 'data-generate-section-sub', PROVIDER) || { children: [] })
         .filter((node) => node.props && (node.props['data-generate-add-button'] || node.props['data-generate-refresh']))
         .map((node) => node.props['data-generate-add-button'] || node.props['data-generate-refresh']),
     ),
@@ -1646,20 +1726,20 @@ check(
 // The add control is the pane's one install control, and it is the harness's own
 // Button plus its own CodeBlock (founder, 2026-09-23: "+ workflow is a button
 // primitive", "click on + workflow is a code snippet primitive"). It moved out of the
-// section body and into the header, beside refresh, as a glyph (founder, 2026-09-23:
-// *"move + workflow button as an icon button next to refresh"*). Its click has to yield
-// THAT provider's own prompt, because the phrase the agent's skill answers to names the
-// provider.
+// section body, beside refresh, and then into the subheader, as a glyph (founder,
+// 2026-09-23: *"move + workflow button as an icon button next to refresh"*). Its
+// click has to yield THAT provider's own prompt, because the phrase the agent's
+// skill answers to names the provider.
 {
   const real = globalThis.fetch
   globalThis.fetch = stubHost({ units: [] }).fetch
   try {
     const first = await settle(paneSlot.component, { t }, 'pane-add-card')
     const button = byAttr(first, 'data-generate-add-button', PROVIDER)
-    const header = byAttr(first, 'data-generate-section-toggle', PROVIDER)
+    const band = byAttr(first, 'data-generate-section-sub', PROVIDER)
     check(
-      'a provider with nothing installed carries the add control in its header, as a glyph',
-      !!button && !!header && nodesOf(header).includes(button),
+      'a provider with nothing installed carries the add control in its subheader, as a glyph',
+      !!button && !!band && nodesOf(band).includes(button),
       button ? JSON.stringify({ stub: button.props['data-stub'] }) : 'no add control',
     )
     check(

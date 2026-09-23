@@ -1102,6 +1102,28 @@ window.__ModuleLoader__.load({
         border: 'none',
         cursor: 'pointer',
       },
+      /**
+       * THE SUBHEADER (founder, 2026-09-23: *"the accordion header for generate is too
+       * cluttered. remove the wallet balance, workflows counter, add/refresh icons.
+       * make a subheader with separator top/bottom and move these elements into it"*).
+       *
+       * A second band under the header, inside the same card: one hairline above and
+       * one below, holding the balance, the count line and the two glyph controls that
+       * used to crowd the header. The header keeps only the status light, the
+       * provider's name with its account glyph, and the chevron — one row whatever a
+       * provider's numbers say. The band is drawn open or shut: the balance and the
+       * count are what a person scans four collapsed sections for, and add and refresh
+       * are how a collapsed one is acted on. It is NOT the toggle — only the header
+       * above it folds the section.
+       */
+      sectionSub: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 12px',
+        borderTop: '1px solid var(--dsw-alias-border-l1)',
+        borderBottom: '1px solid var(--dsw-alias-border-l1)',
+      },
       sectionLight: {
         flex: 'none',
         display: 'flex',
@@ -1111,21 +1133,24 @@ window.__ModuleLoader__.load({
         height: 26,
       },
       /**
-       * Row 2 of a section header: the wallet balance, moved out of the strip that
-       * used to sit above the accordion (founder, 2026-09-23: *"move the wall balance
-       * to row 2 below accordion title"*). It reads inside the header so the section's
-       * name and its money are one fact.
+       * The wallet balance, now the SUBHEADER's own row: it sat in a strip above the
+       * accordion (founder, 2026-09-23: *"move the wall balance to row 2 below
+       * accordion title"*), then in the header's second row, and now in the band under
+       * the header (the same day: the header was *"too cluttered"*). The subheader is
+       * ONE flex row, so the balance grows into the room the count line and the two
+       * glyphs leave it and clips rather than pushing them out.
        */
       sectionBalance: {
         display: 'flex',
         alignItems: 'center',
         gap: 6,
+        flex: '1 1 auto',
         minWidth: 0,
         fontSize: 12,
         lineHeight: '18px',
         color: 'var(--dsw-alias-label-secondary)',
-        // One line, always: the second of the header's two rows clips rather than
-        // grows, so a provider's explanatory note cannot deepen the header.
+        // One line, always: the band clips rather than grows, so a provider's
+        // explanatory note cannot deepen the section.
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -1157,18 +1182,18 @@ window.__ModuleLoader__.load({
         fontWeight: 600,
         lineHeight: 1.4,
         color: 'var(--dsw-alias-label-primary)',
-        // The header is TWO ROWS and stays two rows (founder, 2026-09-23: *"the
-        // accordion title should only be 2 rows"*): a long provider name, a long
-        // balance note and a long count line are all clipped rather than wrapped, so
-        // no vendor's wording can deepen the header.
+        // The header is ONE ROW and the subheader under it is one more, so nothing a
+        // provider says can deepen the section (founder, 2026-09-23: the title was
+        // *"too cluttered"* after an earlier *"should only be 2 rows"*): the name, the
+        // balance, the count line and the notes all clip rather than wrap.
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
       },
       /**
-       * The count line: the right cluster's own text, sitting immediately left of the
-       * add glyph (founder, 2026-09-23). It takes its width from its words and never
-       * shrinks — the text column beside it is the one that gives way.
+       * The count line: the subheader's own text, sitting immediately left of the add
+       * glyph (founder, 2026-09-23). It takes its width from its words and never
+       * shrinks — the balance beside it is the one that gives way.
        */
       sectionMeta: {
         flex: 'none',
@@ -1186,9 +1211,10 @@ window.__ModuleLoader__.load({
         color: 'var(--dsw-alias-label-tertiary)',
       },
       /**
-       * The header's own controls, right-justified before the chevron: add a workflow
-       * and re-read the section, both as glyphs (founder, 2026-09-23: *"move + workflow
-       * button as an icon button next to refresh"*).
+       * The subheader's own controls, at the end of the band: add a workflow and
+       * re-read the section, both as glyphs (founder, 2026-09-23: *"move + workflow
+       * button as an icon button next to refresh"*), with the count line immediately
+       * to their left.
        */
       sectionActions: {
         flex: 'none',
@@ -3438,13 +3464,15 @@ window.__ModuleLoader__.load({
      */
     function ProviderSection({ t, provider, units, failed, open, onToggle, onOpen, onRefresh }) {
       // Whether this section's install prompt is revealed. It lives here rather than in
-      // the panel below, because the control that toggles it is in the HEADER now
+      // the panel below, because the control that toggles it is in the SUBHEADER now
       // (founder, 2026-09-23: *"move + workflow button as an icon button next to
-      // refresh"*) and the thing it reveals is still the body's.
+      // refresh"*, then the header decluttering that created the band) and the thing
+      // it reveals is still the body's.
       const [addShown, setAddShown] = React.useState(false)
-      // "Workflows · 2 installed", not "Workflows · 2 workflows installed": the header
-      // already said the family, so the count says only the number. The family word is
-      // the same on every section (founder, 2026-09-23) — see `pane.section.family`.
+      // "Workflows · 2 installed", not "Workflows · 2 workflows installed": the line
+      // says the family itself, so the count is only the number after it. The family
+      // word is the same on every section (founder, 2026-09-23) — see
+      // `pane.section.family`.
       const meta =
         t('pane.section.family') +
         ' · ' +
@@ -3475,6 +3503,9 @@ window.__ModuleLoader__.load({
         // The header is the section's toggle and it also holds the way out to the
         // provider's own page. A <button> may not contain a link, so the row carries the
         // button's ROLE rather than its tag: one toggle, with the account anchor inside.
+        // It holds ONLY that now: the balance, the count line and the add/refresh
+        // glyphs live in the subheader band below (founder, 2026-09-23: *"the
+        // accordion header for generate is too cluttered"*).
         h(
           'div',
           {
@@ -3491,7 +3522,7 @@ window.__ModuleLoader__.load({
               onToggle()
             },
           },
-          // ROW 1's marker: the status light, where the header used to draw the kind.
+          // The header's marker: the status light, where it used to draw the kind.
           h(
             'span',
             { style: S.sectionLight },
@@ -3529,46 +3560,55 @@ window.__ModuleLoader__.load({
                   )
                 : null,
             ),
-            // ROW 2: the wallet balance, moved out of the strip that used to sit above
-            // the accordion (founder, 2026-09-23: *"move the wall balance to row 2 below
-            // accordion title"*).
+          ),
+          h('span', { style: S.sectionChevron }, h(open ? IconChevronDownOutline14 : IconChevronRightOutline14, { size: 14 })),
+        ),
+        // THE SUBHEADER (founder, 2026-09-23: *"the accordion header for generate is
+        // too cluttered. remove the wallet balance, workflows counter, add/refresh
+        // icons. make a subheader with separator top/bottom and move these elements
+        // into it"*): a band under the header, hairline above and below, holding what
+        // used to crowd the toggle row — the balance, then the count line, then the
+        // add and refresh glyphs. It draws open or shut: the balance and the count are
+        // what a person scans collapsed sections for, and add and refresh are how a
+        // collapsed one is acted on. The header above stays the ONLY toggle, so
+        // nothing in this band folds the section by being clicked, and clicks here do
+        // not bubble into it — the band is the header's sibling, not its child.
+        h(
+          'div',
+          { style: S.sectionSub, 'data-generate-section-sub': provider.id },
+          h(
+            'span',
+            { style: S.sectionBalance, 'data-generate-provider-strip': provider.id },
+            // A provider with no balance endpoint says `Key saved` rather than
+            // claiming an empty wallet: Krea and Comfy Cloud have no balance route.
             h(
               'span',
-              { style: S.sectionBalance, 'data-generate-provider-strip': provider.id },
-              // A provider with no balance endpoint says `Key saved` rather than
-              // claiming an empty wallet: Krea and Comfy Cloud have no balance route.
-              h(
-                'span',
-                { style: S.balanceValue },
-                parts.length ? parts.join(' · ') : provider.linked ? t('settings.linked') : t('wallet.notLinked'),
-              ),
-              h(
-                'span',
-                {
-                  style: S.balanceNote,
-                  // The note's own text is the contract the verify reads; matching the
-                  // phrase across the page would also hit the replace hint, which says
-                  // "the one stored on this machine" for a different reason.
-                  'data-generate-source': provider.source || 'none',
-                },
-                provider.writable === false ? t('settings.readOnly') : null,
-                provider.writable !== false && provider.source === STORED_SOURCE ? t('wallet.fromStore') : null,
-                provider.writable !== false && ENVIRONMENT_SOURCES.includes(provider.source) ? t('wallet.fromEnvironment') : null,
-                provider.note ? t('note.' + provider.note) : null,
-              ),
+              { style: S.balanceValue },
+              parts.length ? parts.join(' · ') : provider.linked ? t('settings.linked') : t('wallet.notLinked'),
+            ),
+            h(
+              'span',
+              {
+                style: S.balanceNote,
+                // The note's own text is the contract the verify reads; matching the
+                // phrase across the page would also hit the replace hint, which says
+                // "the one stored on this machine" for a different reason.
+                'data-generate-source': provider.source || 'none',
+              },
+              provider.writable === false ? t('settings.readOnly') : null,
+              provider.writable !== false && provider.source === STORED_SOURCE ? t('wallet.fromStore') : null,
+              provider.writable !== false && ENVIRONMENT_SOURCES.includes(provider.source) ? t('wallet.fromEnvironment') : null,
+              provider.note ? t('note.' + provider.note) : null,
             ),
           ),
-          // The section's count line, at the right of the header and immediately left
-          // of the add glyph (founder, 2026-09-23: *"Move Workflows 3 installed to left
-          // of + icon"*). It used to be row 3 of the text column, which made the header
-          // three rows deep; the column now holds the name and the balance and nothing
-          // else, so a header is two rows whatever its provider says.
+          // The count line, immediately left of the add glyph (founder, 2026-09-23:
+          // *"Move Workflows 3 installed to left of + icon"*) — the two moved together.
           h('span', { style: S.sectionMeta, 'data-generate-section-meta': provider.id }, meta),
-          // The section's own controls, right-justified before the chevron: add a
-          // workflow, then re-read the section. Both are glyphs, so both carry a hover
-          // tooltip (the harness's own bubble, not a native `title`) and an `aria-label`
-          // — the bubble is the sighted answer, the label is the one a screen reader
-          // reads (founder, 2026-09-23: *"add tooltip on hover for both"*).
+          // The section's own controls: add a workflow, then re-read the section. Both
+          // are glyphs, so both carry a hover tooltip (the harness's own bubble, not a
+          // native `title`) and an `aria-label` — the bubble is the sighted answer, the
+          // label is the one a screen reader reads (founder, 2026-09-23: *"add tooltip
+          // on hover for both"*).
           h(
             'span',
             { style: S.sectionActions },
@@ -3591,7 +3631,6 @@ window.__ModuleLoader__.load({
                       'data-generate-add-button': provider.id,
                       style: { flex: 'none' },
                       onClick: (event) => {
-                        event.stopPropagation()
                         // The prompt it reveals lives in the body, so a closed section
                         // opens first: a click that changed nothing visible would read
                         // as a control that does not work.
@@ -3614,15 +3653,11 @@ window.__ModuleLoader__.load({
                   'aria-label': t('wallet.refresh'),
                   'data-generate-refresh': provider.id,
                   style: { flex: 'none' },
-                  onClick: (event) => {
-                    event.stopPropagation()
-                    onRefresh()
-                  },
+                  onClick: () => onRefresh(),
                 }),
               ),
             ),
           ),
-          h('span', { style: S.sectionChevron }, h(open ? IconChevronDownOutline14 : IconChevronRightOutline14, { size: 14 })),
         ),
         open
           ? h(

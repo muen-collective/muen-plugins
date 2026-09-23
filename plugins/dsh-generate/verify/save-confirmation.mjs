@@ -897,17 +897,18 @@ if (pane && settings) {
       !!noteHolder && !textOf(noteHolder).join(' ').includes('8,600'),
       noteHolder ? textOf(noteHolder).join(' ').slice(0, 200) : 'no block holds the note',
     )
-    // The add path moved into the section's HEADER, beside refresh (founder,
-    // 2026-09-23: *"move + workflow button as an icon button next to refresh"*). The
-    // pane must not lose the action while gaining the design.
+    // The add path moved beside refresh and then into the section's SUBHEADER
+    // (founder, 2026-09-23: *"move + workflow button as an icon button next to
+    // refresh"*, then *"make a subheader with separator top/bottom and move these
+    // elements into it"*). The pane must not lose the action while gaining the design.
     check(
-      'the linked pane still has a way to add, in the header of the section it belongs to',
+      'the linked pane still has a way to add, in the subheader of the section it belongs to',
       (() => {
         const button = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
-        const head = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-section-toggle'] === PROVIDER)
-        return !!button && !!head && nodesOf(head).includes(button)
+        const band = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-section-sub'] === PROVIDER)
+        return !!button && !!band && nodesOf(band).includes(button)
       })(),
-      'the control moved into the header',
+      'the control moved into the subheader',
     )
     check(
       'the linked directions carry the shipped info glyph',
