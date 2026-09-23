@@ -1,0 +1,15 @@
+# @muen/dsh-runninghub — bundle patch layer (Epic 61).
+#
+# One row: mount this package into the profile tree. The host half serves the wallet
+# routes (S2); the client half registers the `generate` right-panel tab type, its body
+# and its chip, and the guide entry that puts the "Generate" card on the right panel's
+# start page.
+#
+# Row id `runninghub` is also the profile directory name the surface's own data
+# lives under (`<profile>/runninghub/`), so renaming the plugin again moves that
+# directory with it. The name is settled: `@muen/dsh-runninghub`, ratified
+# 2026-09-22 as epic 61 D10/Q4, so a RunningHub user can find it in the market.
+# The surface itself keeps the label "Generate".
+- insert:
+    - id: runninghub
+      name: '@muen/dsh-runninghub'

@@ -1,4 +1,4 @@
-// @muen/dsh-generate-space — browser half (Epic 61 S1 + S2).
+// @muen/dsh-runninghub — browser half (Epic 61 S1 + S2).
 //
 // WHAT THIS REGISTERS:
 //
@@ -37,7 +37,7 @@
 // React arrives through factory(require); the right-panel registry and the slot
 // registry arrive on ctx.
 window.__ModuleLoader__.load({
-  id: '@muen/dsh-generate-space',
+  id: '@muen/dsh-runninghub',
   factory: (require) => {
     const React = require('react')
     // The harness's own icon set and its dialog, not hand-rolled glyphs or a
@@ -56,7 +56,7 @@ window.__ModuleLoader__.load({
     const h = React.createElement
 
     /** The implementation id: the key this type's body and title register under. */
-    const GENERATE_ID = '@muen/dsh-generate-space'
+    const GENERATE_ID = '@muen/dsh-runninghub'
     /** The kind `openTab` names and the guide card opens. */
     const GENERATE_KIND = 'generate'
     /** This package's namespace in the client locale registry. */
@@ -1019,8 +1019,8 @@ window.__ModuleLoader__.load({
      */
     function apply(ctx) {
       const t = ctx.locale.bind(NS)
-      ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'generate-space.copy')
-      ctx.effect(() => ctx.sidebarRightTabs.register(generateDefinition(t)), 'generate-space.type')
+      ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'runninghub.copy')
+      ctx.effect(() => ctx.sidebarRightTabs.register(generateDefinition(t)), 'runninghub.type')
       ctx.effect(
         () =>
           ctx.slots.inject('sidebar.right.pane.tab', () =>
@@ -1029,7 +1029,7 @@ window.__ModuleLoader__.load({
               GeneratePane,
             ),
           ),
-        'generate-space.body',
+        'runninghub.body',
       )
       ctx.effect(
         () =>
@@ -1039,7 +1039,7 @@ window.__ModuleLoader__.load({
               GenerateTitle,
             ),
           ),
-        'generate-space.title',
+        'runninghub.title',
       )
       // The key is changed or unlinked here once the pane is in use (§9).
       ctx.effect(
@@ -1048,7 +1048,7 @@ window.__ModuleLoader__.load({
             ctx.slots.register(
               {
                 name: 'settings.section',
-                id: 'generate-space-wallet',
+                id: 'runninghub-wallet',
                 order: 17,
                 // Without this the page body keeps the language it first rendered
                 // in: the nav label is a thunk and re-reads, the page is not.
@@ -1058,7 +1058,7 @@ window.__ModuleLoader__.load({
               GenerateSettings,
             ),
           ),
-        'generate-space.settings',
+        'runninghub.settings',
       )
     }
 

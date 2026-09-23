@@ -37,7 +37,7 @@ import vm from 'node:vm'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
-const PKG_NAME = '@muen/dsh-generate-space'
+const PKG_NAME = '@muen/dsh-runninghub'
 const GENERATE_KIND = 'generate'
 const NS = 'generate'
 const GUIDE_ENTRY_ID = 'open'
@@ -209,7 +209,7 @@ async function contract() {
   const insertLines = patchLines.filter((line) => /^- insert:\s*$/.test(line))
   check('the patch has exactly one top-level insert', insertLines.length === 1, insertLines.length + ' found')
   check('no second YAML document', !patchLines.some((line) => /^---\s*$/.test(line)), 'found a ---')
-  check('the patch inserts our row id', /^\s*- id: generate-space\s*$/m.test(patch), 'row id missing')
+  check('the patch inserts our row id', /^\s*- id: runninghub\s*$/m.test(patch), 'row id missing')
   check(
     'the patch inserts our package',
     patch.split('\n').some((line) => line.trim().replace(/^- /, '') === "name: '" + PKG_NAME + "'"),
@@ -351,7 +351,7 @@ async function contract() {
   check('the settings page registers at settings.section', !!settings, JSON.stringify(seen.injected))
   check(
     "the settings page uses an id of its own, so it sits beside the shipped pages",
-    !!settings && settings.options.id === 'generate-space-wallet',
+    !!settings && settings.options.id === 'runninghub-wallet',
     settings && settings.options.id,
   )
   check(

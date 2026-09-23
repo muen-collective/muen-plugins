@@ -1,4 +1,4 @@
-# @muen/dsh-generate-space
+# @muen/dsh-runninghub
 
 The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a
 workflow, and run it in the right panel. Epic 61.
@@ -11,11 +11,11 @@ faked here.
 
 | Seat | What |
 |---|---|
-| `ctx.sidebarRightTabs` | a `generate` page type, id `@muen/dsh-generate-space`, priority `extension` |
+| `ctx.sidebarRightTabs` | a `generate` page type, id `@muen/dsh-runninghub`, priority `extension` |
 | `sidebar.right.pane.tab` | the pane body, keyed by the same id |
 | `sidebar.right.pane.tab.title` | the tab chip's live text |
 | the type's `guide[]` | one entry, which puts the **Generate** card on the right panel's start page |
-| `settings.section` | one settings page, `generate-space-wallet`, where the key is changed or unlinked |
+| `settings.section` | one settings page, `runninghub-wallet`, where the key is changed or unlinked |
 | the client locale registry | namespace `generate`, en + zh |
 
 ## The pane links; Settings manages
@@ -168,6 +168,8 @@ key, no Muen service. Only upstream `@deepseek-ai/*` services, the harness's own
 theme aliases (`--dsw-alias-*`), and this package's own copy — so it is a plain
 Cordis plugin in any DSH (`docs/plans/61-runninghub-generate-space-epic.md` §5).
 
-The package name is a working title. The market name (`@muen/dsh-runninghub` is
-the recommendation) is D10/Q4 and still open; a rename moves the row id and the
-profile directory with it.
+The package name is settled: **`@muen/dsh-runninghub`** (epic 61 D10/Q4, ratified
+2026-09-22), so a RunningHub user searching the market finds it. The surface inside keeps
+the label **Generate**, the tab kind stays `generate`, and the row id is `runninghub` —
+which is also the profile directory the surface's own data lives under
+(`<profile>/runninghub/`), so a later rename moves that directory with it.

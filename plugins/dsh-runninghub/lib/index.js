@@ -1,5 +1,5 @@
 /**
- * @muen/dsh-generate-space — host half (Epic 61, S1 + S2).
+ * @muen/dsh-runninghub — host half (Epic 61, S1 + S2).
  *
  * WHAT THIS IS: the wallet. The pane never holds the RunningHub key, so every
  * conversation with RunningHub happens here, in the host process, behind two
@@ -35,11 +35,11 @@
  * WHAT THIS DOES NOT DO YET: submit a task (S3/S5), price a run (§15 D5), or
  * touch the adapter store. It reads one account and stores one secret.
  *
- * @module @muen/dsh-generate-space
+ * @module @muen/dsh-runninghub
  */
 
 /** Matches the row id in cordis.patch.yml. */
-export const name = 'generate-space'
+export const name = 'runninghub'
 
 /** The one wallet path. Distinct (kind, path) per route, so this cannot collide. */
 const WALLET_PATH = '/plugins/generate/wallet'
@@ -342,7 +342,7 @@ export function apply(ctx, config = {}) {
 
   const mount = (server) => {
     if (!server || typeof server.register !== 'function') return
-    ctx.effect(() => server.register({ kind: 'exact', path: WALLET_PATH, handler: wallet }), 'generate-space: wallet')
+    ctx.effect(() => server.register({ kind: 'exact', path: WALLET_PATH, handler: wallet }), 'runninghub: wallet')
   }
 
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined

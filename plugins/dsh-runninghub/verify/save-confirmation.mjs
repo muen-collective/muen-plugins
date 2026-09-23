@@ -33,7 +33,7 @@ import vm from 'node:vm'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
-const PKG_NAME = '@muen/dsh-generate-space'
+const PKG_NAME = '@muen/dsh-runninghub'
 const NS = 'generate'
 const argv = process.argv.slice(2)
 /** `--show` prints the dialog's own lines, in order, without restarting the app. */
