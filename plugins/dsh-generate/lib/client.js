@@ -76,6 +76,14 @@ window.__ModuleLoader__.load({
       IconRefreshOutline16,
       IconCheckOutline16,
       IconInfoOutline14,
+      // The pane's own glyphs: a chevron per accordion header, a flow glyph on a
+      // workflow card, an image glyph on an image provider's header, and the plus on
+      // the dashed add card.
+      IconChevronDownOutline14,
+      IconChevronRightOutline14,
+      IconBranchOutline16,
+      IconEnhanceOutline16,
+      IconPlusOutline16,
       Modal,
     } = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
@@ -134,8 +142,15 @@ window.__ModuleLoader__.load({
       // it here would break the instruction this line exists to give. A user may
       // say it in their own language; what must not move is the sentence we show.
       'pane.add.hint': 'To add a workflow, ask the agent in chat: “add this RunningHub workflow <app link>”.',
-      'pane.empty.title': 'Nothing installed yet',
-      'pane.empty.body': 'RunningHub apps you add open here, one card each.',
+      // The pane's home is a stacked accordion, one section per provider (founder,
+      // 2026-09-23). A provider with nothing installed no longer draws a paragraph
+      // about being empty: it draws the dashed add card, whose click yields the prompt
+      // that installs one. That is also why the linked screen has no separate "how to
+      // add" note any more — the card under the workflows IS that sentence.
+      'pane.section.none': 'No workflows yet',
+      'pane.section.count': 'installed',
+      'pane.add.card': '+ Workflow',
+      'pane.add.card.hint': 'Click for the prompt you paste in chat',
       // A host that did not answer is not an empty install, and saying so is the
       // difference between "add a workflow" and "something is wrong".
       'pane.list.failed': 'The installed workflows could not be read.',
@@ -268,8 +283,10 @@ window.__ModuleLoader__.load({
       'pane.linked.manage': '在「设置 → 生成」里修改或移除密钥。设置菜单位于左侧边栏底部。',
       // 引号内的指令保持英文：它就是技能 whenToUse 里写的那句，翻译会让这行失去作用。
       'pane.add.hint': '要添加工作流，在对话里对智能体说：「add this RunningHub workflow <app link>」。',
-      'pane.empty.title': '还没有安装应用',
-      'pane.empty.body': '你添加的 RunningHub 应用会在这里打开，每个应用一张卡片。',
+      'pane.section.none': '还没有工作流',
+      'pane.section.count': '个已安装',
+      'pane.add.card': '+ 工作流',
+      'pane.add.card.hint': '点击获取可粘贴到对话里的指令',
       'pane.list.failed': '无法读取已安装的工作流。',
       'key.label.suffix': 'API 密钥',
       'wallet.key.placeholder': '粘贴你的密钥',
@@ -852,62 +869,160 @@ window.__ModuleLoader__.load({
         color: 'var(--dsw-alias-state-warn-primary)',
       },
       /**
-       * The hub: one card per installed workflow, inside the pane (founder,
-       * 2026-09-22 — "this surface needs to hold all wf surfaces inside this one RH
-       * plugin surface"). The card is a button, so the whole card is the target.
+       * The pane's home as a stacked accordion (founder, 2026-09-23): one section per
+       * provider, in the registry's own order, and a section holds that provider's
+       * workflows as cards.
        */
-      cards: {
+      sections: {
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 8,
         padding: '14px 12px 2px',
       },
-      card: {
+      section: {
         display: 'flex',
-        alignItems: 'stretch',
-        gap: 0,
+        flexDirection: 'column',
+      },
+      sectionHead: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
         width: '100%',
-        padding: 0,
-        overflow: 'hidden',
+        boxSizing: 'border-box',
+        padding: '10px 12px',
         textAlign: 'left',
         font: 'inherit',
         color: 'inherit',
         background: 'var(--dsw-alias-bg-layer-1)',
-        border: '1px solid var(--dsw-alias-border-l1)',
-        borderRadius: 10,
+        border: '.5px solid var(--dsw-alias-border-l4)',
+        borderRadius: 12,
         cursor: 'pointer',
       },
-      cardCover: {
+      sectionIcon: {
         flex: 'none',
-        display: 'block',
-        width: 72,
-        height: 72,
-        objectFit: 'cover',
-        background: 'var(--dsw-alias-bg-layer-2)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 26,
+        height: 26,
+        color: 'var(--dsw-alias-label-secondary)',
       },
-      cardBody: {
+      sectionText: {
         display: 'flex',
         flexDirection: 'column',
-        gap: 3,
+        gap: 2,
         minWidth: 0,
-        padding: '10px 12px',
+        flex: 1,
       },
-      cardTitle: {
-        fontSize: 13,
+      sectionTitle: {
+        fontSize: 14,
         fontWeight: 600,
         lineHeight: 1.4,
         color: 'var(--dsw-alias-label-primary)',
       },
-      cardBlurb: {
-        fontSize: 11,
-        lineHeight: 1.45,
+      sectionMeta: {
+        fontSize: 12,
+        lineHeight: 1.4,
+        color: 'var(--dsw-alias-label-caption)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      },
+      sectionChevron: {
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        color: 'var(--dsw-alias-label-tertiary)',
+      },
+      sectionBody: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        padding: '8px 2px 2px',
+      },
+      sectionCards: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      },
+      /** The note under the accordion: where the key is managed, and nothing else. */
+      sectionNotes: {
+        padding: '8px 12px 0',
+      },
+      /**
+       * One card, the harness's own start-page card (the guide's `.entry`): 24px
+       * radius, a half-pixel border, a 26px glyph, a 15px title and one 13px line
+       * under it — and NO thumbnail. Founder, 2026-09-23: *"the workflow card is same
+       * design as dsh start page card; icon + label + 2nd row (no thumbnails)"*.
+       *
+       * Inline styles carry no `:hover`, so the hover value is swapped in from state
+       * by the card itself (`useHover`), which is the one part of the start-page card
+       * that would otherwise be lost.
+       */
+      startCard: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        width: '100%',
+        boxSizing: 'border-box',
+        minHeight: 56,
+        padding: '14px 20px',
+        textAlign: 'left',
+        font: 'inherit',
+        color: 'var(--dsw-alias-label-primary)',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '.5px solid var(--dsw-alias-border-l4)',
+        borderRadius: 24,
+        cursor: 'pointer',
+      },
+      startCardHover: { background: 'var(--dsw-alias-interactive-bg-hover)' },
+      /** The empty state: the same card, dashed, carrying nothing but the plus. */
+      startCardDashed: {
+        background: 'transparent',
+        border: '1px dashed var(--dsw-alias-border-l2)',
         color: 'var(--dsw-alias-label-secondary)',
       },
-      cardMark: {
-        marginTop: 2,
-        fontSize: 10,
+      startCardIcon: {
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 26,
+        height: 26,
+        color: 'var(--dsw-alias-label-secondary)',
+      },
+      startCardText: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        minWidth: 0,
+      },
+      startCardTitle: {
+        fontSize: 15,
         lineHeight: 1.4,
-        color: 'var(--dsw-alias-label-tertiary)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      },
+      startCardLine: {
+        fontSize: 13,
+        lineHeight: 1.4,
+        color: 'var(--dsw-alias-label-caption)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      },
+      /** What the add card's click reveals: the sentence, the prompt, and Copy. */
+      addWrap: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      },
+      addPrompt: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        padding: '0 2px 2px',
       },
       /** One workflow's surface: the form column, inside the pane, under the strip. */
       surface: {
@@ -1471,32 +1586,59 @@ window.__ModuleLoader__.load({
     }
 
     /** One card on the pane's first screen: the whole card opens that workflow. */
+    /**
+     * Inline styles carry no `:hover`, and the start-page card's hover background is
+     * part of what makes it read as a control, so the two values are swapped from
+     * state. One hook, every card in the pane.
+     */
+    function useHover() {
+      const [hover, setHover] = React.useState(false)
+      return [hover, { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) }]
+    }
+
+    /**
+     * One installed workflow, as the harness's own start-page card.
+     *
+     * NO THUMBNAIL AND NO PROVIDER ON THE CARD (founder, 2026-09-23: *"the workflow
+     * card is same design as dsh start page card; icon + label + 2nd row (no
+     * thumbnails)"*). The cover the API returns is dropped: it is a screenshot of an app
+     * the person has not opened, and at pane width it read as a 72px postage stamp. The
+     * provider is not repeated either — the card sits inside that provider's own
+     * accordion section, whose header names it — while `data-generate-provider` still
+     * carries the fact for anyone reading the DOM.
+     */
     function UnitCard({ t, unit, onOpen }) {
+      const [hover, hoverProps] = useHover()
       return h(
         'button',
         {
           type: 'button',
-          style: S.card,
+          style: hover ? { ...S.startCard, ...S.startCardHover } : S.startCard,
           'data-generate-unit': unit.name,
           'data-generate-provider': unit.provider,
           onClick: () => onOpen(unit.provider, unit.name),
+          ...hoverProps,
         },
-        unit.cover ? h('img', { src: unit.cover, alt: '', style: S.cardCover }) : null,
+        h('span', { style: S.startCardIcon }, h(IconBranchOutline16, { size: 24 })),
         h(
           'span',
-          { style: S.cardBody },
-          h('span', { style: S.cardTitle }, unit.title),
-          unit.blurb ? h('span', { style: S.cardBlurb }, unit.blurb) : null,
-          // WHICH PROVIDER it runs on, and whose app it is: with several providers
-          // the first is a fact a reader needs, and the second is one the API cannot
-          // supply, so the adapter is where a person said it (§2).
-          h(
-            'span',
-            { style: S.cardMark },
-            unit.providerLabel + (unit.origin === 'community' ? ' · ' + t('card.community') : ''),
-          ),
+          { style: S.startCardText },
+          h('span', { style: S.startCardTitle }, unit.title),
+          h('span', { style: S.startCardLine }, unitLine(t, unit)),
         ),
       )
+    }
+
+    /**
+     * The card's second row: whose work it is when that is a fact, then what the app
+     * does. A workflow whose file carries no description falls back to the provider's
+     * own label, so the row is never blank.
+     */
+    function unitLine(t, unit) {
+      const parts = []
+      if (unit.origin === 'community') parts.push(t('card.community'))
+      if (unit.blurb) parts.push(unit.blurb)
+      return parts.length > 0 ? parts.join(' · ') : unit.providerLabel || ''
     }
 
     /**
@@ -1622,6 +1764,143 @@ window.__ModuleLoader__.load({
      * no key contributes no cards, and the pane asks for the first key rather than
      * showing an empty list.
      */
+    /**
+     * The dashed add card: how a workflow arrives.
+     *
+     * A plugin cannot put text into the conversation composer and a slash command
+     * cannot start a turn (measured 2026-09-22), so the pane cannot hand the job to
+     * chat itself. What it can do is hand over the sentence: one click reveals the
+     * provider's own install prompt — the phrase the agent's skill answers to — with
+     * Copy beside it (founder, 2026-09-23: *"use + workflow empty card w dashed border,
+     * click on it to get code snippet to copy/paste to composer"*).
+     *
+     * It rides at the foot of every section, not only an empty one: a provider with
+     * three workflows still needs a way to gain a fourth, and this is the only place in
+     * the pane that says how.
+     */
+    function AddWorkflowCard({ t, provider }) {
+      const [hover, hoverProps] = useHover()
+      const [shown, setShown] = React.useState(false)
+      const [copied, setCopied] = React.useState(false)
+
+      const copy = async () => {
+        try {
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            await navigator.clipboard.writeText(provider.addPrompt)
+            setCopied(true)
+          }
+        } catch {
+          // The prompt is on screen either way; a refused clipboard is not an error
+          // worth a message of its own.
+        }
+      }
+
+      return h(
+        'div',
+        { style: S.addWrap, 'data-generate-add-wrap': provider.id },
+        h(
+          'button',
+          {
+            type: 'button',
+            style: { ...S.startCard, ...S.startCardDashed, ...(hover ? S.startCardHover : {}) },
+            'data-generate-add-card': provider.id,
+            'aria-expanded': shown ? 'true' : 'false',
+            onClick: () => setShown(!shown),
+            ...hoverProps,
+          },
+          h('span', { style: S.startCardIcon }, h(IconPlusOutline16, { size: 24 })),
+          h(
+            'span',
+            { style: S.startCardText },
+            h('span', { style: S.startCardTitle }, t('pane.add.card')),
+            h('span', { style: S.startCardLine }, t('pane.add.card.hint')),
+          ),
+        ),
+        shown
+          ? h(
+              'div',
+              { style: S.addPrompt, 'data-generate-add-open': provider.id },
+              h('div', { style: S.hint, 'data-generate-add-hint': 'yes' }, t('settings.workflows.add')),
+              h(
+                'div',
+                { style: S.promptRow },
+                h('code', { style: S.promptCode, 'data-generate-add-prompt': provider.id }, provider.addPrompt),
+                h(
+                  'button',
+                  { type: 'button', style: S.secondary, 'data-generate-copy-prompt': provider.id, onClick: copy },
+                  copied ? t('settings.workflows.copied') : t('settings.workflows.copy'),
+                ),
+              ),
+            )
+          : null,
+      )
+    }
+
+    /**
+     * One provider's section of the pane's accordion: a header that names the provider
+     * and says what the section holds, and a body holding its cards.
+     *
+     * ONE SECTION PER PROVIDER, ALL OF THEM (founder, 2026-09-23). A provider with
+     * nothing installed is still a section, because a section is where its dashed add
+     * card lives: an install that showed only the providers that already work could
+     * never be filled. A provider whose list could not be read says so instead of
+     * showing the empty state, because "nothing installed" and "nothing answered" are
+     * different facts.
+     */
+    function ProviderSection({ t, provider, units, failed, open, onToggle, onOpen }) {
+      const kind = provider.kind === 'image' ? t('settings.kind.image') : t('settings.kind.workflow')
+      // "Workflows · 2 installed", not "Workflows · 2 workflows installed": the header
+      // already said the family, so the count says only the number.
+      const meta = kind + ' · ' + (units.length === 0 ? t('pane.section.none') : units.length + ' ' + t('pane.section.count'))
+      return h(
+        'div',
+        { style: S.section, 'data-generate-section-wrap': provider.id },
+        h(
+          'button',
+          {
+            type: 'button',
+            style: S.sectionHead,
+            'data-generate-section': provider.id,
+            'data-generate-section-toggle': provider.id,
+            'aria-expanded': open ? 'true' : 'false',
+            onClick: onToggle,
+          },
+          h(
+            'span',
+            { style: S.sectionIcon },
+            h(provider.kind === 'image' ? IconEnhanceOutline16 : IconBranchOutline16, { size: 22 }),
+          ),
+          h(
+            'span',
+            { style: S.sectionText },
+            h('span', { style: S.sectionTitle }, provider.label),
+            h('span', { style: S.sectionMeta, 'data-generate-section-meta': provider.id }, meta),
+          ),
+          h('span', { style: S.sectionChevron }, h(open ? IconChevronDownOutline14 : IconChevronRightOutline14, { size: 14 })),
+        ),
+        open
+          ? h(
+              'div',
+              { style: S.sectionBody, 'data-generate-section-body': provider.id },
+              failed
+                ? h('div', { style: S.hint, 'data-generate-provider-failed': provider.id }, t('pane.list.failed'))
+                : h(
+                    'div',
+                    {
+                      style: S.sectionCards,
+                      'data-generate-cards': String(units.length),
+                      // The empty state is this container: a provider with nothing
+                      // installed holds one card, and that card is how it gets filled.
+                      ...(units.length === 0 ? { 'data-generate-none': provider.id } : {}),
+                    },
+                    units.map((unit) => h(UnitCard, { key: unit.name, t, unit, onOpen })),
+                    h(AddWorkflowCard, { t, provider }),
+                  ),
+            )
+          : null,
+      )
+    }
+
     function GeneratePane(props) {
       const t = translatorOf(props)
       const providers = useProviders()
@@ -1629,6 +1908,10 @@ window.__ModuleLoader__.load({
       // `null` means the user has not chosen; `{ provider, name }` opens that
       // workflow's surface; `''` is the way back to the cards.
       const [chosen, setChosen] = React.useState(null)
+      // Which accordion section is open, in the same three states: `null` is "not
+      // chosen yet" (the default below applies), `''` is "closed on purpose", and an id
+      // is that provider's section.
+      const [openId, setOpenId] = React.useState(null)
 
       // A tab may be opened at a unit by an opener that passed `params.unit` — and
       // `params.provider` when there is more than one place it could live.
@@ -1658,6 +1941,14 @@ window.__ModuleLoader__.load({
         providers.providers[0] ||
         null
       const several = providers.providers.length > 1
+      // The accordion's own bookkeeping: which units belong to which provider, and
+      // which section is open before anyone has clicked. The default is the first
+      // provider that actually has workflows — landing on four closed rows would hide
+      // the thing the pane exists for — and failing that, the first provider.
+      const unitsOf = (id) => units.units.filter((unit) => unit.provider === id)
+      const openDefault =
+        (providers.providers.find((provider) => unitsOf(provider.id).length > 0) || providers.providers[0] || {}).id || null
+      const open = openId === null ? openDefault : openId
 
       // No provider linked yet: the pane asks for the first one's key. That is the
       // first-run screen a new install lands on, unchanged in shape.
@@ -1720,32 +2011,35 @@ window.__ModuleLoader__.load({
               h('span', null, provider.error === 'invalid-key' ? t('error.storedKeyRejected') : errorText(t, provider.error)),
             ),
           ),
-        // ONE PANE HOLDS EVERY WORKFLOW SURFACE (founder, 2026-09-22). The first
-        // screen is the cards; a card opens that workflow's surface in place, and the
-        // way back is the surface's own first control.
+        // THE HOME SCREEN IS A STACKED ACCORDION, ONE SECTION PER PROVIDER (founder,
+        // 2026-09-23). All of them, linked or not, in the registry's own order: a
+        // provider with nothing installed is where its add card lives. One section is
+        // open at a time — opening a second closes the first, which is what keeps a
+        // four-provider pane short enough to read.
         active === null
-          ? units.units.length > 0
+          ? units.phase === 'failed'
             ? h(
                 'div',
-                { style: S.cards, 'data-generate-cards': String(units.units.length) },
-                units.units.map((unit) =>
-                  h(UnitCard, { key: unit.provider + '/' + unit.name, t, unit, onOpen: (provider, name) => setChosen({ provider, name }) }),
+                { style: S.empty, 'data-generate-list-failed': 'yes' },
+                h(GenerateMark, null),
+                h('div', { style: S.title }, t('pane.list.failed')),
+              )
+            : h(
+                'div',
+                { style: S.sections, 'data-generate-sections': String(providers.providers.length) },
+                providers.providers.map((provider) =>
+                  h(ProviderSection, {
+                    key: provider.id,
+                    t,
+                    provider,
+                    units: unitsOf(provider.id),
+                    failed: units.failed.indexOf(provider.id) !== -1,
+                    open: open === provider.id,
+                    onToggle: () => setOpenId(open === provider.id ? '' : provider.id),
+                    onOpen: (id, name) => setChosen({ provider: id, name }),
+                  }),
                 ),
               )
-            : units.phase === 'failed'
-              ? h(
-                  'div',
-                  { style: S.empty, 'data-generate-list-failed': 'yes' },
-                  h(GenerateMark, null),
-                  h('div', { style: S.title }, t('pane.list.failed')),
-                )
-              : h(
-                  'div',
-                  { style: S.empty, 'data-generate-none': 'yes' },
-                  h(GenerateMark, null),
-                  h('div', { style: S.title }, t('pane.empty.title')),
-                  h('div', { style: S.body }, t('pane.empty.body')),
-                )
           : h(WorkflowSurface, {
               key: active.provider + '/' + active.name,
               t,
@@ -1756,20 +2050,15 @@ window.__ModuleLoader__.load({
         active === null
           ? h(
               'div',
-              { style: S.cards },
+              { style: S.sectionNotes },
               // The directions sit under the screen they explain, not at the top of
               // the pane: this is the surface a person returns to when they rotate
-              // the key.
+              // the key. How to ADD a workflow is no longer a sentence here — it lives
+              // on the dashed card in each section, which is also the control that
+              // hands over the prompt.
               h(Note, {
                 text: t('pane.linked.manage'),
                 attrs: { 'data-generate-manage-hint': 'yes' },
-              }),
-              // And under those, how to add an app: this is the screen a person lands
-              // on with a linked account, so the one action that fills it has to be
-              // on it, in words they can repeat into the chat.
-              h(Note, {
-                text: t('pane.add.hint'),
-                attrs: { 'data-generate-add-hint': 'yes' },
               }),
             )
           : null,

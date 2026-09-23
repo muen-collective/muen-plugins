@@ -560,7 +560,9 @@ if (pane && settings) {
         )
         check(
           'the linked pane stays after the dialog closes',
-          !!firstOf(closed, 'div') && textOf(closed).join(' ').includes(EN['pane.empty.title']),
+          !!firstOf(closed, 'div') &&
+            !!nodesOf(closed).find((node) => node.props && node.props['data-generate-add-card']) &&
+            textOf(closed).join(' ').includes(EN['pane.add.card']),
           textOf(closed).join(' | ').slice(0, 160),
         )
       }
@@ -876,8 +878,19 @@ if (pane && settings) {
       : null
     check(
       'the linked directions sit in their own block below the screen they explain',
-      !!noteHolder && textOf(noteHolder).join(' ').includes(EN['pane.add.hint']) && !textOf(noteHolder).join(' ').includes('8,600'),
+      !!noteHolder && !textOf(noteHolder).join(' ').includes('8,600'),
       noteHolder ? textOf(noteHolder).join(' ').slice(0, 200) : 'no block holds the note',
+    )
+    // The add path moved onto the dashed card inside the section (founder,
+    // 2026-09-23). The pane must not lose the action while gaining the design.
+    check(
+      'the linked pane still has a way to add, inside the section it belongs to',
+      (() => {
+        const card = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-add-card'] === PROVIDER)
+        const body = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-section-body'] === PROVIDER)
+        return !!card && !!body && nodesOf(body).includes(card)
+      })(),
+      'the sentence moved onto the card',
     )
     check(
       'the linked directions carry the shipped info glyph',
@@ -890,7 +903,7 @@ if (pane && settings) {
         if (!homeRoot) return false
         const inOrder = nodesOf(homeRoot)
         const stripAt = inOrder.findIndex((node) => node.props && node.props['data-generate-source'])
-        const emptyAt = inOrder.findIndex((node) => node.props && node.props['data-generate-none'] === 'yes')
+        const emptyAt = inOrder.findIndex((node) => node.props && node.props['data-generate-none'] !== undefined)
         const manageAt = inOrder.findIndex((node) => node.props && node.props['data-generate-manage-hint'] === 'yes')
         return stripAt !== -1 && emptyAt !== -1 && manageAt !== -1 && stripAt < emptyAt && emptyAt < manageAt
       })(),
@@ -903,14 +916,15 @@ if (pane && settings) {
       EN['pane.linked.manage'],
     )
 
-    // 9b. how an app gets added, on the screen that has nothing installed
+    // 9b. how a workflow gets added
     //
     // The pane cannot hand the job to the chat: a third-party client plugin cannot
     // put text into the composer and a slash command cannot start a turn (measured
-    // 2026-09-22). So the one thing it can do is say what to ask for, and this is
-    // the screen whose whole job is to be filled — the sentence has to be on it,
-    // under the key directions, because linking a wallet and adding a workflow are
-    // the two answers this pane owes a new install.
+    // 2026-09-22). On a FRESH install the sentence is a note under the key directions.
+    // On a LINKED pane it is the dashed add card inside the provider's section
+    // (founder, 2026-09-23: *"use + workflow empty card w dashed border, click on it
+    // to get code snippet to copy/paste to composer"*) — the same words, on the control
+    // that reveals the prompt.
     {
       const noteAt = (tree, attr) => nodesOf(tree).findIndex((node) => node.props && node.props[attr] === 'yes')
       const noteOf = (tree, attr) => nodesOf(tree).find((node) => node.props && node.props[attr] === 'yes')
@@ -939,37 +953,32 @@ if (pane && settings) {
         'manage@' + noteAt(fresh.tree, 'data-generate-manage-hint') + ' add@' + noteAt(fresh.tree, 'data-generate-add-hint'),
       )
       check(
-        'the linked pane says the same thing, in the same order',
-        linkedText.includes(EN['pane.add.hint']) &&
-          carriesInfoGlyph(linked.tree, EN['pane.add.hint']) &&
-          noteAt(linked.tree, 'data-generate-manage-hint') < noteAt(linked.tree, 'data-generate-add-hint'),
-        'manage@' + noteAt(linked.tree, 'data-generate-manage-hint') + ' add@' + noteAt(linked.tree, 'data-generate-add-hint'),
-      )
-      check(
         'the add note is read off its own node, not matched as a phrase',
         (() => {
           const freshNote = noteOf(fresh.tree, 'data-generate-add-hint')
-          const linkedNote = noteOf(linked.tree, 'data-generate-add-hint')
           const freshLine = freshNote ? linesOf(freshNote).join(' ').trim() : ''
-          const linkedLine = linkedNote ? linesOf(linkedNote).join(' ').trim() : ''
-          return freshLine === EN['pane.add.hint'] && linkedLine === EN['pane.add.hint']
+          return freshLine === EN['pane.add.hint']
         })(),
         'the note node must carry the copy itself',
       )
-      // Both notes belong to the home screen's own block, not to the pane root: the
-      // strip's balance sits above them, and a note beside the strip is a different
-      // claim.
-      const bothNotes = homeRoot
-        ? homeRoot.children.find((child) => textOf(child).join(' ').includes(EN['pane.add.hint']))
-        : null
-      const bothText = bothNotes ? textOf(bothNotes).join(' ') : ''
+      check(
+        'the linked pane adds a workflow through the dashed card, not a note',
+        linkedText.includes(EN['pane.add.card']) &&
+          !linkedText.includes(EN['pane.add.hint']) &&
+          !!nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-add-card'] === PROVIDER),
+        linkedText.slice(0, 240),
+      )
+      // Both notes belong to the fresh screen's own block, not to the pane root: the
+      // key field sits above them, and a note beside the field is a different claim.
+      const freshForm = nodesOf(fresh.tree).find((node) => node.props && node.props['data-generate-first-run'] === 'yes')
+      const bothText = freshForm ? textOf(freshForm).join(' ') : ''
       check(
         'both notes live in one block of their own, with no balance in it',
-        !!bothNotes &&
-          bothText.includes(EN['pane.linked.manage']) &&
+        !!freshForm &&
+          bothText.includes(EN['pane.first.manage']) &&
           bothText.includes(EN['pane.add.hint']) &&
           !bothText.includes('8,600'),
-        bothNotes ? bothText.slice(0, 240) : 'no block carries both notes',
+        bothText.slice(0, 240),
       )
     }
   }

@@ -700,12 +700,21 @@ check(
   byAttr(home.tree, 'data-generate-unit', KREA.name) ? textIn(byAttr(home.tree, 'data-generate-unit', KREA.name)) : 'no card',
 )
 check(
-  'a card says which provider it runs on, and from which provider the list came',
+  'a card carries the provider it runs on, and its section header names it',
   (() => {
     const card = byAttr(home.tree, 'data-generate-unit', KREA.name)
-    return !!card && card.props['data-generate-provider'] === PROVIDER && textIn(card).includes('RunningHub')
+    const head = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
+    return !!card && card.props['data-generate-provider'] === PROVIDER && !!head && textIn(head).includes('RunningHub')
   })(),
   byAttr(home.tree, 'data-generate-unit', KREA.name) ? textIn(byAttr(home.tree, 'data-generate-unit', KREA.name)) : 'no card',
+)
+check(
+  'no thumbnail is drawn: the card is icon, label and one line (founder, 2026-09-23)',
+  (() => {
+    const card = byAttr(home.tree, 'data-generate-unit', KREA.name)
+    return !!card && !nodesOf(card).some((node) => node.type === 'img')
+  })(),
+  'the adapter carries a cover; the card no longer draws it',
 )
 check(
   'a community app says whose work it is',
@@ -732,6 +741,123 @@ check(
   seen.types.length === 1 && seen.types[0].multiple === undefined,
   JSON.stringify(seen.types.map((definition) => ({ kind: definition.kind, multiple: definition.multiple }))),
 )
+
+// ── the home screen's accordion: one section per provider, all of them ──────
+//
+// THE SHAPE THE FOUNDER ASKED FOR (2026-09-23): "I want to try stacked accordion to
+// each provider inside an accordion", with one section per provider — all four, not
+// only the linked ones, because a section is where that provider's add card lives. One
+// section is open at a time. The card inside a section is the harness's own start-page
+// card: icon, label, one line under it, no thumbnail.
+
+const sectionIds = (tree) =>
+  nodesOf(tree)
+    .filter((node) => node.props && node.props['data-generate-section-toggle'])
+    .map((node) => node.props['data-generate-section-toggle'])
+
+check(
+  'the home screen is a stacked accordion, one section per provider, in registry order',
+  sectionIds(home.tree).join(',') === 'runninghub,krea,comfycloud,magnific',
+  JSON.stringify(sectionIds(home.tree)),
+)
+check(
+  'a section header names its provider and says what the section holds',
+  (() => {
+    const head = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
+    const text = head ? textIn(head) : ''
+    return text.includes('RunningHub') && text.includes(EN['settings.kind.workflow']) && text.includes('2')
+  })(),
+  byAttr(home.tree, 'data-generate-section-toggle', PROVIDER) ? textIn(byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)) : 'no header',
+)
+check(
+  'an image provider is tagged as one, and says it has nothing installed',
+  (() => {
+    const head = byAttr(home.tree, 'data-generate-section-toggle', 'krea')
+    const text = head ? textIn(head) : ''
+    return text.includes('Krea') && text.includes(EN['settings.kind.image']) && text.includes(EN['pane.section.none'])
+  })(),
+  byAttr(home.tree, 'data-generate-section-toggle', 'krea') ? textIn(byAttr(home.tree, 'data-generate-section-toggle', 'krea')) : 'no header',
+)
+check(
+  'the section that has workflows opens by itself; the empty ones stay shut',
+  !!byAttr(home.tree, 'data-generate-section-body', PROVIDER) &&
+    !byAttr(home.tree, 'data-generate-section-body', 'krea') &&
+    !byAttr(home.tree, 'data-generate-section-body', 'comfycloud'),
+  JSON.stringify(sectionIds(home.tree)),
+)
+check(
+  'the open section carries its own workflows, and only its own',
+  (() => {
+    const body = byAttr(home.tree, 'data-generate-section-body', PROVIDER)
+    const names = body
+      ? nodesOf(body)
+          .filter((node) => node.props && node.props['data-generate-unit'])
+          .map((node) => node.props['data-generate-unit'])
+      : []
+    return names.join(',') === KREA.name + ',' + QWEN.name
+  })(),
+  'a card under the wrong provider is a card that runs somewhere else',
+)
+
+// Opening a section is what makes its cards reachable, and the accordion holds one
+// open at a time: opening Krea's must close RunningHub's.
+{
+  const real = globalThis.fetch
+  globalThis.fetch = stubHost({ units: [KREA, QWEN] }).fetch
+  try {
+    const before = await settle(paneSlot.component, { t }, 'pane-accordion')
+    const toggle = byAttr(before, 'data-generate-section-toggle', 'krea')
+    check(
+      'a closed section is still a control that opens it',
+      !!toggle && typeof toggle.props.onClick === 'function',
+      toggle ? 'control present' : 'no toggle on the Krea section',
+    )
+    if (toggle) toggle.props.onClick()
+    const after = await settle(paneSlot.component, { t }, 'pane-accordion')
+    check(
+      'opening a section closes the open one: one section at a time',
+      !!byAttr(after, 'data-generate-section-body', 'krea') && !byAttr(after, 'data-generate-section-body', PROVIDER),
+      JSON.stringify(sectionIds(after)),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// The dashed add card is the pane's one install control (founder, 2026-09-23: "use +
+// workflow empty card w dashed border, click on it to get code snippet to copy/paste to
+// composer"). Its click has to yield THAT provider's own prompt, because the phrase the
+// agent's skill answers to names the provider.
+{
+  const real = globalThis.fetch
+  globalThis.fetch = stubHost({ units: [] }).fetch
+  try {
+    const first = await settle(paneSlot.component, { t }, 'pane-add-card')
+    const card = byAttr(first, 'data-generate-add-card', PROVIDER)
+    check(
+      'a provider with nothing installed carries the dashed add card',
+      !!card && textIn(card).includes(EN['pane.add.card']) && textIn(card).includes(EN['pane.add.card.hint']),
+      card ? textIn(card) : 'no add card',
+    )
+    check(
+      'the prompt is not on screen until the card is clicked',
+      !byAttr(first, 'data-generate-add-prompt', PROVIDER),
+      'the sentence and the prompt stay behind the click',
+    )
+    if (card) card.props.onClick()
+    const after = await settle(paneSlot.component, { t }, 'pane-add-card')
+    check(
+      "clicking the add card yields that provider's own prompt, with Copy beside it",
+      textIn(after).includes(EN['settings.workflows.add']) &&
+        !!byAttr(after, 'data-generate-add-prompt', PROVIDER) &&
+        !!byAttr(after, 'data-generate-copy-prompt', PROVIDER) &&
+        textIn(byAttr(after, 'data-generate-add-prompt', PROVIDER)) === 'add this RunningHub workflow <app link>',
+      textIn(after).slice(0, 240),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
 
 // ── a workflow's surface, inside the pane ───────────────────────────────────
 
@@ -834,19 +960,33 @@ check(
 // ── nothing installed, and a host that cannot answer ────────────────────────
 
 check(
-  'nothing installed: the pane says so, in its own block',
-  !!byAttr(empty.tree, 'data-generate-none', 'yes') && textIn(byAttr(empty.tree, 'data-generate-none', 'yes')).includes(EN['pane.empty.title']),
-  byAttr(empty.tree, 'data-generate-none', 'yes') ? textIn(byAttr(empty.tree, 'data-generate-none', 'yes')) : 'no empty block',
+  'nothing installed: the open section holds the dashed add card, not a paragraph',
+  (() => {
+    const box = byAttr(empty.tree, 'data-generate-none', PROVIDER)
+    return !!box && textIn(box).includes(EN['pane.add.card']) && !!byAttr(box, 'data-generate-add-card', PROVIDER)
+  })(),
+  byAttr(empty.tree, 'data-generate-none', PROVIDER) ? textIn(byAttr(empty.tree, 'data-generate-none', PROVIDER)) : 'no empty section',
 )
 check(
-  'nothing installed: both notes are still there, below that block',
-  !!byAttr(empty.tree, 'data-generate-manage-hint', 'yes') && !!byAttr(empty.tree, 'data-generate-add-hint', 'yes'),
-  '',
+  'nothing installed: every provider still has a section to fill',
+  sectionIds(empty.tree).join(',') === 'runninghub,krea,comfycloud,magnific',
+  JSON.stringify(sectionIds(empty.tree)),
+)
+check(
+  'nothing installed: the key directions are still there, below the sections',
+  (() => {
+    const nodes = nodesOf(empty.tree)
+    const sectionAt = nodes.findIndex((node) => node.props && node.props['data-generate-none'])
+    const manageAt = nodes.findIndex((node) => node.props && node.props['data-generate-manage-hint'] === 'yes')
+    return sectionAt !== -1 && manageAt !== -1 && sectionAt < manageAt
+  })(),
+  'strip · sections · the directions is the order the pane owes',
 )
 check(
   'a host that cannot answer says so, instead of looking like an empty install',
   !!byAttr(failed.tree, 'data-generate-list-failed', 'yes') &&
-    !byAttr(failed.tree, 'data-generate-none', 'yes') &&
+    !nodesOf(failed.tree).some((node) => node.props && node.props['data-generate-none']) &&
+    !byAttr(failed.tree, 'data-generate-add-card') &&
     !!byAttr(failed.tree, 'data-generate-pane') &&
     byAttr(failed.tree, 'data-generate-pane').props['data-generate-pane'] === 'home',
   textIn(failed.tree).slice(0, 160),
@@ -870,6 +1010,13 @@ for (const key of [
   'surface.pending',
   'card.community',
   'surface.image.choose',
+  // The accordion and its dashed add card (founder, 2026-09-23). `pane.section.none`
+  // is the count on an empty section's header and `pane.add.card` is the card itself,
+  // so a missing key would put a raw id on the pane's most-used control.
+  'pane.section.none',
+  'pane.section.count',
+  'pane.add.card',
+  'pane.add.card.hint',
   // The notes a provider can attach to a stored key. Each one is rendered as
   // `t('note.' + provider.note)` from the host's row, so a missing key here shows the
   // raw id to the user — which is what a note without copy looks like.

@@ -6,8 +6,9 @@ surface inside the one Generate pane. Epic 61.
 
 **This is S1 + S2 + S3 plus the provider registry and the pane as a hub: the plugin installs, the surface
 mounts, each provider's key can be linked on the one Generate settings page, a workflow can be added from its
-app link, and the pane opens on a meter per linked provider and one card per installed workflow — a card
-opening that workflow's surface inside the same pane.** The pane's one-field install form, the payload gate
+app link, and the pane opens on a meter per linked provider under a stacked accordion of provider sections,
+each holding its workflows as start-page cards — a card opening that workflow's surface inside the same pane.**
+The pane's one-field install form, the payload gate
 and the run are not faked here.
 
 ## What it registers
@@ -154,8 +155,8 @@ What the pane cannot do is change or remove a key — that page is the owner —
 names it, twice, because a person who meets the field here would otherwise never learn where the key is
 managed: *"You can change or remove this key later in Settings → Generate. The Settings menu is at the bottom of
   the left sidebar."* on the
-first-run card, and the same directions again once linked, where they sit under the empty state's own line
-(*"RunningHub apps you add open here, one tab each."*) rather than at the top of the pane. Both notes are led
+first-run card, and the same directions again once linked, where they sit in their own block under the
+accordion rather than at the top of the pane. Both notes are led
 by `IconInfoOutline14` from the harness's icon set, so they read as notes rather than as one more control.
 
 Directions rather than a button, because a client plugin cannot open the Settings surface: the client service
@@ -166,18 +167,22 @@ the field so the pane only points (one extra navigation on first link, and the u
 themselves), or move link/replace/remove all into the pane (which contradicts S5, where the pane becomes the
 workflow workspace). The wallet page's own copy already distinguishes replacing from removing.
 
-Under those key directions, and in both pane states, sits the other half of what a new install needs — how an
-app gets added:
+Under those key directions sits the other half of what a new install needs — how an
+app gets added. On a fresh install it is the note:
 
 > To add a workflow, ask the agent in chat: “add this RunningHub workflow &lt;app link&gt;”.
 
-It is text rather than a button for the same class of reason: a third-party client plugin cannot put text
+On a linked pane it is the **dashed `+ Workflow` card**, one per provider section, which reveals that
+provider's own `addPrompt` with Copy beside it when clicked (founder, 2026-09-23).
+
+Text and not a button for the same class of reason: a third-party client plugin cannot put text
 into the conversation composer, and a slash command cannot start a turn (both measured 2026-09-22). So the
 pane says what to ask for and the agent's `add-rh-workflow` skill does the rest. **The quoted trigger stays
 English in both dictionaries, deliberately** — it is the phrase the skill's `whenToUse` names, so translating
 it would produce a sentence the user types and nothing picks up; a user may of course say it in their own
-language. The line carries the same info glyph as the key directions and is read off its own node
-(`data-generate-add-hint`) by the verify, so it is held by placement rather than by matching a phrase.
+language. The fresh-install line is the note (`data-generate-add-hint`); the linked pane's copy is the `code`
+node inside the dashed card (`data-generate-add-prompt`, with `data-generate-copy-prompt` beside it) and is read
+off those nodes by the verify rather than by matching a phrase.
 
 ## The key (S2, now per provider)
 
@@ -276,14 +281,25 @@ over:
 So the start-page card is the harness's own standard card, titled with the surface's
 own label (**Generate** — founder, 2026-09-23: *"Generate with Runninghub should be
 Generate"*; one plugin holds several providers, so the card names none of them), and the
-pane holds everything else:
+pane holds everything else.
+
+**The home screen is a stacked accordion** (founder, 2026-09-23: *"I want to try stacked
+accordion to each provider inside an accordion … the workflow card is same design as dsh
+start page card; icon + label + 2nd row (no thumbnails)"*):
 
 | Screen | What it is |
 |---|---|
-| home | the wallet strip, then **one card per installed workflow** (cover, title, blurb, whose app it is), then the key directions, then how to add another |
+| home | the wallet strip, then **one accordion section per provider — all four, in registry order** — each header carrying the provider's glyph, its name and `family · count`; the open section holds that provider's workflows as cards, then its dashed add card; under the sections, where the key is managed |
+| a workflow card | the harness's own start-page card: **glyph + title + one line**, no thumbnail. The second row is whose app it is (when that is a fact), then the blurb; a workflow with no description falls back to the provider's name. The provider is not on the card — the section header names it, and `data-generate-provider` carries the fact in the DOM |
+| the dashed add card | the empty state, and the add path for a section that already has workflows. One click reveals **that provider's own install prompt** (`addPrompt`) with Copy beside it — the sentence the agent's skill answers to |
 | a workflow | its surface, in the same pane: **doors as controls** in `ui.order` with the primary door first, the app's tooltip under each, `advanced` doors behind one disclosure, the app's own bounds/options/defaults on every control, and a way back to the list |
-| nothing installed | the empty state, which says how to add one |
-| the host did not answer | that, said plainly — not a false "nothing installed" |
+| the host did not answer | that, said plainly — not a false "nothing installed". A section whose list failed says so inside its own body, and when no provider answered the pane draws the failure block instead of the accordion |
+
+One section is open at a time, and the first provider that actually has workflows opens
+by itself: landing on four closed rows would hide the thing the pane exists for.
+Providers are drawn whether or not they are linked, because a section is where its add
+card lives — an install that showed only the providers that already work could never be
+filled.
 
 **No node id and no field name is ever drawn** (E7's acceptance gate): those belong
 to the payload gate, as JSON to read, which is the next slice with the run strip and
@@ -387,21 +403,34 @@ a recording ctx. `verify/wallet.mjs` imports `lib/index.js`, mounts the route ag
 drives it with a stubbed RunningHub and a recording credentials seam — including the rule that no response
 body ever carries a key. Its fixtures use the seam's real `source` values (`file`, `env`); they said
 `store`/`environment` until 2026-09-22, strings the seam never emits, which is how the strip came to call a
-pasted key "from your environment" while every check stayed green. `verify/save-confirmation.mjs` (**64/64**) renders the shipped components with React stood in for by a shim
+pasted key "from your environment" while every check stayed green. `verify/save-confirmation.mjs` (**65/65**) renders the shipped components with React stood in for by a shim
 with working hooks and a stubbed `fetch`, presses Save and Remove key, and reads what the surface does next: a
 confirmation dialog naming the key, the wallet read and where the balance went, nothing at all for a refused
 key, a dialog that closes on dismiss or on the next keystroke, the strip's note for each real `source` value,
 the fresh-install and linked panes both naming Settings → Generate as the place the key is managed (with the
-info glyph, and the linked note inside the empty state rather than beside the strip), **both panes telling the
-user how to add a workflow, under the key directions and in that order, with the trigger phrase intact in
-`zh` too**, and for rotation a question that deletes nothing until it is answered, declined without a
-`DELETE` leaving the wallet linked, and a receipt in the same dialog once it is.
+info glyph, and the linked note in its own block below the sections rather than beside the strip), **the fresh
+pane telling the user how to add a workflow, under the key directions, with the trigger phrase intact in `zh`
+too, and the linked pane adding one through the dashed card in the provider's own section**, and for rotation a
+question that deletes nothing until it is answered, declined without a `DELETE` leaving the wallet linked, and a
+receipt in the same dialog once it is.
 `node verify/save-confirmation.mjs --show` prints the dialog's lines in order — including both pane states,
 which is how the copy above is read without restarting the app. A skip is printed as `SKIP`; a layer that ran
-and disagreed fails the run. Mutation-tested while the suite held 62 checks: **58/62 with the note's info
-glyph removed**, **59/62 with the
+and disagreed fails the run. Mutation-tested while the suite held 62 checks, **before the pane became an
+accordion (2026-09-23)**: **58/62 with the note's info glyph removed**, **59/62 with the
 add line dropped from the linked pane**, **61/62 with the two notes swapped** and **61/62 with the `zh`
-trigger translated away**.
+trigger translated away**. Those four mutations were not re-run against the accordion — the "add line on the
+linked pane" one targets a note that no longer exists there — so treat them as the record of the earlier
+suite, not as a score for this one.
+
+`verify/start.mjs` (**120/120**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
+the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
+**one accordion section per provider in registry order, all four whether linked or not**, each header naming
+its provider and its `family · count`, the section with workflows opening by itself, one section open at a time,
+a card carrying its workflow's title and its one-line second row with **no thumbnail**, the dashed add card
+standing in for the empty state and revealing that provider's own prompt only when clicked, a failed list
+saying so instead of wearing the empty state, and a workflow's doors rendered as the app's own controls. It
+also drives the host half for real over temp directories: what may be listed, and what `readAdapter` refuses.
 
 `verify/adapter.mjs` (**86/86**) drives both tools through the definitions the plugin actually registers, with
 a stubbed RunningHub that answers **per app id** — a URL-blind stub would let an adapter naming one app pass

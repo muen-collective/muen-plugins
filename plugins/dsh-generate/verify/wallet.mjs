@@ -799,11 +799,23 @@ async function live(url) {
     }
     check(
       'live: the wallet route answers JSON on the running app',
-      response.ok && !!body && typeof body.linked === 'boolean',
+      // The provider registry replaced the single-wallet body with `{ providers }`
+      // (2026-09-23): one row per provider, each with its own `linked` boolean. This
+      // assertion still read `body.linked` for a while after that, so it failed against
+      // a route that was working perfectly — the check was stale, not the route.
+      response.ok &&
+        !!body &&
+        Array.isArray(body.providers) &&
+        body.providers.length > 0 &&
+        body.providers.every((provider) => typeof provider.id === 'string' && typeof provider.linked === 'boolean'),
       response.status + ' ' + text.slice(0, 120),
     )
     if (body) {
-      check('live: the running route reports no key', !text.includes(SECRET) && !('key' in body), Object.keys(body).join(','))
+      check(
+        'live: the running route reports no key, for any provider',
+        !text.includes(SECRET) && !('key' in body) && body.providers.every((provider) => !('key' in provider)),
+        Object.keys(body).join(','),
+      )
     }
   } catch (error) {
     skip('live: the wallet route answers on the running app', String((error && error.message) || error))
