@@ -552,7 +552,7 @@ export function apply(ctx, config = {}) {
       const paths = provider.data(root.root)
       let workflows = 0
       try {
-        const listed = await provider.listWorkflows({ dir: paths.adapters })
+        const listed = await provider.listWorkflows({ dir: paths.adapters, root: root.root })
         workflows = listed.entries.length
       } catch {
         // A provider whose directory cannot be read is still a provider: the key
@@ -713,7 +713,7 @@ export function apply(ctx, config = {}) {
    */
   const providerWorkflows = async (provider, res) => {
     try {
-      send(res, 200, await provider.listWorkflows({ dir: provider.data(root.root).adapters }))
+      send(res, 200, await provider.listWorkflows({ dir: provider.data(root.root).adapters, root: root.root }))
     } catch (error) {
       // The directory exists but cannot be read: a permission or a filesystem
       // problem, not an empty install, and the two must not look alike.
@@ -730,7 +730,7 @@ export function apply(ctx, config = {}) {
    * adapter is neither.
    */
   const providerWorkflow = async (provider, url, res) => {
-    const read = await provider.readWorkflow({ dir: provider.data(root.root).adapters, name: url.searchParams.get('name') })
+    const read = await provider.readWorkflow({ dir: provider.data(root.root).adapters, root: root.root, name: url.searchParams.get('name') })
     if (read.error) {
       const status = read.error === 'not-found' ? 404 : read.error === 'bad-name' ? 400 : 500
       send(res, status, { error: read.error, detail: read.detail || null })

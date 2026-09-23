@@ -71,6 +71,7 @@
  * @module @muen/dsh-generate/lib/providers
  */
 import { listAdapters, readAdapter } from './adapter.js'
+import { modelEntry, modelSurface, readKreaModels } from './krea-models.js'
 import { dataPaths } from './paths.js'
 
 /** One key check: long enough for a cold API, short enough to fail at the field. */
@@ -319,6 +320,29 @@ export const krea = {
   },
 
   ...adapterBacked('krea'),
+
+  /**
+   * THE KREA SECTION HOLDS TWO KINDS OF THING, and this is the only provider where that
+   * is true: the models Krea documents (shipped, plus the profile's own `_models.json`)
+   * and any adapter somebody installed into Krea's own directory. Both arrive as the one
+   * list of cards the pane already draws, so the pane needed no change to gain a model.
+   */
+  async listWorkflows({ dir, root }) {
+    const models = await readKreaModels(root)
+    const adapters = await listAdapters(dir)
+    return {
+      entries: [...models.models.map(modelEntry), ...adapters.entries],
+      skipped: [...models.skipped, ...adapters.skipped],
+    }
+  },
+
+  /** One Krea unit, whole: a documented model when the name is one, a file otherwise. */
+  async readWorkflow({ dir, root, name }) {
+    const { models } = await readKreaModels(root)
+    const model = models.find((entry) => entry.name === name)
+    if (model !== undefined) return { adapter: modelSurface(model) }
+    return readAdapter(dir, name)
+  },
 }
 
 /**

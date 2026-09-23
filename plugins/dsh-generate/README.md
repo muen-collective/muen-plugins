@@ -92,6 +92,39 @@ the provider object. Two facts shaped the contract:
 provider's own files — its adapters today, its uploads later — stay together under its own name, and the row id
 (`generate`) never names a provider.
 
+### A Krea model is not an adapter
+
+A RunningHub adapter describes an AI App **somebody authored on RunningHub**, and its doors are read from that
+app — which is why installing one is the agent's job, through `rh_workflow_graph` and `rh_adapter_validate`
+(S3). A Krea model is **Krea's**: the slug, the endpoint and the input schema are published by Krea, and no
+user authors one. So the models ship with the plugin, in `lib/krea-models.js`, exactly the way the door
+glossary ships in `lib/house.js`, and a profile extends that list the same way `_house.json` extends the
+glossary: **`<profile>/generate/krea/_models.json`** adds a model or replaces one by name.
+
+The first model is the founder's, added 2026-09-23 (*"add this Krea model"*, with the SDK call for
+`image/krea/krea-2/medium-turbo`):
+
+| Fact | Value | Source |
+|---|---|---|
+| `model` / `endpoint` | `image/krea/krea-2/medium-turbo` / `POST /generate/image/krea/krea-2/medium-turbo` | Krea's OpenAPI |
+| Required doors | `prompt`, `aspect_ratio`, `resolution` | `required:` in that schema |
+| `aspect_ratio` | one of `1:1`, `4:3`, `3:2`, `16:9`, `2.35:1`, `4:5`, `3:4`, `2:3`, `9:16` | `enum` |
+| `resolution` | `1K` | `enum` |
+| `creativity` | `raw` \| `low` \| `medium` \| `high`, default `low` | this variant's own default |
+| `intensity`, `complexity`, `movement` | integer `-100`..`100`, default `0` | the generative-slider docs |
+| `image_url`, `strength` | image; `0`..`1`, default `0.99` | the img2img fields |
+| `seed` | number, optional | — |
+
+**Three fields are deliberately not doors.** `styles`, `image_style_references` and `moodboards` are arrays of
+objects (a LoRA id with a strength, a URL with a strength, a moodboard uuid), and the surface has four
+controls: text, number, select, image. They arrive when the run slice (S5) can upload an asset and address a
+LoRA — a text box posting a bare string into `additionalProperties: false` would be a control that cannot
+work.
+
+Nothing here spends anything: a Krea model is a card and a surface, and the run is S5. What the model adds for
+that slice is the two facts it will need (`model` and `endpoint`), carried through the surface route so S5 does
+not have to re-derive them.
+
 ## The settings page, in the Models shape
 
 **Decided by the founder on 2026-09-23:**
@@ -412,6 +445,7 @@ node verify/mount.mjs            # registration contract (+ live page, which ski
 node verify/wallet.mjs           # the wallet routes, driven against fakes (+ live route)
 node verify/save-confirmation.mjs # a save that worked, and one that was refused
 node verify/adapter.mjs          # the install: doors read, adapters written and refused
+node verify/models.mjs           # the Krea models: the catalogue, the profile layer, both routes
 node verify/skill.mjs            # the skill's order, and that the plugin has no write path
 node verify/start.mjs            # the hub: the cards, the surface, one settings page, and what may be listed
 node verify/mount.mjs --static   # registration only

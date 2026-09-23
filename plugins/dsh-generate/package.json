@@ -1,7 +1,7 @@
 {
   "name": "@muen/dsh-generate",
   "version": "0.1.0-dev",
-  "description": "The Generate space for DeepSeek Harness: one provider-neutral plugin that holds several providers, in this order everywhere — RunningHub and Comfy Cloud (workflows), Krea (image) and Magnific last (its key still to be tested) — each with its own key and its own workflows, opened as surfaces inside the one Generate pane. The provider registry and the Models-shaped settings page (a row per provider, one open editor card, the API key as the primary field) are built; the payload gate and the run (S5) are still owed.",
+  "description": "The Generate space for DeepSeek Harness: one provider-neutral plugin that holds several providers, in this order everywhere \u2014 RunningHub and Comfy Cloud (workflows), Krea (image) and Magnific last (its key still to be tested) \u2014 each with its own key and its own workflows, opened as surfaces inside the one Generate pane. The provider registry and the Models-shaped settings page (a row per provider, one open editor card, the API key as the primary field) are built; the payload gate and the run (S5) are still owed.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -20,6 +20,7 @@
     "verify:wallet": "node verify/wallet.mjs",
     "verify:saved": "node verify/save-confirmation.mjs",
     "verify:adapter": "node verify/adapter.mjs",
+    "verify:models": "node verify/models.mjs",
     "verify:skill": "node verify/skill.mjs",
     "verify:start": "node verify/start.mjs"
   },
