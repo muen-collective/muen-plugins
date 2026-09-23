@@ -277,13 +277,13 @@ function mount(credentials) {
   )
   check(
     'and it claims every route the pane and the agent call',
-    ['runninghub', 'krea', 'comfycloud'].every(
+    ['runninghub', 'krea', 'comfycloud', 'magnific'].every(
       (id) =>
         !!server.match(PROVIDERS_PATH + '/' + id + '/key') &&
         !!server.match(PROVIDERS_PATH + '/' + id + '/workflows') &&
         !!server.match(PROVIDERS_PATH + '/' + id + '/workflow'),
     ),
-    ['runninghub', 'krea', 'comfycloud']
+    ['runninghub', 'krea', 'comfycloud', 'magnific']
       .map((id) => id + ':' + String(!!server.match(PROVIDERS_PATH + '/' + id + '/key')))
       .join(' '),
   )
@@ -305,7 +305,7 @@ function mount(credentials) {
   const ids = body && Array.isArray(body.providers) ? body.providers.map((provider) => provider.id) : []
   check(
     'it names every provider this build ships, in the order the surfaces show them',
-    ids.join(',') === 'runninghub,krea,comfycloud',
+    ids.join(',') === 'runninghub,krea,comfycloud,magnific',
     JSON.stringify(ids),
   )
   check(
@@ -333,7 +333,7 @@ function mount(credentials) {
       body.providers.every(
         (provider) =>
           provider.funding &&
-          ['coins', 'balance', 'plan'].includes(provider.funding.kind) &&
+          ['coins', 'balance', 'plan', 'credits'].includes(provider.funding.kind) &&
           /^https:\/\/[^/]+\/.+/.test(String(provider.funding.url || '')),
       ),
     JSON.stringify(body && body.providers && body.providers.map((provider) => [provider.id, provider.funding])),
@@ -344,13 +344,14 @@ function mount(credentials) {
     JSON.stringify(body && body.providers && body.providers.map((provider) => Object.keys(provider.funding || {}))),
   )
   // Researched 2026-09-23 on each provider's own billing page: RunningHub sells coins,
-  // Krea's API draws on a prepaid USD balance and has no monthly plan, and Comfy Cloud
-  // is the one with a monthly plan (its key 429s while the subscription is inactive).
+  // Krea's API draws on a prepaid USD balance and has no monthly plan, Comfy Cloud has
+  // the monthly plan its key needs active (the 429), and Magnific's API runs on the
+  // credits a paid plan grants.
   check(
     'each provider carries the funding model its own billing page documents',
     !!body &&
       body.providers.map((provider) => provider.id + ':' + provider.funding.kind).join(' ') ===
-        'runninghub:coins krea:balance comfycloud:plan',
+        'runninghub:coins krea:balance comfycloud:plan magnific:credits',
     JSON.stringify(body && body.providers && body.providers.map((provider) => [provider.id, provider.funding.kind])),
   )
   check(
@@ -620,9 +621,9 @@ function mount(credentials) {
 
 // 15. every provider checks its own key, at its own host, with its own header
 //
-// THE HEADER IS THE THING THAT SILENTLY BREAKS. Two providers, two auth schemes
-// researched on 2026-09-23 (Krea: `Authorization: Bearer`; Comfy Cloud: `X-API-Key`),
-// and a wrong one does not fail here —
+// THE HEADER IS THE THING THAT SILENTLY BREAKS. Three providers, three auth schemes
+// researched on 2026-09-23 (Krea: `Authorization: Bearer`; Magnific:
+// `x-magnific-api-key`; Comfy Cloud: `X-API-Key`), and a wrong one does not fail here —
 // it fails as "the key was not accepted" in front of a user whose key is fine. The host
 // override (`RH_BASE`) is asserted too: it names RunningHub only, so no other provider's
 // key can be sent to RunningHub's server.
@@ -635,6 +636,15 @@ function mount(credentials) {
       header: 'authorization',
       headerValue: 'Bearer ' + SECRET,
       answer: { ok: true, status: 200, text: async () => JSON.stringify({ items: [], next_cursor: null }) },
+      note: null,
+    },
+    {
+      id: 'magnific',
+      ref: 'MAGNIFIC_API_KEY',
+      host: 'https://api.magnific.com',
+      header: 'x-magnific-api-key',
+      headerValue: SECRET,
+      answer: { ok: true, status: 200, text: async () => JSON.stringify({ data: [], meta: { pagination: {} } }) },
       note: null,
     },
     {
@@ -672,7 +682,23 @@ function mount(credentials) {
   }
 }
 
-// 16. Comfy Cloud's 429 is a real key whose subscription is inactive
+// 16. a key the provider will not check is stored, and the row says so
+//
+// Magnific answers 403 with a response component its own spec never defines. Calling
+// that key invalid would be a guess about a key the user owns; the founder's rule
+// (2026-09-23) is "store it and mark it unverified".
+{
+  fetchCalls.length = 0
+  respond = () => ({ ok: false, status: 403, text: async () => JSON.stringify({ message: 'Forbidden' }) })
+  const credentials = fakeCredentials({})
+  const { handler } = mount(credentials)
+  const res = await call(handler, 'POST', { key: SECRET }, providerPath('magnific', 'key'))
+  const body = json(res)
+  check('a Magnific 403 is stored rather than thrown away', res.statusCode === 200 && credentials.held === SECRET, res.statusCode + ' ' + JSON.stringify(credentials.calls))
+  check('and the row reports it unverified, with the reason', body && body.linked === true && body.verified === false && body.note === 'not-entitled', JSON.stringify(body))
+}
+
+// 17. Comfy Cloud's 429 is a real key whose subscription is inactive
 {
   fetchCalls.length = 0
   respond = () => ({ ok: false, status: 429, text: async () => JSON.stringify({ code: 'rate_limited', message: 'inactive subscription' }) })
@@ -684,7 +710,7 @@ function mount(credentials) {
   check('and the row names the subscription, not the key', body && body.verified === true && body.note === 'subscription-inactive', JSON.stringify(body))
 }
 
-// 16b. Krea's 402 is an empty API balance, not a bad key
+// 17b. Krea's 402 is an empty API balance, not a bad key
 //
 // Krea's own key page, 2026-09-23: API calls draw on a separate USD balance, and when it
 // runs out "new API requests are rejected with HTTP 402 Payment Required". The key is
@@ -712,7 +738,7 @@ function mount(credentials) {
 
 // 18. a 401 anywhere is a bad key, and nothing is stored
 {
-  for (const id of ['krea', 'comfycloud']) {
+  for (const id of ['krea', 'magnific', 'comfycloud']) {
     fetchCalls.length = 0
     respond = () => ({ ok: false, status: 401, text: async () => JSON.stringify({ message: 'Unauthorized' }) })
     const credentials = fakeCredentials({})
@@ -724,7 +750,7 @@ function mount(credentials) {
   }
 }
 
-// 18. an unreachable provider is not a bad key, at any provider
+// 19. an unreachable provider is not a bad key, at any provider
 {
   fetchCalls.length = 0
   respond = () => new Error('network down')
@@ -736,7 +762,7 @@ function mount(credentials) {
   check('and nothing is stored on a network failure', !credentials.calls.some((call) => call[0] === 'set'), JSON.stringify(credentials.calls))
 }
 
-// 19. a stored key the provider refuses is reported unverified on the next read
+// 20. a stored key the provider refuses is reported unverified on the next read
 {
   fetchCalls.length = 0
   respond = () => ({ ok: false, status: 401, text: async () => JSON.stringify({ message: 'Unauthorized' }) })

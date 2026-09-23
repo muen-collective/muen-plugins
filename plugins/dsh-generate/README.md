@@ -48,29 +48,33 @@ a person manages the account at, the sentence that installs one of its workflows
 opens (which is how a key is validated before it is stored), where its data lives under the plugin root, and how
 to list and read its workflows.
 
-**Three are registered, and the registry's own order is the order every surface shows them in (founder,
-2026-09-23: *"the order of providers is: RunningHub, Krea, Comfy Cloud"*):**
+**Four are registered, and the registry's own order is the order every surface shows them in (founder,
+2026-09-23: *"the order of providers is: RunningHub, Krea, Comfy Cloud"*, and then *"actually you can leave
+magnific as a last row, I will test another time"*):**
 
 | Provider | Family | Host | Key check | Key page |
 |---|---|---|---|---|
 | RunningHub | workflow | `www.runninghub.ai` | `POST /uc/openapi/accountStatus`, `Authorization: Bearer` | runninghub.ai/call-api/bill-task?tab=keys |
 | Krea | image | `api.krea.ai` | `GET /jobs`, `Authorization: Bearer` | krea.ai/settings/api-tokens |
 | Comfy Cloud | workflow | `cloud.comfy.org` | `GET /api/user`, `X-API-Key` | platform.comfy.org/profile/api-keys |
+| Magnific | image | `api.magnific.com` | `GET /v1/creations/recent?per_page=1`, `x-magnific-api-key` | magnific.com/user/organization/api-keys |
 
-**Magnific was the fourth, registered and removed the same day.** It was taken for a one-month trial to test;
-the founder tested Krea and Comfy Cloud instead and reported *"krea and comfy cloud works, you can remove
-magnific"*. Its object, key check and strings are deleted rather than left disabled, so nothing in the surface
-can offer a provider this build does not support.
+**Magnific sits last because its key is the one still untested.** It was registered for a one-month trial on
+2026-09-23, removed the same morning when the founder's working pair turned out to be Krea and Comfy Cloud
+(*"krea and comfy cloud works, you can remove magnific"*), and restored the same morning as the last row so the
+trial can happen later. It is a real provider, not a disabled one: its key check runs like any other's. Being
+last is a position in the registry, not a comment on the provider.
 
 Each check was researched on 2026-09-23 against the provider's own docs and OpenAPI, and the citations live on
 the provider object. Two facts shaped the contract:
 
-- **Only RunningHub can report a balance.** Krea and Comfy Cloud publish no account endpoint at all —
-  Krea's docs say outright that balance *"cannot be read programmatically"* — so a row for those says `Key saved`
-  rather than showing an empty wallet;
+- **Only RunningHub can report a balance.** Krea, Magnific and Comfy Cloud publish no account endpoint at
+  all — Krea's docs say outright that balance *"cannot be read programmatically"* — so a row for those says
+  `Key saved` rather than showing an empty wallet;
 - **a provider can answer about a key without accepting it.** Comfy Cloud answers `429` for a key whose
-  subscription is inactive, and Krea answers `402` when the API balance is empty. Both mean the key is real,
-  and neither is thrown away (founder: *"store it and mark it unverified"*): the key is stored, `verified` is
+  subscription is inactive, Krea answers `402` when the API balance is empty, and Magnific answers `403` with a
+  response component its own spec never defines. Each means the key is real,
+  and none is thrown away (founder: *"store it and mark it unverified"*): the key is stored, `verified` is
   false, and the row carries the reason (`note`). A `401` is a bad key everywhere, and a network failure is
   never reported as one.
 
@@ -103,7 +107,7 @@ module background with a 32px input.
 | State | Dot | What the row says |
 |---|---|---|
 | linked and answered | green | the balance, when the provider has one — otherwise `Key saved` |
-| linked, unverified | amber | why: no active subscription (Comfy Cloud), or an empty API balance (Krea) |
+| linked, unverified | amber | why: no active subscription (Comfy Cloud), an empty API balance (Krea), or an entitlement Magnific never confirms |
 | stored but refused | red | the key is no longer accepted; link a new one |
 | no key yet | hollow | `No key linked` |
 
@@ -125,12 +129,14 @@ because they are copy:
 | RunningHub | `coins` | Runs on coins | runninghub.ai/call-api/bill-task |
 | Krea | `balance` | Needs API balance — API calls are billed in USD, not compute units | krea.ai/app/api |
 | Comfy Cloud | `plan` | Needs an active monthly plan | comfy.org/pricing |
+| Magnific | `credits` | Needs a paid plan with credits | magnific.com/pricing |
 
-Each `kind` was read off the provider's own billing page on 2026-09-23, and the three are genuinely different
-models rather than one word for "pay": RunningHub sells coins, **Krea has no monthly plan at all** — API calls
-draw on a separate prepaid USD balance, which is why an empty one is Krea's `402` — and Comfy Cloud is the one
-with a monthly plan, which its API key needs to be active (its `429`). No price is written into the plugin:
-prices change, and the link is the page that knows.
+Each `kind` was read off the provider's own billing page on 2026-09-23, and they are genuinely different
+models rather than one word for "pay": RunningHub sells coins; **Krea has no monthly plan at all** — API calls
+draw on a separate prepaid USD balance, which is why an empty one is Krea's `402`; Comfy Cloud has the monthly
+plan its API key needs active (its `429`); and Magnific's API is not pay-per-use either — a paid plan grants a
+credit bundle that API calls draw on, which is why its row says credits rather than a balance. No price is
+written into the plugin: prices change, and the link is the page that knows.
 
 **The one thing this page cannot copy from Models:** a model list is fetched from the provider over its API, and
 a workflow is installed by the agent from a link the user gives it. So where Models has *Fetch available
@@ -176,7 +182,7 @@ language. The line carries the same info glyph as the key directions and is read
 ## The key (S2, now per provider)
 
 S2 shipped one wallet route for one provider. The provider registry replaced it with one key route per
-provider, so every sentence below holds for all three:
+provider, so every sentence below holds for all four:
 
 | Route | What |
 |---|---|
@@ -202,7 +208,7 @@ API-keys page is unverified — epic 61 D23. If it turns out to be tier-specific
 `/call-api/bill-task?tab=keys` is the first thing to try.
 
 The key lives in the harness `credentials` seam as a `CredentialRef` named per provider — `RH_API_KEY`,
-`KREA_API_KEY`, `COMFY_CLOUD_API_KEY` — so the value goes to
+`KREA_API_KEY`, `COMFY_CLOUD_API_KEY`, `MAGNIFIC_API_KEY` — so the value goes to
 the provider's own writable store while an existing env file keeps working as the fallback. `source` is the
 seam's own word for where the value came from, and it has four values, not two: `file` is the provider-managed
 store (what a key pasted here becomes), `env` is the inherited process environment (`writable: false`), and

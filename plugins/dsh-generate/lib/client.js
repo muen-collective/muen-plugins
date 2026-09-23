@@ -24,10 +24,10 @@
 //                 provider would be one Generate page per provider, which is exactly
 //                 what the founder ruled out.
 //
-// ONE PLUGIN, SEVERAL PROVIDERS (founder, 2026-09-22). Three are registered in the host
-// half, in this order everywhere: RunningHub, Krea, Comfy Cloud (founder, 2026-09-23:
-// "the order of providers is: RunningHub, Krea, Comfy Cloud") — Magnific was removed
-// 2026-09-23 (founder: "krea and comfy cloud works, you can remove magnific"). The pane
+// ONE PLUGIN, SEVERAL PROVIDERS (founder, 2026-09-22). Four are registered in the host
+// half, in this order everywhere: RunningHub, Krea, Comfy Cloud, Magnific (founder,
+// 2026-09-23: "the order of providers is: RunningHub, Krea, Comfy Cloud", and Magnific
+// left as the last row — the one key still to be tested). The pane
 // is the hub: a meter per linked provider, then a card per installed workflow from every
 // provider, and a card opens that workflow's surface in the same pane. The provider
 // list, each provider's key and each provider's workflows come from the host over
@@ -201,11 +201,13 @@ window.__ModuleLoader__.load({
       'settings.workflows.add': 'To add one, ask the agent in chat:',
       'settings.workflows.copy': 'Copy',
       'settings.workflows.copied': 'Copied',
-      // Two providers answer about a key without accepting it, and neither answer is a
-      // bad key: Comfy Cloud's subscription has lapsed, and Krea's API balance is empty.
-      // HTTP 429 and HTTP 402 mean exactly that in their own docs, so the key is kept
-      // and the row carries the reason instead of calling it invalid.
+      // Three providers answer about a key without accepting it, and none of those
+      // answers is a bad key: Comfy Cloud's subscription has lapsed, Magnific's API
+      // entitlement is a 403 its own spec never defines, and Krea's API balance is
+      // empty (HTTP 402 in its docs). The key is kept and the row carries the reason
+      // instead of calling it invalid.
       'note.subscription-inactive': 'The key works, but this account has no active Comfy Cloud subscription, so a run would be refused.',
+      'note.not-entitled': 'Magnific answered the key but did not confirm access, so it is stored unchecked.',
       'note.no-api-balance': 'The key works, but this Krea workspace has no API balance, so a run would be refused. Top it up in Krea.',
       // What using a provider costs, on its row, so the funding is visible before a run
       // is refused for it. The host sends `funding.kind` and `funding.url`; the sentence
@@ -213,9 +215,11 @@ window.__ModuleLoader__.load({
       'funding.coins': 'Runs on coins.',
       'funding.balance': 'Needs API balance — API calls are billed in USD, not compute units.',
       'funding.plan': 'Needs an active monthly plan.',
+      'funding.credits': 'Needs a paid plan with credits.',
       'funding.coins.link': 'Buy coins',
       'funding.balance.link': 'Add API balance',
       'funding.plan.link': 'See plans and credits',
+      'funding.credits.link': 'See plans',
       'pane.noProviders': 'This build has no providers registered.',
       // Rotation is a normal act, not an edge case: a person creates a new key on
       // RunningHub and pastes it here. The hint says the field is the way to do
@@ -312,13 +316,16 @@ window.__ModuleLoader__.load({
       'settings.workflows.copy': '复制',
       'settings.workflows.copied': '已复制',
       'note.subscription-inactive': '密钥可用，但此账户没有有效的 Comfy Cloud 订阅，运行会被拒绝。',
+      'note.not-entitled': 'Magnific 回应了密钥但没有确认访问权限，因此仅保存、未校验。',
       'note.no-api-balance': '密钥可用，但此 Krea 工作区没有 API 余额，运行会被拒绝。请在 Krea 充值。',
       'funding.coins': '按金币计费。',
       'funding.balance': '需要 API 余额——API 调用按美元计费，不使用工作区算力。',
       'funding.plan': '需要一个有效的月度套餐。',
+      'funding.credits': '需要含额度的付费套餐。',
       'funding.coins.link': '购买金币',
       'funding.balance.link': '充值 API 余额',
       'funding.plan.link': '查看套餐与额度',
+      'funding.credits.link': '查看套餐',
       'pane.noProviders': '此版本没有注册任何服务商。',
       'wallet.replace.hint': '在这里粘贴密钥会替换本机已保存的那个。',
       'remove.action': '移除密钥',

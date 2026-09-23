@@ -351,7 +351,8 @@ const RUNNINGHUB = {
   addPrompt: 'add this RunningHub workflow <app link>',
 }
 /**
- * The other two providers, as the host builds them (2026-09-23). They are in the
+ * The other three providers, as the host builds them and in the registry's order
+ * (2026-09-23: RunningHub, Krea, Comfy Cloud, Magnific). They are in the
  * list because the settings page and the pane now draw every provider, and the
  * first-run posture (the first UNLINKED provider opens its own card) is a behaviour
  * these cases have to account for rather than a fixture they can ignore.
@@ -376,6 +377,16 @@ const OTHERS = [
     accountUrl: 'https://platform.comfy.org',
     funding: { kind: 'plan', url: 'https://comfy.org/pricing' },
     addPrompt: 'add this Comfy Cloud workflow <workflow file>',
+  },
+  {
+    id: 'magnific',
+    label: 'Magnific',
+    kind: 'image',
+    keyPageLabel: 'API keys',
+    keyUrl: 'https://www.magnific.com/user/organization/api-keys',
+    accountUrl: null,
+    funding: { kind: 'credits', url: 'https://www.magnific.com/pricing' },
+    addPrompt: 'add this Magnific tool <tool name>',
   },
 ]
 const UNLINKED = { linked: false, verified: false, writable: true, source: null, account: null, note: null, error: null }
