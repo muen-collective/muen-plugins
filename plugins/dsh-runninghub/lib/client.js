@@ -79,6 +79,16 @@ window.__ModuleLoader__.load({
       // after "at the foot of the sidebar" read as less clear (2026-09-22).
       'pane.first.manage': 'You can change or remove this key later in Settings → Generate. The Settings menu is at the bottom of the left sidebar.',
       'pane.linked.manage': 'Change or remove the key in Settings → Generate. The Settings menu is at the bottom of the left sidebar.',
+      // How an app is added. A plugin cannot put text into the conversation
+      // composer and a slash command cannot start a turn (measured 2026-09-22), so
+      // the pane cannot hand the job to chat itself: it says what to ask for, and
+      // the agent's add-rh-workflow skill does the rest (epic 61 §2b, D15).
+      //
+      // THE QUOTED TRIGGER STAYS ENGLISH IN BOTH DICTIONARIES, deliberately. It is
+      // the same phrase the skill's whenToUse names, so a translator who improves
+      // it here would break the instruction this line exists to give. A user may
+      // say it in their own language; what must not move is the sentence we show.
+      'pane.add.hint': 'To add a workflow, ask the agent in chat: “add this RunningHub workflow <app link>”.',
       'pane.empty.title': 'Nothing installed yet',
       'pane.empty.body': 'RunningHub apps you add open here, one tab each.',
       'wallet.key.label': 'RunningHub API key',
@@ -147,6 +157,8 @@ window.__ModuleLoader__.load({
       'pane.first.body': '粘贴你的 API 密钥。现在就会校验，并且只保存在这台机器上。',
       'pane.first.manage': '之后可以在「设置 → 生成」里修改或移除这个密钥。设置菜单位于左侧边栏底部。',
       'pane.linked.manage': '在「设置 → 生成」里修改或移除密钥。设置菜单位于左侧边栏底部。',
+      // 引号内的指令保持英文：它就是技能 whenToUse 里写的那句，翻译会让这行失去作用。
+      'pane.add.hint': '要添加工作流，在对话里对智能体说：「add this RunningHub workflow <app link>」。',
       'pane.empty.title': '还没有安装应用',
       'pane.empty.body': '你添加的 RunningHub 应用会在这里打开，每个应用一个标签页。',
       'wallet.key.label': 'RunningHub API 密钥',
@@ -559,6 +571,24 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * One note line: the shipped info glyph and one sentence, in the panel's
+     * tertiary ink.
+     *
+     * A component rather than four copies of the same markup, because there are now
+     * two notes in two pane states and the glyph is what makes them read as notes
+     * instead of as more instructions. The call site passes the data attribute the
+     * verify reads the note off, rather than matching a phrase across the page.
+     */
+    function Note(props) {
+      return h(
+        'div',
+        { style: S.manageHint, ...props.attrs },
+        h('span', { style: S.manageIcon }, h(IconInfoOutline14, { size: 12 })),
+        h('span', null, props.text),
+      )
+    }
+
+    /**
      * The account as one line of text. Shared by the strip and the confirmation
      * dialog, so the number the dialog promises is the number the strip shows.
      */
@@ -768,12 +798,17 @@ window.__ModuleLoader__.load({
             h(KeyForm, { t, onSave: save, busy, autofocus: true, accountUrl: wallet.accountUrl, onEdit: forget }),
             // The pane can link a key but cannot change or remove one, so the
             // place that can is named here, where the person first meets the field.
-            h(
-              'div',
-              { style: S.manageHint },
-              h('span', { style: S.manageIcon }, h(IconInfoOutline14, { size: 12 })),
-              h('span', null, t('pane.first.manage')),
-            ),
+            h(Note, {
+              text: t('pane.first.manage'),
+              attrs: { 'data-generate-manage-hint': 'yes' },
+            }),
+            // And how an app gets added, under the key directions: linking a wallet
+            // is the first thing this screen asks for, and adding a workflow is the
+            // next one, so both answers sit together (founder, 2026-09-22).
+            h(Note, {
+              text: t('pane.add.hint'),
+              attrs: { 'data-generate-add-hint': 'yes' },
+            }),
           ),
         )
       }
@@ -804,12 +839,17 @@ window.__ModuleLoader__.load({
           h('div', { style: S.body }, t('pane.empty.body')),
           // The directions sit under the line they explain, not at the top of the
           // pane: this is the surface a person returns to when they rotate the key.
-          h(
-            'div',
-            { style: S.manageHint },
-            h('span', { style: S.manageIcon }, h(IconInfoOutline14, { size: 12 })),
-            h('span', null, t('pane.linked.manage')),
-          ),
+          h(Note, {
+            text: t('pane.linked.manage'),
+            attrs: { 'data-generate-manage-hint': 'yes' },
+          }),
+          // And under those, how to add an app. This is the screen a person lands on
+          // with a linked wallet and nothing installed, so the one action that fills
+          // it has to be on it, in words they can repeat into the chat.
+          h(Note, {
+            text: t('pane.add.hint'),
+            attrs: { 'data-generate-add-hint': 'yes' },
+          }),
         ),
         h(
           'div',

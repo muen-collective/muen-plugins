@@ -752,6 +752,70 @@ if (pane && settings) {
         EN['pane.linked.manage'].includes('bottom of the left sidebar'),
       EN['pane.linked.manage'],
     )
+
+    // 9b. how an app gets added, on the screen that has nothing installed
+    //
+    // The pane cannot hand the job to the chat: a third-party client plugin cannot
+    // put text into the composer and a slash command cannot start a turn (measured
+    // 2026-09-22). So the one thing it can do is say what to ask for, and this is
+    // the screen whose whole job is to be filled — the sentence has to be on it,
+    // under the key directions, because linking a wallet and adding a workflow are
+    // the two answers this pane owes a new install.
+    {
+      const noteAt = (tree, attr) => nodesOf(tree).findIndex((node) => node.props && node.props[attr] === 'yes')
+      const noteOf = (tree, attr) => nodesOf(tree).find((node) => node.props && node.props[attr] === 'yes')
+
+      check(
+        'the trigger names the chat and the phrase the skill answers to',
+        EN['pane.add.hint'].includes('in chat') &&
+          EN['pane.add.hint'].includes('add this RunningHub workflow') &&
+          EN['pane.add.hint'].includes('<app link>'),
+        EN['pane.add.hint'],
+      )
+      check(
+        'a fresh install is told how to add a workflow',
+        freshText.includes(EN['pane.add.hint']),
+        freshText.slice(0, 320),
+      )
+      check(
+        'the add line carries the shipped info glyph too',
+        carriesInfoGlyph(fresh.tree, EN['pane.add.hint']),
+        'a bare sentence reads as one more instruction',
+      )
+      check(
+        'on a fresh install the add line sits under the key directions',
+        noteAt(fresh.tree, 'data-generate-manage-hint') !== -1 &&
+          noteAt(fresh.tree, 'data-generate-manage-hint') < noteAt(fresh.tree, 'data-generate-add-hint'),
+        'manage@' + noteAt(fresh.tree, 'data-generate-manage-hint') + ' add@' + noteAt(fresh.tree, 'data-generate-add-hint'),
+      )
+      check(
+        'the linked pane says the same thing, in the same order',
+        linkedText.includes(EN['pane.add.hint']) &&
+          carriesInfoGlyph(linked.tree, EN['pane.add.hint']) &&
+          noteAt(linked.tree, 'data-generate-manage-hint') < noteAt(linked.tree, 'data-generate-add-hint'),
+        'manage@' + noteAt(linked.tree, 'data-generate-manage-hint') + ' add@' + noteAt(linked.tree, 'data-generate-add-hint'),
+      )
+      check(
+        'the add note is read off its own node, not matched as a phrase',
+        (() => {
+          const freshNote = noteOf(fresh.tree, 'data-generate-add-hint')
+          const linkedNote = noteOf(linked.tree, 'data-generate-add-hint')
+          const freshLine = freshNote ? linesOf(freshNote).join(' ').trim() : ''
+          const linkedLine = linkedNote ? linesOf(linkedNote).join(' ').trim() : ''
+          return freshLine === EN['pane.add.hint'] && linkedLine === EN['pane.add.hint']
+        })(),
+        'the note node must carry the copy itself',
+      )
+      // Both notes belong to the empty state, not to the pane root: the strip's
+      // balance sits above them, and a note beside the strip is a different claim.
+      const bothNotes = blockWith(linked.tree, [EN['pane.linked.manage'], EN['pane.add.hint']])
+      const bothText = bothNotes ? textOf(bothNotes).join(' ') : ''
+      check(
+        'both notes live in the empty-state block, under its own line',
+        !!bothNotes && bothText.includes(EN['pane.empty.body']) && !bothText.includes('8,600'),
+        bothNotes ? bothText.slice(0, 240) : 'no block carries both notes',
+      )
+    }
   }
 
   // 10. the copy is reached through the same path a language change takes
@@ -774,6 +838,21 @@ if (pane && settings) {
       textOf(saved).join(' ').includes(zhCopy.table.zh['saved.title']) &&
         textOf(saved).join(' ').includes(zhCopy.table.zh['saved.where']),
       textOf(saved).join(' | ').slice(0, 200),
+    )
+
+    // The add trigger is the one sentence that must NOT be translated: it is the
+    // phrase the skill answers to, so a localized version would be a sentence the
+    // user types and nothing picks up.
+    const zhStub = stubFetch([{ method: 'GET', body: UNLINKED }])
+    globalThis.fetch = zhStub.fetch
+    const zhPane = zhSeen.slots.find((slot) => slot.options.name === 'sidebar.right.pane.tab').component
+    const zhFresh = nodesOf(await settle(zhPane, { t: zhT }, 'pane-zh'))
+    const zhAdd = zhFresh.find((node) => node.props && node.props['data-generate-add-hint'] === 'yes')
+    const zhLine = zhAdd ? linesOf(zhAdd).join(' ').trim() : ''
+    check(
+      'the zh pane carries the add line, with the trigger still in English',
+      zhLine === zhCopy.table.zh['pane.add.hint'] && zhLine.includes('add this RunningHub workflow'),
+      zhLine || 'no add note in the zh pane',
     )
   }
 }

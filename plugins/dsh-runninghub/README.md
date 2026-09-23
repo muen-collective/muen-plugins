@@ -39,6 +39,19 @@ the field so the pane only points (one extra navigation on first link, and the u
 themselves), or move link/replace/remove all into the pane (which contradicts S5, where the pane becomes the
 workflow workspace). The wallet page's own copy already distinguishes replacing from removing.
 
+Under those key directions, and in both pane states, sits the other half of what a new install needs — how an
+app gets added:
+
+> To add a workflow, ask the agent in chat: “add this RunningHub workflow &lt;app link&gt;”.
+
+It is text rather than a button for the same class of reason: a third-party client plugin cannot put text
+into the conversation composer, and a slash command cannot start a turn (both measured 2026-09-22). So the
+pane says what to ask for and the agent's `add-rh-workflow` skill does the rest. **The quoted trigger stays
+English in both dictionaries, deliberately** — it is the phrase the skill's `whenToUse` names, so translating
+it would produce a sentence the user types and nothing picks up; a user may of course say it in their own
+language. The line carries the same info glyph as the key directions and is read off its own node
+(`data-generate-add-hint`) by the verify, so it is held by placement rather than by matching a phrase.
+
 ## The wallet (S2)
 
 | Route | What |
@@ -205,17 +218,20 @@ a recording ctx. `verify/wallet.mjs` imports `lib/index.js`, mounts the route ag
 drives it with a stubbed RunningHub and a recording credentials seam — including the rule that no response
 body ever carries a key. Its fixtures use the seam's real `source` values (`file`, `env`); they said
 `store`/`environment` until 2026-09-22, strings the seam never emits, which is how the strip came to call a
-pasted key "from your environment" while every check stayed green. `verify/save-confirmation.mjs` renders the
-shipped components with React stood in for by a shim with working hooks and a stubbed `fetch`, presses Save
-and Remove key, and reads what the surface does next: a confirmation dialog naming the key, the wallet read
-and where the balance went, nothing at all for a refused key, a dialog that closes on dismiss or on the next
-keystroke, the strip's note for each real `source` value, the fresh-install and linked panes both naming
-Settings → Generate as the place the key is managed (with the info glyph, and the linked note inside the empty
-state rather than beside the strip), and for rotation a question that deletes nothing
-until it is answered, declined without a `DELETE` leaving the wallet linked, and a receipt in the same dialog
-once it is. `node verify/save-confirmation.mjs --show` prints the dialog's lines in order, which is how the
-copy is read without restarting the app. A skip is printed as `SKIP`; a layer that ran and disagreed fails the
-run.
+pasted key "from your environment" while every check stayed green. `verify/save-confirmation.mjs` (**62/62**) renders the shipped components with React stood in for by a shim
+with working hooks and a stubbed `fetch`, presses Save and Remove key, and reads what the surface does next: a
+confirmation dialog naming the key, the wallet read and where the balance went, nothing at all for a refused
+key, a dialog that closes on dismiss or on the next keystroke, the strip's note for each real `source` value,
+the fresh-install and linked panes both naming Settings → Generate as the place the key is managed (with the
+info glyph, and the linked note inside the empty state rather than beside the strip), **both panes telling the
+user how to add a workflow, under the key directions and in that order, with the trigger phrase intact in
+`zh` too**, and for rotation a question that deletes nothing until it is answered, declined without a
+`DELETE` leaving the wallet linked, and a receipt in the same dialog once it is.
+`node verify/save-confirmation.mjs --show` prints the dialog's lines in order — including both pane states,
+which is how the copy above is read without restarting the app. A skip is printed as `SKIP`; a layer that ran
+and disagreed fails the run. Mutation-tested: **58/62 with the note's info glyph removed**, **59/62 with the
+add line dropped from the linked pane**, **61/62 with the two notes swapped** and **61/62 with the `zh`
+trigger translated away**.
 
 `verify/adapter.mjs` (**86/86**) drives both tools through the definitions the plugin actually registers, with
 a stubbed RunningHub that answers **per app id** — a URL-blind stub would let an adapter naming one app pass
