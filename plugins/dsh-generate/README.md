@@ -470,6 +470,23 @@ pane would otherwise be taller than the screen. A workflow with no aspect door g
 shape that never misrepresents a workflow — rather than a guessed one. `RunOutput` no longer draws the image at
 all: it draws the phase, the failure and the open/again controls, and the canvas above it owns the picture.
 
+**The run control is a split button where the provider declares run modes** (founder, 2026-09-23:
+*"RH has option to run as plus vs ultra we can use this shadcn split button"*). RunningHub's own OpenAPI is
+where the modes come from — `POST /task/openapi/ai-app/run` takes `instanceType`, *"`default` uses 24GB VRAM;
+`plus` uses 48GB; `ultra` uses 84GB"* — so they are **provider data**, declared on the registry entry
+(`runOption`), carried to the page with the rest of the provider's identity, and drawn by a `SplitButton` kit
+component: the action, then a segment showing the current mode that opens the harness's own `Menu` (whose
+documentation names the split-button case) with one row per mode, each naming the machine it buys. The pattern
+is the shadcn ButtonGroup + DropdownMenu one; the primitives are the harness's, because this bundle carries no
+Tailwind and one external peer.
+
+**The mode is part of what a person confirms.** The surface sends `options` with the payload and the run, the
+host reads them through `runOptions` — the provider's own declaration, so an option nobody declared or a value
+outside the declared modes is refused by name rather than forwarded into somebody else's API — and the preview
+echoes the validated option back, so the gate draws the host's answer rather than the browser's memory. The
+chosen mode is written into the run's record beside the payload. A provider that declares no modes (Krea, Comfy
+Cloud today) keeps the plain run button and sends no options at all.
+
 **A number door is a stepper** (founder, 2026-09-23, with RunningHub's own form as the reference: *"for number
 input use the correct primitive"*): a bordered group with a square decrement, the value centred in tabular
 figures, and a square increment — the design the founder pasted, drawn from the harness's own `Button` and the
@@ -607,7 +624,7 @@ trigger translated away**. Those four mutations were not re-run against the acco
 linked pane" one targets a note that no longer exists there — so treat them as the record of the earlier
 suite, not as a score for this one.
 
-`verify/start.mjs` (**223/223**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/start.mjs` (**231/231**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
 the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
 **one accordion section per provider in registry order, all four whether linked or not**, each header holding
@@ -627,9 +644,14 @@ given to a workflow whose run is not built yet as well, and carrying equal backg
 because both come from the one `Card`; the **preview canvas** takes the shape the workflow's own aspect door
 asks for (`1 / 1` on the fixture, `16 / 9` after the door is changed, and a square canvas for the catalogue entry
 that has no aspect door at all); and a **number door is the stepper** — the increment moves by the app's own
-`step`, and walking it down stops at the app's own floor with that button disabled. Mutation-tested the same day,
+`step`, and walking it down stops at the app's own floor with that button disabled. The **split run control** is
+checked here too: a provider that declares run modes (RunningHub's `instanceType`) gets the segment, its rows
+name the modes and the machines, choosing one moves the segment and closes the list, the payload request carries
+the choice, the gate names it, and the run that starts carries it — while a provider that declares none keeps
+the plain button. Mutation-tested the same day,
 the card kit included: **219/220** with the kit's radius and padding changed, with either column taken off the
-`Card`, or with the empty-preview marker dropped; **222/223** with the canvas no longer driven by the aspect door,
+`Card`, or with the empty-preview marker dropped; **224/231** with the split control never drawn and **229/231**
+with the chosen mode never sent; **222/223** with the canvas no longer driven by the aspect door,
 with the door no longer found, or with its value no longer parsed; **216/217** with the chevron removed, the
 margin under the back control zeroed, or the floor taken off the decrement; **215/217** with the columns no longer
 wrapping.
@@ -649,7 +671,7 @@ distinctly; an adapter with no `ui` block still passes; and no call creates the 
 seed label**, **84/86 when the derived values stop being compared** and **83/86 when the data root ignores
 `--profile`** — the checks fail on the defects they were written for.
 
-`verify/skill.mjs` (**59/59**) mounts the plugin against a recording skills registry and reads the text the
+`verify/skill.mjs` (**60/60**) mounts the plugin against a recording skills registry and reads the text the
 host would serve for **both** skills: each is the shipped file byte for byte, `add-rh-workflow`'s ask comes
 before its fetch and its confirmation before its write, `design-generate-screen`'s rules come before its steps
 and it carries the rules the pane cannot bend (no node id or field name drawn, nothing spends without the
@@ -662,7 +684,8 @@ removed**, **55/56 with the "no node id, no field name" rule removed**, **55/56 
 **55/56 with the four-door budget turned into "any number of doors"**, **55/56 with the opening design step
 renamed**, and **55/56 with the rules moved after the steps** — every one fails on the claim it breaks, and
 none of them takes a second check down with it. **57/58 with the `Card` rule removed**, the check the card kit
-added when the two cards landed, and **58/59 with the aspect-canvas rule removed**.
+added when the two cards landed, **58/59 with the aspect-canvas rule removed**, and **59/60 with the split-control
+rule removed**.
 
 ## Not in this package, by rule
 

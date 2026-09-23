@@ -77,7 +77,7 @@ import { dirname } from 'node:path'
 import { parseAppRef, readAppDoors } from './doors.js'
 import { loadHouse } from './house.js'
 import { ADAPTER_SCHEMA, adapterFromDoors, validateAdapter } from './adapter.js'
-import { PROVIDERS, normalizeKey, providerById, runninghub, uploadFile } from './providers.js'
+import { PROVIDERS, normalizeKey, providerById, runOptions, runninghub, uploadFile } from './providers.js'
 import { readHidden, withHidden, writeHidden } from './hidden.js'
 import { resolveDataRoot } from './paths.js'
 
@@ -562,6 +562,10 @@ export function apply(ctx, config = {}) {
    * account at, what using the provider costs (`funding` — the row draws the sentence
    * from its `kind` and links its `url`), and the sentence that installs one of
    * its workflows. No key and no credential reference: a route answers a page.
+   *
+   * `runOption` travels with the identity because it is the provider's own vocabulary —
+   * RunningHub's `instanceType` (24/48/84GB) is the one today — so the surface draws its
+   * split button from a declaration rather than from a name it guessed.
    */
   const identity = (provider) => ({
     id: provider.id,
@@ -572,6 +576,7 @@ export function apply(ctx, config = {}) {
     accountUrl: provider.accountUrl,
     funding: provider.funding,
     addPrompt: provider.addPrompt,
+    runOption: provider.runOption,
   })
 
   /**
@@ -903,12 +908,19 @@ export function apply(ctx, config = {}) {
       send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
       return
     }
-    const preview = await provider.previewRun({ root: provider.data(root.root).root, name: body.name, values: body.values })
+    const chosen = runOptions(provider, body.options)
+    if (!chosen.ok) {
+      send(res, 400, { error: 'bad-option', detail: chosen.detail })
+      return
+    }
+    const preview = await provider.previewRun({ root: provider.data(root.root).root, name: body.name, values: body.values, options: chosen.options })
     if (preview.error) {
       send(res, preview.error === 'not-found' ? 404 : 400, preview)
       return
     }
-    send(res, 200, preview)
+    // The options the request WILL carry are echoed back with it, so the gate draws what
+    // the host would send rather than what the browser remembers choosing.
+    send(res, 200, { ...preview, options: chosen.options })
   }
 
   /**
@@ -973,7 +985,20 @@ export function apply(ctx, config = {}) {
       send(res, key.error === 'no-key' ? 400 : 500, { error: key.error })
       return
     }
-    const started = await provider.startRun({ root: provider.data(root.root).root, name: body.name, values: body.values, key: key.key })
+    // The same declaration the preview was read through: a run carries the options the gate
+    // showed, and one the provider never declared is refused here.
+    const chosen = runOptions(provider, body.options)
+    if (!chosen.ok) {
+      send(res, 400, { error: 'bad-option', detail: chosen.detail })
+      return
+    }
+    const started = await provider.startRun({
+      root: provider.data(root.root).root,
+      name: body.name,
+      values: body.values,
+      options: chosen.options,
+      key: key.key,
+    })
     if (started.error) {
       const status =
         started.error === 'not-found'

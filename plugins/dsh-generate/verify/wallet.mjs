@@ -345,6 +345,28 @@ function mount(credentials) {
     !!body && body.providers.every((provider) => Object.keys(provider.funding).sort().join(',') === 'kind,url'),
     JSON.stringify(body && body.providers && body.providers.map((provider) => Object.keys(provider.funding || {}))),
   )
+  // The run modes travel the same way (RunningHub's `instanceType`: default 24GB, plus 48GB,
+  // ultra 84GB, from its own OpenAPI). The pane draws the split run control from this row,
+  // so a provider that carries it and one that does not are both facts a check can see.
+  check(
+    'a provider that has run modes sends them, and one that has none sends nothing',
+    (() => {
+      if (!body) return false
+      const rh = body.providers.find((provider) => provider.id === 'runninghub')
+      const krea = body.providers.find((provider) => provider.id === 'krea')
+      return (
+        !!rh &&
+        !!rh.runOption &&
+        rh.runOption.key === 'instanceType' &&
+        rh.runOption.fallback === 'default' &&
+        Array.isArray(rh.runOption.modes) &&
+        rh.runOption.modes.length === 3 &&
+        !!krea &&
+        krea.runOption === undefined
+      )
+    })(),
+    JSON.stringify(body && body.providers && body.providers.map((provider) => [provider.id, provider.runOption && provider.runOption.key])),
+  )
   // Researched 2026-09-23 on each provider's own billing page: RunningHub sells coins,
   // Krea's API draws on a prepaid USD balance and has no monthly plan, Comfy Cloud has
   // the monthly plan its key needs active (the 429), and Magnific's API runs on the

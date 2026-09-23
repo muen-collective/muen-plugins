@@ -162,6 +162,26 @@ const PRIMITIVES = {
   IconCheckOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'check', ...props }),
   IconInfoOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'info', ...props }),
   IconPlusOutline16: (props) => REACT.createElement('svg', { 'data-stub': 'plus', ...props }),
+  /**
+   * The anchored menu the split run control opens. The stub renders the anchor it wraps and,
+   * while open, one button per row — enough for a check to read the modes declared for a
+   * provider and to choose one, which is what the real primitive's rows do.
+   */
+  Menu: (props) =>
+    REACT.createElement(
+      'span',
+      { 'data-stub': 'menu', 'data-menu-open': props.open === true ? 'yes' : 'no', selected: props.selectedId, onClose: props.onClose, onSelect: props.onSelect },
+      props.anchor,
+      props.open === true
+        ? REACT.createElement(
+            'span',
+            { 'data-stub': 'menu-list' },
+            (props.items || []).map((item) =>
+              REACT.createElement('button', { key: item.id, type: 'button', 'data-menu-item': item.id, onClick: () => props.onSelect(item.id) }, item.label),
+            ),
+          )
+        : null,
+    ),
   // The way out of a workflow surface wears this (founder, 2026-09-23).
   IconChevronLeftOutline14: (props) => REACT.createElement('svg', { 'data-stub': 'chevron-left', ...props }),
   /**
@@ -611,6 +631,13 @@ function stubHost({
   hidden = [],
   jobStates = ['done'],
   jobError = null,
+  /**
+   * The run option a provider declares (RunningHub's `instanceType` today). It is attached
+   * to the krea row on demand, because krea is the provider whose adapters can actually run
+   * in these fixtures: the contract being exercised is "a provider that declares modes gets
+   * the split control", and a runnable surface is what draws one.
+   */
+  runOption = null,
 } = {}) {
   const calls = []
   // The runs this stub was asked to start, and how many times a job was polled: the two
@@ -627,7 +654,9 @@ function stubHost({
       return polls
     },
     fetch: async (url, init = {}) => {
-      calls.push({ url, method: (init.method || 'GET').toUpperCase() })
+      // The body travels with the call: the split run control's check reads what the
+      // payload request actually carried, not what the surface said it would.
+      calls.push({ url, method: (init.method || 'GET').toUpperCase(), body: init.body })
       // The upload an image door calls: the file goes to this plugin's own host route, the
       // host answers the provider's asset URL, and that URL is the value the door carries.
       if (String(url).endsWith('/asset')) {
@@ -651,6 +680,8 @@ function stubHost({
           body: values,
           missing: String(values.prompt || '').trim() === '' ? ['prompt'] : [],
           refused: [],
+          // The host echoes the option it validated, so the gate draws what would be sent.
+          options: posted.options || null,
         })
       }
       // Starting a run. The stub records the whole call, so a check can prove the confirm
@@ -711,7 +742,11 @@ function stubHost({
             unlinked(OTHER_PROVIDERS[0]),
             unlinked(OTHER_PROVIDERS[1]),
             unlinked(OTHER_PROVIDERS[2]),
-          ].map((provider) => ({ ...provider, hidden: hidden.includes(provider.id) })),
+          ].map((provider) => ({
+            ...provider,
+            hidden: hidden.includes(provider.id),
+            ...(runOption && provider.id === 'krea' ? { runOption } : {}),
+          })),
         })
       }
       // Every provider's workflow route answers, because the pane and the open card
@@ -2069,6 +2104,13 @@ check(
     const backToSquare = byAttr(reshaped, 'data-generate-door', 'aspect_ratio')
     if (backToSquare) backToSquare.props.onChange({ target: { value: '1:1' } })
     await settle(paneSlot.component, props, 'pane-run')
+    // The other half of the split rule: this provider declares no run modes, so the control
+    // is the plain button it always was — a segment opening an empty list would be worse.
+    check(
+      'a provider with no run modes draws the plain run button, with no empty split',
+      !!runButton && !byAttr(tree, 'data-generate-split', 'yes') && !byAttr(tree, 'data-generate-mode-toggle', 'yes'),
+      JSON.stringify({ split: !!byAttr(tree, 'data-generate-split', 'yes'), toggle: !!byAttr(tree, 'data-generate-mode-toggle', 'yes') }),
+    )
     check('nothing is posted until that control is pressed', stub.runs.length === 0, JSON.stringify(stub.runs))
 
     if (runButton) runButton.props.onClick()
@@ -2164,6 +2206,101 @@ check(
   }
 }
 
+// ── the split run control: the action, and the mode it will run in ───────────
+//
+// Founder, 2026-09-23: *"RH has option to run as plus vs ultra we can use this shadcn split
+// button"*. RunningHub's own OpenAPI is where the modes come from (`instanceType`: default
+// 24GB, plus 48GB, ultra 84GB); this block exercises the declaration wherever a provider
+// makes it, on the fixture provider whose adapters can actually run.
+{
+  const RUN_OPTION = {
+    key: 'instanceType',
+    label: 'Instance',
+    fallback: 'default',
+    modes: [
+      { id: 'default', label: 'Default', description: '24GB VRAM' },
+      { id: 'plus', label: 'Plus', description: '48GB VRAM' },
+      { id: 'ultra', label: 'Ultra', description: '84GB VRAM' },
+    ],
+  }
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: MODEL_UNIT.name, provider: 'krea' }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, runOption: RUN_OPTION })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    const tree = await settle(paneSlot.component, props, 'pane-split')
+    const toggle = byAttr(tree, 'data-generate-mode-toggle', 'yes')
+    check(
+      'a provider that declares run modes gets the split control, not a plain button',
+      !!byAttr(tree, 'data-generate-split', 'yes') && !!byAttr(tree, 'data-generate-run', MODEL_UNIT.name) && !!toggle,
+      JSON.stringify({ split: !!byAttr(tree, 'data-generate-split', 'yes'), toggle: !!toggle }),
+    )
+    check(
+      "the segment shows the provider's own fallback mode before anything is chosen",
+      !!toggle && textIn(toggle).includes('Default') && byAttr(tree, 'data-generate-mode').props['data-generate-mode'] === 'default',
+      toggle ? textIn(toggle) : 'no segment',
+    )
+    const opener = byAttr(tree, 'data-generate-mode-toggle', 'yes')
+    if (opener) opener.props.onClick({ stopPropagation: () => {} })
+    const opened = await settle(paneSlot.component, props, 'pane-split')
+    const ultra = nodesOf(opened).find((node) => node.props && node.props['data-menu-item'] === 'ultra')
+    check('the segment opens the list of modes', !!ultra, ultra ? 'the rows are there' : 'no rows')
+    check(
+      'the modes come from the provider: each row names the mode and the machine it buys',
+      (() => {
+        const menu = nodesOf(opened).find((node) => node.props && node.props['data-stub'] === 'menu')
+        if (!menu) return false
+        const rows = nodesOf(menu).filter((node) => node.props && node.props['data-menu-item'])
+        return rows.length === 3 && textIn(menu).includes('Ultra') && textIn(menu).includes('84GB VRAM') && textIn(menu).includes('48GB VRAM')
+      })(),
+      "the sizes are RunningHub's own words for the machines, not a price",
+    )
+    if (ultra) ultra.props.onClick()
+    const chosen = await settle(paneSlot.component, props, 'pane-split')
+    check(
+      'choosing a mode says so on the segment, and closes the list',
+      (() => {
+        const segment = byAttr(chosen, 'data-generate-mode')
+        const menu = nodesOf(chosen).find((node) => node.props && node.props['data-stub'] === 'menu')
+        return (
+          !!segment &&
+          segment.props['data-generate-mode'] === 'ultra' &&
+          textIn(byAttr(chosen, 'data-generate-mode-toggle', 'yes')).includes('Ultra') &&
+          (!menu || menu.props['data-menu-open'] === 'no')
+        )
+      })(),
+      JSON.stringify(byAttr(chosen, 'data-generate-mode') ? byAttr(chosen, 'data-generate-mode').props['data-generate-mode'] : 'no segment'),
+    )
+    const run = byAttr(chosen, 'data-generate-run', MODEL_UNIT.name)
+    if (run) run.props.onClick()
+    const gate = await settle(paneSlot.component, props, 'pane-split')
+    check(
+      "the gate names the mode, from the host's own echo of the validated option",
+      (() => {
+        const sent = stub.calls.filter((call) => String(call.url).endsWith('/payload') && call.body)
+        const body = sent.length > 0 ? JSON.parse(sent[sent.length - 1].body) : null
+        return textIn(gate).includes('Instance') && textIn(gate).includes('Ultra') && !!body && !!body.options && body.options.instanceType === 'ultra'
+      })(),
+      'what the gate shows is what the request carries',
+    )
+    const prompt = byAttr(gate, 'data-generate-door', 'prompt')
+    if (prompt) prompt.props.onChange({ target: { value: 'a glass cabin' } })
+    const filled = await settle(paneSlot.component, props, 'pane-split')
+    const go = byAttr(filled, 'data-generate-gate-confirm', 'yes')
+    if (go) go.props.onClick()
+    await settle(paneSlot.component, props, 'pane-split')
+    check(
+      'the run that starts carries the chosen mode too',
+      stub.runs.length > 0 && !!stub.runs[0].options && stub.runs[0].options.instanceType === 'ultra',
+      JSON.stringify(stub.runs.map((entry) => entry.options)),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
 // A run that fails says whose words it is: the provider's message verbatim, plus the run
 // id, plus a way back to the form.
 {

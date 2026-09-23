@@ -27,6 +27,11 @@ never invents a control, never invents a number, and never writes plugin code.
   `aspect_ratio` — or whatever the adapter's `preview.aspectDoor` names — decides: `9:16` is a
   portrait canvas, `16:9` landscape, `1:1` square. Never hard-code a shape, and never invent an
   aspect door for a workflow that has none: that workflow gets a square canvas.
+- **A provider that declares run modes gets the split run control.** Its `runOption` (the
+  registry's, never the adapter's — RunningHub's `instanceType` is the one today) becomes the
+  segment beside the action, and the chosen mode is part of what the gate shows, because it
+  changes what the run uses. A provider that declares none gets the plain button: never draw a
+  segment that opens an empty list.
 - **Copy is the profile's language, and data.** Labels are authored words. The plugin's own
   sentences come from `ctx.locale` under namespace `generate`.
 - **The visual layer is the harness's own.** `--dsw-alias-*` tokens only: no EVA token name, no

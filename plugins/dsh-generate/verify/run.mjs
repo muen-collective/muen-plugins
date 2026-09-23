@@ -37,7 +37,7 @@ const SECRET = 'krea_test_key_123456'
 const PROVIDERS_PATH = '/plugins/generate/providers'
 
 const { buildRunPayload, getRun, postRun } = await import(pathToFileURL(join(ROOT, 'lib/krea-run.js')).href)
-const { krea } = await import(pathToFileURL(join(ROOT, 'lib/providers.js')).href)
+const { krea, runOptions } = await import(pathToFileURL(join(ROOT, 'lib/providers.js')).href)
 const { dataPaths, resolveDataRoot } = await import(pathToFileURL(join(ROOT, 'lib/paths.js')).href)
 const { SHIPPED_KREA_MODELS } = await import(pathToFileURL(join(ROOT, 'lib/krea-models.js')).href)
 
@@ -562,6 +562,95 @@ check(
   pollWithoutJob.statusCode === 400 && json(pollWithoutJob).error === 'bad-request',
   JSON.stringify(json(pollWithoutJob)),
 )
+
+// ── a run's own options, read through what the provider declares ─────────────
+//
+// RunningHub's `instanceType` (default 24GB / plus 48GB / ultra 84GB, from its own OpenAPI)
+// is not a door: it is the same three choices for every app and it goes to the request's top
+// level. The provider declares it, the route validates a request against that declaration,
+// and the preview echoes what it would send so the gate can show it.
+{
+  const RH_PAYLOAD = PROVIDERS_PATH + '/runninghub/payload'
+  const rhPayload = await call(handler, 'POST', { name: 'x', values: {}, options: { instanceType: 'plus' } }, RH_PAYLOAD)
+  check(
+    "RunningHub's declared modes cannot be sent yet: its run is not built, so the route still answers 501",
+    rhPayload.statusCode === 501 && json(rhPayload).error === 'unsupported',
+    JSON.stringify({ status: rhPayload.statusCode, body: json(rhPayload) }),
+  )
+  // Krea declares no runOption at all, so options sent to it are refused rather than
+  // silently dropped: a value nobody declared must not travel into somebody else's API.
+  const kreaOption = await call(handler, 'POST', { name: 'krea-2-medium-turbo', values, options: { instanceType: 'plus' } }, PAYLOAD_PATH)
+  check(
+    'a provider that declares no run options refuses one rather than ignoring it',
+    kreaOption.statusCode === 400 && json(kreaOption).error === 'bad-option',
+    JSON.stringify({ status: kreaOption.statusCode, body: json(kreaOption) }),
+  )
+  // And with nothing declared and nothing sent, the route answers as it always did.
+  const noOptions = await call(handler, 'POST', { name: 'krea-2-medium-turbo', values }, PAYLOAD_PATH)
+  check(
+    'no options at all is still a valid request, on any provider',
+    noOptions.statusCode === 200 && json(noOptions).options === null,
+    JSON.stringify(json(noOptions).options),
+  )
+  // The declaration is read directly too, because the route can only reach one of its
+  // branches today: no runnable provider declares modes yet (Krea declares none,
+  // RunningHub cannot run), so an unknown KEY is refused by a route and an unknown VALUE
+  // is refused here. Both are the same rule, and the day RunningHub runs the first covers
+  // the second as well.
+  const withModes = { id: 'fake', runOption: { key: 'instanceType', label: 'Instance', fallback: 'default', modes: [{ id: 'default' }, { id: 'plus' }] } }
+  check(
+    'an option the provider never declared is refused by name',
+    (() => {
+      const read = runOptions(withModes, { gpu: 'plus' })
+      return read.ok === false && read.detail.includes('instanceType')
+    })(),
+    JSON.stringify(runOptions(withModes, { gpu: 'plus' })),
+  )
+  check(
+    'a mode outside the declared list is refused by name',
+    (() => {
+      const read = runOptions(withModes, { instanceType: 'quantum' })
+      return read.ok === false && read.detail.includes('quantum')
+    })(),
+    JSON.stringify(runOptions(withModes, { instanceType: 'quantum' })),
+  )
+  check(
+    'a missing mode becomes the provider\'s own fallback rather than an error',
+    (() => {
+      const read = runOptions(withModes, {})
+      return read.ok === true && read.options.instanceType === 'default'
+    })(),
+    JSON.stringify(runOptions(withModes, {})),
+  )
+  check(
+    'a valid mode is carried through as the request\'s own options',
+    (() => {
+      const read = runOptions(withModes, { instanceType: 'plus' })
+      return read.ok === true && read.options.instanceType === 'plus' && Object.keys(read.options).length === 1
+    })(),
+    JSON.stringify(runOptions(withModes, { instanceType: 'plus' })),
+  )
+  const { runninghub } = await import(pathToFileURL(join(ROOT, 'lib/providers.js')).href)
+  check(
+    'RunningHub declares its own modes, with the sizes its documentation gives',
+    (() => {
+      const declared = runninghub.runOption
+      return (
+        !!declared &&
+        declared.key === 'instanceType' &&
+        declared.fallback === 'default' &&
+        declared.modes.map((mode) => mode.id).join(',') === 'default,plus,ultra' &&
+        declared.modes.every((mode) => typeof mode.label === 'string' && typeof mode.description === 'string')
+      )
+    })(),
+    JSON.stringify(runninghub.runOption),
+  )
+  check(
+    'the modes are RunningHub\'s own words for the machines, not a price',
+    runninghub.runOption.modes.map((mode) => mode.description).join(' ') === '24GB VRAM 48GB VRAM 84GB VRAM',
+    JSON.stringify(runninghub.runOption.modes.map((mode) => mode.description)),
+  )
+}
 
 // A provider with no run path answers 501 rather than pretending: RunningHub's run is a
 // workflow's node ids and an upload per image door, which is a different slice.

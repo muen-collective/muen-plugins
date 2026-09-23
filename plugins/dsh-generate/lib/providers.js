@@ -289,6 +289,38 @@ function accountOf(data) {
  * A plain membership key can list and run AI Apps and ComfyUI Workflows; only the
  * Model API and LLM need an enterprise key, so a hobby account works here.
  */
+/**
+ * A RUN'S OWN OPTIONS, read through what the provider declares.
+ *
+ * An option is not a door: RunningHub's `instanceType` is the same three choices for every
+ * app and belongs at the request's top level beside `webappId` rather than inside
+ * `nodeInfoList`, so it cannot come from the adapter. The provider declares it
+ * (`runOption`) and this is the only place a request's `options` is read — an option
+ * nobody declared, or a value outside the declared modes, is refused here rather than
+ * forwarded into somebody else's API.
+ *
+ * A missing value is not an error: it is the provider's own `fallback`, so a surface that
+ * draws no split button still sends a complete request.
+ *
+ * @returns {{ ok: true, options: object | null } | { ok: false, detail: string }}
+ */
+export function runOptions(provider, raw) {
+  const declared = provider.runOption
+  const given = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+  const keys = Object.keys(given)
+  if (!declared) {
+    return keys.length === 0 ? { ok: true, options: null } : { ok: false, detail: 'this provider takes no run options' }
+  }
+  if (keys.some((key) => key !== declared.key)) {
+    return { ok: false, detail: declared.key + ' is the only run option this provider takes' }
+  }
+  const value = given[declared.key] === undefined ? declared.fallback : given[declared.key]
+  if (!declared.modes.some((mode) => mode.id === value)) {
+    return { ok: false, detail: String(value) + ' is not one of ' + declared.modes.map((mode) => mode.id).join(', ') }
+  }
+  return { ok: true, options: { [declared.key]: value } }
+}
+
 export const runninghub = {
   id: 'runninghub',
   label: 'RunningHub',
@@ -318,6 +350,33 @@ export const runninghub = {
    * `add-rh-workflow` skill does the work.
    */
   addPrompt: 'add this RunningHub workflow <app link>',
+
+  /**
+   * THE INSTANCE TYPE — RunningHub's own run modes.
+   *
+   * Read from RunningHub's OpenAPI on 2026-09-23 (`POST /task/openapi/ai-app/run`, the
+   * `instanceType` field): *"Optional. `default` uses 24GB VRAM; `plus` uses 48GB;
+   * `ultra` uses 84GB."* The founder saw the same three in RunningHub's own form —
+   * *"RH has option to run as plus vs ultra"* — as a split button beside Run.
+   *
+   * It is provider data, not a door: it does not come from the app, it is the same three
+   * choices for every app, and it belongs at the request's top level beside `webappId`
+   * rather than inside `nodeInfoList`. So it is declared here, the surface draws it from
+   * this declaration, and the host refuses any option this declaration does not name.
+   *
+   * The sizes are RunningHub's own words for the machines, which is what a person is
+   * choosing between; they are not a price, and no price is claimed here.
+   */
+  runOption: {
+    key: 'instanceType',
+    label: 'Instance',
+    fallback: 'default',
+    modes: [
+      { id: 'default', label: 'Default', description: '24GB VRAM' },
+      { id: 'plus', label: 'Plus', description: '48GB VRAM' },
+      { id: 'ultra', label: 'Ultra', description: '84GB VRAM' },
+    ],
+  },
 
   /**
    * One account read. `code: 0` is the API's yes; a non-zero code is its no. The
@@ -484,8 +543,12 @@ export const krea = {
    * Start the job. The host route only reaches this after a person confirmed the payload
    * the preview showed, and it refuses a payload the API would reject rather than spending
    * a credit on a 400.
+   *
+   * `options` — the host's own validated read of the request's run options — is not used
+   * here: Krea declares no `runOption`, so the host only ever passes null. It is accepted
+   * and recorded so one route shape serves every provider.
    */
-  async startRun({ root, name, values, key, timeoutMs, fetchImpl }) {
+  async startRun({ root, name, values, options, key, timeoutMs, fetchImpl }) {
     const preview = await this.previewRun({ root, name, values })
     if (preview.error) return preview
     if (preview.missing.length > 0) return { error: 'payload-incomplete', detail: 'still empty: ' + preview.missing.join(', ') }
@@ -504,6 +567,10 @@ export const krea = {
       title: preview.title,
       endpoint: preview.endpoint,
       body: preview.body,
+      // The run's own options, as the host validated them (null for a provider that
+      // declares none), so the record answers "what did we ship" as completely as the
+      // payload does.
+      options: options || null,
       // THE GATE'S OWN ANSWER, in the record, because rule 4 asks what was shipped and
       // why: the payload above is what a person saw before this line existed.
       gate: { confirmed: true, by: 'human', at },

@@ -99,6 +99,10 @@ window.__ModuleLoader__.load({
       Switch,
       Tooltip,
       Modal,
+      // The split run control's list: the harness's own anchored menu, whose documentation
+      // names the split-button case — an anchor that wraps several controls — and which
+      // hands the keyboard back to the trigger that opened it.
+      Menu,
     } = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
 
@@ -130,6 +134,9 @@ window.__ModuleLoader__.load({
       // own label for a screen reader and its own hover tooltip.
       'surface.step.down': 'Decrease',
       'surface.step.up': 'Increase',
+      // The split run control's smaller half: its accessible name and its hover tooltip.
+      // The modes themselves are provider data, so nothing here names one of them.
+      'run.mode': 'Run mode',
       'surface.loading': 'Reading the workflow…',
       'surface.failed': 'That workflow could not be read.',
       'surface.advanced': 'Advanced',
@@ -361,6 +368,7 @@ window.__ModuleLoader__.load({
       'surface.back': '全部工作流',
       'surface.step.down': '减少',
       'surface.step.up': '增加',
+      'run.mode': '运行模式',
       'surface.loading': '正在读取工作流…',
       'surface.failed': '无法读取该工作流。',
       'surface.advanced': '高级',
@@ -667,6 +675,48 @@ window.__ModuleLoader__.load({
         border: '1px solid transparent',
         borderRadius: 6,
         cursor: 'pointer',
+      },
+      /**
+       * THE SPLIT CONTROL (founder, 2026-09-23: *"RH has option to run as plus vs ultra we
+       * can use this shadcn split button"*). One action and one choice that belongs to it:
+       * the button runs, the segment beside it says which mode it will run in and opens the
+       * list. The two halves share an edge — the action keeps its left corners, the segment
+       * keeps its right ones, and the segment tucks one pixel under the action's border so
+       * the seam is a single hairline rather than a double line.
+       */
+      splitButton: {
+        display: 'inline-flex',
+        alignItems: 'stretch',
+        alignSelf: 'flex-start',
+      },
+      splitAction: {
+        borderTopRightRadius: 0,
+        borderBottomRightRadius: 0,
+      },
+      splitToggle: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        marginLeft: -1,
+        borderTopLeftRadius: 0,
+        borderBottomLeftRadius: 0,
+      },
+      /** One mode in the list: its name, then the machine that name buys. */
+      menuRow: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        textAlign: 'left',
+        whiteSpace: 'nowrap',
+      },
+      menuRowValue: {
+        fontSize: 12,
+        fontWeight: 600,
+        color: 'var(--dsw-alias-label-primary)',
+      },
+      menuRowNote: {
+        fontSize: 11,
+        color: 'var(--dsw-alias-label-caption)',
       },
       ghost: {
         padding: '6px 12px',
@@ -2109,12 +2159,12 @@ window.__ModuleLoader__.load({
      */
 
     /** The gate's preview: free, read-only, and the exact body a confirm would post. */
-    async function fetchPayload(provider, name, values) {
+    async function fetchPayload(provider, name, values, options) {
       try {
         const response = await fetch(providerUrl(provider, 'payload'), {
           method: 'POST',
           headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({ name, values }),
+          body: JSON.stringify(options ? { name, values, options } : { name, values }),
         })
         let body = null
         try {
@@ -2134,12 +2184,12 @@ window.__ModuleLoader__.load({
      * run's file; the route refuses a call without it, so the gate is not merely a dialog
      * this half chose to draw.
      */
-    async function postRun(provider, name, values) {
+    async function postRun(provider, name, values, options) {
       try {
         const response = await fetch(providerUrl(provider, 'run'), {
           method: 'POST',
           headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({ name, values, confirmed: true }),
+          body: JSON.stringify(options ? { name, values, options, confirmed: true } : { name, values, confirmed: true }),
         })
         let body = null
         try {
@@ -2526,6 +2576,70 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * A SPLIT BUTTON: one action, and one choice that belongs to it.
+     *
+     * The founder's reference is RunningHub's own form — *"RH has option to run as plus vs
+     * ultra we can use this shadcn split button"* — where Run Now sits beside a smaller
+     * segment showing the machine the run will use. The pattern is the shadcn ButtonGroup +
+     * DropdownMenu one; the primitives are the harness's own (`Button`-styled halves and the
+     * `Menu` it anchors, whose own documentation names the split-button case), because this
+     * bundle carries no Tailwind and one external peer.
+     *
+     * The list is a radio group in behaviour: the current mode is marked selected, choosing
+     * another closes the list and hands the id back. `label` is the action's text; the
+     * segment shows the current mode and carries the accessible name of the choice.
+     */
+    function SplitButton({ t, label, modes, value, onValue, disabled, onClick, attrs }) {
+      const [open, setOpen] = React.useState(false)
+      const current = modes.find((mode) => mode.id === value) || modes[0]
+      const items = modes.map((mode) => ({
+        id: mode.id,
+        label: h(
+          'div',
+          { style: S.menuRow, 'data-generate-mode-row': mode.id },
+          h('span', { style: S.menuRowValue }, mode.label),
+          mode.description ? h('span', { style: S.menuRowNote }, mode.description) : null,
+        ),
+      }))
+      return h(
+        'div',
+        { style: S.splitButton, 'data-generate-split': 'yes' },
+        h('button', { type: 'button', style: { ...S.primary, ...S.splitAction }, disabled, onClick, ...attrs }, label),
+        h(Menu, {
+          open,
+          side: 'bottom',
+          align: 'end',
+          items,
+          selectedId: current ? current.id : undefined,
+          onSelect: (id) => {
+            setOpen(false)
+            onValue(id)
+          },
+          onClose: () => setOpen(false),
+          anchor: h(
+            'button',
+            {
+              type: 'button',
+              style: { ...S.primary, ...S.splitToggle },
+              disabled,
+              title: t('run.mode'),
+              'aria-label': t('run.mode') + ': ' + (current ? current.label : ''),
+              'aria-haspopup': 'true',
+              'aria-expanded': open ? 'true' : 'false',
+              'data-generate-mode-toggle': 'yes',
+              onClick: (event) => {
+                event.stopPropagation()
+                setOpen((shown) => !shown)
+              },
+            },
+            h('span', { 'data-generate-mode': current ? current.id : '' }, current ? current.label : ''),
+            h(IconChevronDownOutline14, { size: 14 }),
+          ),
+        }),
+      )
+    }
+
+    /**
      * THE ASPECT DOOR, AND THE SHAPE IT GIVES THE PREVIEW (founder, 2026-09-23: *"the
      * aspect controls the shape of preview card"*).
      *
@@ -2604,7 +2718,7 @@ window.__ModuleLoader__.load({
      * Krea array field is an array of objects, so a row carries the object's own doors and
      * `advanced` decides whether the whole list sits behind the disclosure.
      */
-    function WorkflowSurface({ t, provider, name, onBack, canUpload = false }) {
+    function WorkflowSurface({ t, provider, name, onBack, canUpload = false, runOption = null }) {
       const { phase, adapter } = useWorkflow(provider, name)
       const [values, setValues] = React.useState({})
       const [showAdvanced, setShowAdvanced] = React.useState(false)
@@ -2642,7 +2756,7 @@ window.__ModuleLoader__.load({
       // The run state is READ HERE, above the early return, because a hook may not be
       // called conditionally: the run outlives the loading phase, and a person who
       // started one keeps it while the surface re-renders around them.
-      const run = useRun({ t, provider, adapter, values })
+      const run = useRun({ t, provider, adapter, values, runOption })
 
       if (phase !== 'ready' || !adapter) {
         return h(
@@ -2928,9 +3042,22 @@ window.__ModuleLoader__.load({
      * parameters column, and the strip and the result sit in the output column beside it.
      * Splitting the state from both views is what lets one run be drawn in two places.
      */
-    function useRun({ t, provider, adapter, values }) {
+    function useRun({ t, provider, adapter, values, runOption = null }) {
       const [run, setRun] = React.useState({ phase: 'form' })
       const [requestShown, setRequestShown] = React.useState(false)
+      /**
+       * THE RUN'S OWN MODE, when the provider declares one (RunningHub's `instanceType`).
+       *
+       * It lives with the run rather than with the doors because it is not a door: it is the
+       * same choice for every app, it goes to the request's top level, and the gate has to
+       * show it like anything else that changes what a run costs. `null` means "whatever the
+       * provider's own fallback is", so a surface that was never touched sends a complete
+       * request.
+       */
+      const declared = runOption && Array.isArray(runOption.modes) && runOption.modes.length > 0 ? runOption : null
+      const [mode, setMode] = React.useState(null)
+      const modeId = declared ? mode || declared.fallback : null
+      const options = declared ? { [declared.key]: modeId } : null
 
       /** The label a door is drawn under, so the gate names what the form named. */
       const labelOf = (key) => {
@@ -2941,7 +3068,7 @@ window.__ModuleLoader__.load({
       const openGate = async () => {
         setRequestShown(false)
         setRun({ phase: 'gate', preview: null })
-        const preview = await fetchPayload(provider, adapter.name, values)
+        const preview = await fetchPayload(provider, adapter.name, values, options)
         setRun((current) => {
           if (current.phase !== 'gate') return current
           return preview.ok ? { phase: 'gate', preview: preview.preview } : { phase: 'gate', preview: null, error: preview.error }
@@ -2950,7 +3077,7 @@ window.__ModuleLoader__.load({
 
       const confirm = async () => {
         setRun((current) => ({ ...current, phase: 'starting' }))
-        const started = await postRun(provider, adapter.name, values)
+        const started = await postRun(provider, adapter.name, values, options)
         if (!started.ok) {
           setRun({ phase: 'failed', error: started.error, detail: started.detail, startedAt: Date.now(), finishedAt: Date.now() })
           return
@@ -3021,6 +3148,11 @@ window.__ModuleLoader__.load({
         labelOf,
         openGate,
         confirm,
+        // The provider's run option, and the mode chosen in it. A provider that declares
+        // none gives `runOption: null` and the surface draws a plain run button.
+        runOption: declared,
+        mode: modeId,
+        setMode,
         // Cancel and "run again" are the same move: back to the form, values intact.
         back: () => setRun({ phase: 'form' }),
         gateOpen: phase === 'gate' || phase === 'starting',
@@ -3038,20 +3170,48 @@ window.__ModuleLoader__.load({
           h('span', { style: S.gateKey }, key),
           h('span', { style: S.gateValue }, value),
         )
+      const runLabel = adapter.runLabel || t('run.action')
+      /**
+       * The run's own options, as rows for the gate: named by the provider's label for the
+       * choice and read from the HOST's echo of the validated option, so the gate shows what
+       * would actually be sent rather than what the browser remembers choosing.
+       */
+      const optionRows = (state) => {
+        const declared = state.runOption
+        const chosen = state.preview && state.preview.options
+        if (!declared || !chosen) return []
+        return Object.entries(chosen).map(([key, value]) => {
+          const mode = (declared.modes || []).find((entry) => entry.id === value)
+          return row(declared.label || key, mode ? mode.label : String(value))
+        })
+      }
       return h(
         'div',
         { style: S.runBlock, 'data-generate-run-block': adapter.name },
-        h(
-          'button',
-          {
-            type: 'button',
-            style: { ...S.primary, alignSelf: 'flex-start' },
-            'data-generate-run': adapter.name,
-            disabled: run.gateOpen,
-            onClick: run.openGate,
-          },
-          adapter.runLabel || t('run.action'),
-        ),
+        // A provider that declares run modes gets the split control — the action, and the
+        // mode it will run in; one that declares none gets the plain button it always had.
+        run.runOption
+          ? h(SplitButton, {
+              t,
+              label: runLabel,
+              modes: run.runOption.modes,
+              value: run.mode,
+              onValue: run.setMode,
+              disabled: run.gateOpen,
+              onClick: run.openGate,
+              attrs: { 'data-generate-run': adapter.name, 'data-generate-run-mode': run.runOption.key },
+            })
+          : h(
+              'button',
+              {
+                type: 'button',
+                style: { ...S.primary, alignSelf: 'flex-start' },
+                'data-generate-run': adapter.name,
+                disabled: run.gateOpen,
+                onClick: run.openGate,
+              },
+              runLabel,
+            ),
         run.gateOpen
           ? h(
               Modal,
@@ -3085,6 +3245,7 @@ window.__ModuleLoader__.load({
                     { style: S.gateRows, 'data-generate-gate': adapter.name },
                     row(t('run.gate.model'), adapter.title),
                     row(t('run.gate.to'), run.preview.endpoint),
+                    ...optionRows(run),
                     Object.entries(run.preview.body).map(([key, value]) => row(run.labelOf(key), String(value))),
                     run.preview.missing.length > 0
                       ? h(
@@ -3630,6 +3791,10 @@ window.__ModuleLoader__.load({
               // Whether this provider can turn a picked file into a URL. The pane knows the
               // rows it drew, so it says; the surface does not guess from the id.
               canUpload: !!((providers.providers || []).find((row) => row.id === active.provider) || {}).upload,
+              // The provider's own run modes (RunningHub's `instanceType`), on the same
+              // rule: the pane read the row, so the run control draws a split button from
+              // what that row declared rather than from the provider's id.
+              runOption: ((providers.providers || []).find((row) => row.id === active.provider) || {}).runOption || null,
               onBack: () => setChosen(''),
             }),
         active === null
