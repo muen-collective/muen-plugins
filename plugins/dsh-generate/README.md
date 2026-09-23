@@ -1,32 +1,61 @@
-# @muen/dsh-runninghub
+# @muen/dsh-generate
 
-The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a
-workflow by pasting its app link, and run it in the right panel. Epic 61.
+The Generate space for DeepSeek Harness: link your own provider account (RunningHub
+today), add a workflow by pasting its app link, and open each installed workflow as a
+surface inside the one Generate pane. Epic 61.
 
-**This is S1 + S2 + S3, plus the pane as a hub: the plugin installs, the surface mounts, a RunningHub key
-can be linked, a workflow can be added from its app link, and the pane opens on one card per installed
-workflow, each card opening that workflow's surface inside the same pane.** The pane's one-field install form,
-the payload gate and the run are not faked here.
+**This is S1 + S2 + S3 plus the provider registry and the pane as a hub: the plugin installs, the surface
+mounts, each provider's key can be linked on the one Generate settings page, a workflow can be added from its
+app link, and the pane opens on a meter per linked provider and one card per installed workflow — a card
+opening that workflow's surface inside the same pane.** The pane's one-field install form, the payload gate
+and the run are not faked here.
 
 ## What it registers
 
 | Seat | What |
 |---|---|
-| `ctx.sidebarRightTabs` | a `generate` page type, id `@muen/dsh-runninghub`, priority `extension` |
+| `ctx.sidebarRightTabs` | a `generate` page type, id `@muen/dsh-generate`, priority `extension` |
 | `sidebar.right.pane.tab` | the pane body, keyed by the same id |
 | `sidebar.right.pane.tab.title` | the tab chip's live text |
 | the type's `guide[]` | one entry, which puts the **Generate with RunningHub** card on the right panel's start page — the harness's own standard card, with no renderer of ours |
-| `/plugins/generate/adapters` | the host route the pane's cards read: the installed workflows, as one disk read, with no key and no network |
-| `/plugins/generate/adapter?name=` | the host route one workflow's surface reads: its doors, labels, bounds and `ui.order` |
-| `settings.section` | exactly ONE settings page, `runninghub-wallet`, where the key is changed or unlinked |
+| `/plugins/generate/providers` | the host route both the pane and Settings read: every provider with its key state and its workflow count |
+| `/plugins/generate/providers/<id>/key` | one provider's key: `GET` its state, `POST` to link or replace, `DELETE` to unlink |
+| `/plugins/generate/providers/<id>/workflows` | one provider's installed workflows — one disk read, no key, no network |
+| `/plugins/generate/providers/<id>/workflow?name=` | one workflow, whole: the doors, labels, bounds and `ui.order` a surface renders |
+| `settings.section` | exactly ONE settings page, id `generate`, listing every provider — the Models → Providers shape |
 | the client locale registry | namespace `generate`, en + zh |
 | `ctx.tools` | `rh_workflow_graph` (read an app's doors) and `rh_adapter_validate` (check a written adapter) |
 | `ctx.skills` | `add-rh-workflow`, read from `skills/add-rh-workflow/SKILL.md` at apply time |
 
+## Providers — one plugin, several of them
+
+**Decided by the founder on 2026-09-22:**
+
+> "we need to rethink the generate plugin to be able to use different providers, it should work like the
+> providers settings" … "we should only have 1 generate settings with the different adapters."
+
+A provider is one object in `lib/providers.js`: its id and label, the credential reference its key lives under,
+the account page a person manages that key at, how to read the account a key opens (which is how a key is
+validated before it is stored), where its data lives under the plugin root, and how to list and read its
+workflows. RunningHub is the first; Krea and Comfy Cloud are the reason the file exists.
+
+**Why not a plugin per provider.** Two measured facts:
+
+1. `settings.section` is a **list** slot — one page per registrant — so a plugin per provider would put a
+   second (and third) Generate page in Settings, and reusing our id would *replace* our page instead of adding
+   to it;
+2. a third-party client plugin **cannot declare its own slot** (the client `slots` service exposes `register`,
+   `registerFactory` and `inject` only), so "one page that several plugins contribute to" has no seam in this
+   harness today.
+
+**The data layout follows the same rule:** `<profile>/generate/<provider>/adapters/<name>.json`, so each
+provider's own files — its adapters today, its uploads later — stay together under its own name, and the row id
+(`generate`) never names a provider.
+
 ## The pane links; Settings manages
 
-A fresh install lands on the pane, and the pane links a key: the first-run state is one field, validated
-before it is stored. What the pane cannot do is change or remove a key — that page is the owner — so the pane
+A fresh install lands on the pane, and the pane links the first provider's key: the first-run state is one
+field, validated before it is stored. What the pane cannot do is change or remove a key — that page is the owner — so the pane
 names it, twice, because a person who meets the field here would otherwise never learn where the key is
 managed: *"You can change or remove this key later in Settings → Generate. The Settings menu is at the bottom of
   the left sidebar."* on the
@@ -296,7 +325,7 @@ key, no Muen service. Only upstream `@deepseek-ai/*` services, the harness's own
 theme aliases (`--dsw-alias-*`), and this package's own copy — so it is a plain
 Cordis plugin in any DSH (`docs/plans/61-runninghub-generate-space-epic.md` §5).
 
-The package name is settled: **`@muen/dsh-runninghub`** (epic 61 D10/Q4, ratified
+The package name is settled: **`@muen/dsh-generate`** (epic 61 D10/Q4, ratified
 2026-09-22), so a RunningHub user searching the market finds it. The surface inside keeps
 the label **Generate**, the tab kind stays `generate`, and the row id is `runninghub` —
 which is also the profile directory the surface's own data lives under

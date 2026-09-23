@@ -42,9 +42,9 @@ import { ADAPTER_SCHEMA, listAdapters, readAdapter } from '../lib/adapter.js'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
 const PKG_NAME = '@muen/dsh-generate'
-const WALLET_API = '/plugins/generate/wallet'
-const ADAPTERS_API = '/plugins/generate/adapters'
-const ADAPTER_API = '/plugins/generate/adapter'
+const PROVIDERS_API = '/plugins/generate/providers'
+const PROVIDER = 'runninghub'
+const providerUrl = (action) => PROVIDERS_API + '/' + PROVIDER + '/' + action
 const argv = process.argv.slice(2)
 const SHOW = argv.includes('--show')
 
@@ -352,18 +352,34 @@ const KREA_FILE = {
   },
 }
 
-function stubHost({ units = [], file = null, failList = false } = {}) {
+function stubHost({ units = [], file = null, failList = false, linked = true } = {}) {
   const calls = []
   const ok = (body) => ({ ok: true, status: 200, json: async () => body })
   return {
     calls,
     fetch: async (url, init = {}) => {
       calls.push({ url, method: (init.method || 'GET').toUpperCase() })
-      if (url === WALLET_API) return ok(LINKED)
-      if (url === ADAPTERS_API) {
+      if (url === PROVIDERS_API) {
+        return ok({
+          providers: [
+            {
+              id: PROVIDER,
+              label: 'RunningHub',
+              linked,
+              writable: true,
+              source: linked ? 'file' : null,
+              account: linked ? { coins: 8600, money: 27.473, currency: 'USD', running: 0 } : null,
+              error: null,
+              accountUrl: ACCOUNT_URL,
+              workflows: units.length,
+            },
+          ],
+        })
+      }
+      if (url === providerUrl('workflows')) {
         return failList ? { ok: false, status: 500, json: async () => ({ error: 'unreadable' }) } : ok({ entries: units, skipped: [] })
       }
-      if (String(url).startsWith(ADAPTER_API)) {
+      if (String(url).startsWith(providerUrl('workflow'))) {
         const name = decodeURIComponent(String(url).split('name=')[1] || '')
         if (file && file.name === name) return ok(file)
         return { ok: false, status: 404, json: async () => ({ error: 'not-found' }) }
@@ -408,6 +424,55 @@ check(
   JSON.stringify(settingsSlots.map((slot) => slot.options.id)),
 )
 
+// ── the one settings page, listing providers ────────────────────────────────
+
+{
+  const settings = settingsSlots[0]
+  const stub = stubHost({ units: [KREA] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  let tree
+  try {
+    tree = await settle(settings.component, { t }, 'settings')
+  } finally {
+    globalThis.fetch = real
+  }
+  check(
+    'the one settings page draws a row per provider, with its own key state',
+    (() => {
+      const cards = nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-card'])
+      return cards.length === 1 && cards[0].props['data-generate-provider-card'] === PROVIDER && textIn(cards[0]).includes('RunningHub')
+    })(),
+    JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-provider-card']).map((node) => node.props['data-generate-provider-card'])),
+  )
+  check(
+    'a provider row carries its own key field, and the field is named per provider',
+    (() => {
+      const field = nodesOf(tree).find((node) => node.props && node.props.id === 'generate-key-' + PROVIDER)
+      return !!field && field.type === 'input'
+    })(),
+    JSON.stringify(nodesOf(tree).filter((node) => node.type === 'input').map((node) => node.props.id)),
+  )
+  check(
+    'a provider row says how many workflows it has installed',
+    (() => {
+      const line = byAttr(tree, 'data-generate-provider-workflows', PROVIDER)
+      return !!line && textIn(line).includes('1 ') && textIn(line).includes('workflow installed')
+    })(),
+    byAttr(tree, 'data-generate-provider-workflows', PROVIDER) ? textIn(byAttr(tree, 'data-generate-provider-workflows', PROVIDER)) : 'no count',
+  )
+  check(
+    'the remove control names the provider it would unlink',
+    !!byAttr(tree, 'data-generate-remove', PROVIDER),
+    JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-remove']).map((node) => node.props['data-generate-remove'])),
+  )
+  check(
+    'the page itself is one page, whatever the provider count',
+    settingsSlots.length === 1,
+    String(settingsSlots.length),
+  )
+}
+
 // ── the pane's first screen: cards ───────────────────────────────────────────
 
 async function pane(state, { params, key = 'pane' } = {}) {
@@ -430,7 +495,7 @@ async function pane(state, { params, key = 'pane' } = {}) {
 const home = await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })
 const empty = await pane({ units: [] }, { key: 'pane-empty' })
 const failed = await pane({ units: [], failList: true }, { key: 'pane-failed' })
-const opened = await pane({ units: [KREA], file: KREA_FILE }, { params: { unit: KREA.name }, key: 'pane-opened' })
+const opened = await pane({ units: [KREA], file: KREA_FILE }, { params: { unit: KREA.name, provider: PROVIDER }, key: 'pane-opened' })
 
 if (SHOW) {
   for (const [name, state] of [['home', home], ['empty', empty], ['failed', failed], ['opened', opened]]) {
@@ -463,13 +528,21 @@ check(
   byAttr(home.tree, 'data-generate-unit', KREA.name) ? textIn(byAttr(home.tree, 'data-generate-unit', KREA.name)) : 'no card',
 )
 check(
+  'a card says which provider it runs on, and from which provider the list came',
+  (() => {
+    const card = byAttr(home.tree, 'data-generate-unit', KREA.name)
+    return !!card && card.props['data-generate-provider'] === PROVIDER && textIn(card).includes('RunningHub')
+  })(),
+  byAttr(home.tree, 'data-generate-unit', KREA.name) ? textIn(byAttr(home.tree, 'data-generate-unit', KREA.name)) : 'no card',
+)
+check(
   'a community app says whose work it is',
   textIn(byAttr(home.tree, 'data-generate-unit', QWEN.name)).includes(EN['card.community']),
   textIn(byAttr(home.tree, 'data-generate-unit', QWEN.name)),
 )
 check(
   'the home screen asks the host for the list, once',
-  home.calls.filter((call) => call.url === ADAPTERS_API).length === 1,
+  home.calls.filter((call) => call.url === providerUrl('workflows')).length === 1,
   JSON.stringify(home.calls),
 )
 check(
@@ -499,7 +572,7 @@ check(
 )
 check(
   'the pane knows which unit it is from params.unit, the seam an opener uses',
-  opened.calls.some((call) => String(call.url).startsWith(ADAPTER_API + '?name=' + KREA.name)),
+  opened.calls.some((call) => String(call.url).startsWith(providerUrl('workflow') + '?name=' + KREA.name)),
   JSON.stringify(opened.calls.map((call) => call.url)),
 )
 check('the surface has a way back to the list', !!byAttr(opened.tree, 'data-generate-back', 'yes'))
@@ -578,7 +651,7 @@ check(
   const disclosure = byAttr(opened.tree, 'data-generate-advanced', 'closed')
   const before = rowsRendered(opened.tree).length
   if (disclosure) disclosure.props.onClick()
-  const after = await settle(paneSlot.component, { t, useTabInfo: () => ({ tab: { navigation: { params: { unit: KREA.name }, revision: 1 } } }) }, 'pane-opened')
+  const after = await settle(paneSlot.component, { t, useTabInfo: () => ({ tab: { navigation: { params: { unit: KREA.name, provider: PROVIDER }, revision: 1 } } }) }, 'pane-opened')
   check(
     'opening the disclosure adds the advanced doors, and they carry their own bounds',
     before === 4 && rowsRendered(after).length === 7,
@@ -740,7 +813,7 @@ try {
 
 // ── the install that is actually on this machine, when there is one ─────────
 
-const profile = join(homedir(), 'Library', 'Application Support', 'Mitsumeru', 'mitsu-dsh', 'profiles', 'mitsu', 'generate', 'adapters')
+const profile = join(homedir(), 'Library', 'Application Support', 'Mitsumeru', 'mitsu-dsh', 'profiles', 'mitsu', 'generate', PROVIDER, 'adapters')
 const installed = await listAdapters(profile).catch(() => null)
 if (installed === null || installed.entries.length === 0) {
   skip('the installed profile lists at least one workflow', 'nothing installed at ' + profile)

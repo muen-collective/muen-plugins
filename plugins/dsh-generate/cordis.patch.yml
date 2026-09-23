@@ -1,17 +1,19 @@
-# @muen/dsh-runninghub — bundle patch layer (Epic 61).
+# @muen/dsh-generate — bundle patch layer (Epic 61).
 #
-# One row: mount this package into the profile tree. The host half serves the wallet
-# routes (S2) and the workflow routes the pane reads (the installed list, and one
-# workflow by name); the client half registers the `generate` right-panel tab type,
-# its body and its chip, and the guide entry that puts the "Generate with
-# RunningHub" card on the right panel's start page. The card is the harness's own
-# standard card; the pane behind it is the hub that holds every workflow surface.
+# One row: mount this package into the profile tree. The host half serves the provider
+# routes — the list, each provider's key, and each provider's workflows — and the
+# client half registers the `generate` right-panel tab type, its body and its chip,
+# the guide entry that puts the "Generate with RunningHub" card on the right panel's
+# start page, and the ONE settings page that lists every provider. The card is the
+# harness's own standard card; the pane behind it is the hub that holds every
+# workflow surface.
 #
-# Row id `runninghub` is also the profile directory name the surface's own data
-# lives under (`<profile>/runninghub/`), so renaming the plugin again moves that
-# directory with it. The name is settled: `@muen/dsh-runninghub`, ratified
-# 2026-09-22 as epic 61 D10/Q4, so a RunningHub user can find it in the market.
-# The surface itself keeps the label "Generate".
+# Row id `generate` is also the profile directory name the surface's own data lives
+# under (`<profile>/generate/`), one directory per provider inside it
+# (`<profile>/generate/<provider>/adapters/<name>.json`) — so renaming the row again
+# moves the data with it. The name is provider-neutral on purpose: this plugin holds
+# RunningHub today, and Krea and Comfy Cloud as further providers (founder,
+# 2026-09-22). The surface keeps the label "Generate"; the card names the provider.
 - insert:
-    - id: runninghub
-      name: '@muen/dsh-runninghub'
+    - id: generate
+      name: '@muen/dsh-generate'

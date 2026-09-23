@@ -1,5 +1,5 @@
 /**
- * @muen/dsh-runninghub — host half (Epic 61, S1 + S2 + S3).
+ * @muen/dsh-generate — host half (Epic 61, S1 + S2 + S3).
  *
  * WHAT THIS IS: the wallet and the install. The pane never holds the RunningHub
  * key, so every conversation with RunningHub happens here, in the host process,
@@ -50,7 +50,7 @@
  * the guide card's flyout (S4). It reads one account, reads one app's doors, and
  * checks one adapter file.
  *
- * @module @muen/dsh-runninghub
+ * @module @muen/dsh-generate
  */
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -59,69 +59,21 @@ import { dirname } from 'node:path'
 
 import { parseAppRef, readAppDoors } from './doors.js'
 import { loadHouse } from './house.js'
-import { ADAPTER_SCHEMA, adapterFromDoors, listAdapters, readAdapter, validateAdapter } from './adapter.js'
-import { dataPaths, resolveDataRoot } from './paths.js'
+import { ADAPTER_SCHEMA, adapterFromDoors, validateAdapter } from './adapter.js'
+import { PROVIDERS, providerById, runninghub } from './providers.js'
+import { resolveDataRoot } from './paths.js'
 
 /** Matches the row id in cordis.patch.yml. */
-export const name = 'runninghub'
-
-/** The one wallet path. Distinct (kind, path) per route, so this cannot collide. */
-const WALLET_PATH = '/plugins/generate/wallet'
+export const name = 'generate'
 
 /**
- * The installed-workflow list, read by the pane's cards.
- *
- * A second route rather than a query on the wallet route: the wallet is one
- * account and the list is one directory, and a route that answered two unrelated
- * questions would have to be told apart by its caller.
+ * The provider routes. One exact path answers the list, and the prefix owns
+ * everything under `/providers/<id>/` — each provider's key and its workflows. A
+ * distinct (kind, path) per registration is what the web server requires, and these
+ * two are distinct.
  */
-const ADAPTERS_PATH = '/plugins/generate/adapters'
-
-/**
- * One workflow, whole.
- *
- * A third route and not a fatter list: a surface needs one file's doors, and a list
- * that carried every door of every workflow would send all of them to draw a screen
- * of titles. `?name=<adapter>` is checked against the file-name rule before it is
- * joined to a directory (see `readAdapter`).
- */
-const ADAPTER_PATH = '/plugins/generate/adapter'
-
-/**
- * The credential reference. A `CredentialRef` is the environment-variable-name
- * half of the credentials seam, so this string is also the name the founder may
- * already have set — which is the point (D1).
- */
-const KEY_REF = 'RH_API_KEY'
-
-const DEFAULT_BASE = 'https://www.runninghub.ai'
-const ACCOUNT_PATH = '/uc/openapi/accountStatus'
-
-/**
- * The account page that issues keys. The founder had to search the web for
- * "account API" and follow the API instructions to it (2026-09-22): nothing in
- * RunningHub's product links it obviously, and the docs link it only from inside
- * one article. So the pane links it directly rather than telling the user where
- * to look.
- *
- * **No `type` parameter, deliberately.** The page has three key types —
- * Enterprise-Shared, Consumer-Membership, Enterprise-Dedicated — and `type`
- * selects one. The founder's own URL carried `type=shared` (his first value,
- * `type=consumer`, was wrong), but pinning a type pins a *capability*: a
- * consumer-only account asking for `type=shared` is asking for a tab it may not
- * have. Checked live on the founder's account 2026-09-22: `?tab=keys` alone lands
- * on the right page, defaulting to Enterprise-Shared there, and the nav switches
- * types. The comparison table on that page is transcribed in epic 61 §9; the
- * short version is that a plain membership can call the AI App and ComfyUI
- * Workflow APIs this plugin uses, and only the Model API and LLM need an
- * enterprise key.
- *
- * One page, two jobs: the key list is there (`tab=keys`) and so is the billing
- * balance (`bill-task`). No separate billing deep link is published, and
- * inventing one would be worse than landing the user on the page that has both.
- */
-const ACCOUNT_URL = 'https://www.runninghub.ai/call-api/bill-task?tab=keys'
-
+const PROVIDERS_PATH = '/plugins/generate/providers'
+const PROVIDERS_PREFIX = '/plugins/generate/providers/'
 const TIMEOUT_MS = 15000
 
 /** Refuse a body past this — a key is tens of bytes, and the route is reachable. */
@@ -139,72 +91,29 @@ const SKILL_WHEN_TO_USE =
   'Use when the user wants to add, install or register a RunningHub workflow or AI App (they give a runninghub.ai app link or an app id), or says "add workflow".'
 const SKILL_FILE = fileURLToPath(new URL('../skills/add-rh-workflow/SKILL.md', import.meta.url))
 
-/** The docs type these as strings; the surface wants numbers where they parse. */
-function num(value) {
-  if (value === undefined || value === null || value === '') return null
-  const parsed = typeof value === 'number' ? value : Number(String(value).trim())
-  return Number.isFinite(parsed) ? parsed : null
-}
-
 function str(value) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
 /**
- * The account as RunningHub reports it. Field names are the API's, values are
- * normalized, and nothing else from the response is kept.
- * @see https://www.runninghub.ai/runninghub-api-doc-en/api-425761030
- */
-function accountOf(data) {
-  const raw = data && typeof data === 'object' ? data : {}
-  return {
-    coins: num(raw.remainCoins),
-    money: num(raw.remainMoney),
-    currency: str(raw.currency),
-    running: num(raw.currentTaskCounts),
-    apiType: str(raw.apiType),
-  }
-}
-
-/**
- * One account read. Outcomes are kept apart on purpose:
+ * The user's key for one provider, resolved for a read.
  *
- *   { account }                 the key works
- *   { error: 'invalid-key' }    RunningHub answered and said no
- *   { error: 'unreachable' | 'timeout' | 'unexpected-response' | 'http-<n>' }
- *                               no answer, or one this code cannot read
- *
- * A network failure never masquerades as a bad key, and a bad key is never
- * blamed on the network: the surface can say which one happened.
+ * Kept apart from the route's status read so a missing key is one outcome rather than
+ * an exception three calls deep, and so the two agent-facing tools (which read the
+ * live app) ask for it the same way the routes do.
  */
-async function readAccount(base, key) {
-  let response
+async function resolveKey(ctx, provider) {
+  const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
+  if (!credentials) return { error: 'no-credentials' }
   try {
-    response = await fetch(base + ACCOUNT_PATH, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({ apikey: key }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    })
-  } catch (error) {
-    const kind = error && error.name
-    return { error: kind === 'TimeoutError' || kind === 'AbortError' ? 'timeout' : 'unreachable' }
-  }
-  let payload = null
-  try {
-    payload = JSON.parse(await response.text())
+    const info = await credentials.describe(provider.keyRef)
+    if (!info || !info.configured) return { error: 'no-key' }
+    const resolved = await credentials.resolve(provider.keyRef)
+    if (!resolved || !resolved.value) return { error: 'no-key' }
+    return { key: resolved.value, source: str(info.source) || str(resolved.source) || null }
   } catch {
-    payload = null
+    return { error: 'credentials-unavailable' }
   }
-  if (payload === null || typeof payload.code !== 'number') {
-    return { error: response.ok ? 'unexpected-response' : 'http-' + response.status }
-  }
-  if (payload.code !== 0) return { error: 'invalid-key' }
-  return { account: accountOf(payload.data) }
 }
 
 /** JSON out, never cached, never carrying a secret. */
@@ -249,65 +158,6 @@ function readJsonBody(req) {
   })
 }
 
-/**
- * The wallet as the pane is allowed to see it. `linked` is a fact about the
- * seam; `source` is where the value came from, so a key inherited from the
- * environment is visible as such rather than looking like one pasted here.
- */
-async function status(ctx, base) {
-  const empty = { linked: false, writable: false, source: null, account: null, error: null, accountUrl: ACCOUNT_URL }
-  const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
-  if (!credentials) return { ...empty, error: 'no-credentials' }
-
-  let info
-  try {
-    info = await credentials.describe(KEY_REF)
-  } catch {
-    return { ...empty, error: 'credentials-unavailable' }
-  }
-  if (!info || !info.configured) {
-    return { ...empty, writable: !!(info && info.writable) }
-  }
-
-  let resolved
-  try {
-    resolved = await credentials.resolve(KEY_REF)
-  } catch {
-    return { ...empty, writable: !!info.writable, error: 'credentials-unavailable' }
-  }
-  if (!resolved || !resolved.value) {
-    return { ...empty, writable: !!info.writable }
-  }
-
-  const probe = await readAccount(base, resolved.value)
-  return {
-    linked: true,
-    writable: !!info.writable,
-    source: str(info.source) || str(resolved.source) || null,
-    account: probe.account || null,
-    error: probe.error || null,
-    accountUrl: ACCOUNT_URL,
-  }
-}
-
-/**
- * The user's key, resolved for a read. Kept apart from the wallet's own read so a
- * missing key is one outcome rather than an exception three calls deep.
- */
-async function resolveKey(ctx) {
-  const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
-  if (!credentials) return { error: 'no-credentials' }
-  try {
-    const info = await credentials.describe(KEY_REF)
-    if (!info || !info.configured) return { error: 'no-key' }
-    const resolved = await credentials.resolve(KEY_REF)
-    if (!resolved || !resolved.value) return { error: 'no-key' }
-    return { key: resolved.value, source: str(info.source) || str(resolved.source) || null }
-  } catch {
-    return { error: 'credentials-unavailable' }
-  }
-}
-
 /** One text block, the shape every tool render returns. */
 function text(value) {
   return [{ type: 'text', text: String(value) }]
@@ -322,7 +172,7 @@ function line(parts) {
 function rootNote(root) {
   if (root.kind === 'override') return 'adapters directory pinned by RH_DATA_DIR'
   if (root.kind === 'profile') return 'adapters directory is inside profile "' + root.profile + '"'
-  return 'no --profile was found in this process, so the adapters directory is $DSH_HOME/runninghub'
+  return 'no --profile was found in this process, so the adapters directory is $DSH_HOME/generate'
 }
 
 /**
@@ -379,7 +229,7 @@ function mountTools(ctx, { base, paths, root }) {
                   : 'that does not look like a RunningHub app link or id; ask for it again',
             }
           }
-          const key = await resolveKey(ctx)
+          const key = await resolveKey(ctx, runninghub)
           if (key.error) {
             return {
               ok: false,
@@ -440,7 +290,7 @@ function mountTools(ctx, { base, paths, root }) {
           }
         },
       }),
-    'runninghub: tool ' + TOOL_GRAPH,
+    'generate: tool ' + TOOL_GRAPH,
   )
 
   ctx.effect(
@@ -497,7 +347,7 @@ function mountTools(ctx, { base, paths, root }) {
               problems: [{ code: 'source', detail: 'the adapter declares no source.appId, so there is no app to check it against' }],
             }
           }
-          const key = await resolveKey(ctx)
+          const key = await resolveKey(ctx, runninghub)
           if (key.error) return { ok: false, error: key.error, detail: 'the key could not be read, so nothing can be checked against the live app' }
 
           const loaded = await loadHouse(paths.house)
@@ -523,7 +373,7 @@ function mountTools(ctx, { base, paths, root }) {
           }
         },
       }),
-    'runninghub: tool ' + TOOL_VALIDATE,
+    'generate: tool ' + TOOL_VALIDATE,
   )
 
   return true
@@ -546,7 +396,7 @@ function mountSkill(ctx) {
     content = readFileSync(SKILL_FILE, 'utf8')
   } catch (error) {
     if (ctx.logger && typeof ctx.logger.warn === 'function') {
-      ctx.logger.warn('runninghub: the skill file could not be read at ' + SKILL_FILE + ': ' + String((error && error.message) || error))
+      ctx.logger.warn('generate: the skill file could not be read at ' + SKILL_FILE + ': ' + String((error && error.message) || error))
     }
     return false
   }
@@ -563,33 +413,92 @@ function mountSkill(ctx) {
         resourceBase: { kind: 'directory', path: dirname(SKILL_FILE) },
         content,
       }),
-    'runninghub: skill ' + SKILL_NAME,
+    'generate: skill ' + SKILL_NAME,
   )
   return true
 }
 
 /**
- * Mount the wallet routes.
+ * Mount the provider routes.
  *
- * `credentials` is read per request rather than captured, which is what the seam
- * asks for: resolution is per call, so a credential changed elsewhere reaches the
- * next request without a restart.
+ * ONE ROUTER, ONE PREFIX. The plugin owns `/plugins/generate/` and answers everything
+ * under `/plugins/generate/providers/`: the provider list, each provider's key, and
+ * each provider's workflows. A route per provider per action would have been three
+ * registrations per provider; a prefix route keeps the surface's own namespace ours
+ * and puts the provider id in the path, which is where a reader expects it.
+ *
+ * `credentials` is read per request rather than captured, which is what the seam asks
+ * for: resolution is per call, so a credential changed elsewhere reaches the next
+ * request without a restart of the plugin.
  */
 export function apply(ctx, config = {}) {
-  const base = str(config.base) || str(process.env.RH_BASE) || DEFAULT_BASE
+  const base = str(config.base) || str(process.env.RH_BASE) || null
 
-  // Resolved before the routes mount, because the adapters route answers from this
-  // directory and the tools below report the same resolution (§4: one root, said
+  // Resolved before the routes mount, because the provider routes answer from these
+  // directories and the tools below report the same resolution (§4: one root, said
   // out loud once).
   const root = resolveDataRoot()
-  const paths = dataPaths(root.root)
 
-  const wallet = async (req, res) => {
+  /** The key state of one provider: the wallet the pane and Settings both read. */
+  const keyStatus = async (provider) => {
+    const empty = { id: provider.id, label: provider.label, linked: false, writable: false, source: null, account: null, error: null, accountUrl: provider.accountUrl }
+    const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
+    if (!credentials) return { ...empty, error: 'no-credentials' }
+
+    let info
+    try {
+      info = await credentials.describe(provider.keyRef)
+    } catch {
+      return { ...empty, error: 'credentials-unavailable' }
+    }
+    if (!info || !info.configured) return { ...empty, writable: !!info.writable }
+
+    let resolved
+    try {
+      resolved = await credentials.resolve(provider.keyRef)
+    } catch {
+      return { ...empty, writable: !!info.writable, error: 'credentials-unavailable' }
+    }
+    if (!resolved || !resolved.value) return { ...empty, writable: !!info.writable }
+
+    const probe = await provider.account({ base: base || provider.base, key: resolved.value })
+    return {
+      ...empty,
+      linked: true,
+      writable: !!info.writable,
+      source: str(info.source) || str(resolved.source) || null,
+      account: probe.account || null,
+      error: probe.error || null,
+    }
+  }
+
+  /** Every provider, with its key state and how many workflows it has installed. */
+  const providerList = async () => {
+    const rows = []
+    for (const provider of PROVIDERS) {
+      const status = await keyStatus(provider)
+      const paths = provider.data(root.root)
+      let workflows = 0
+      try {
+        const listed = await provider.listWorkflows({ dir: paths.adapters })
+        workflows = listed.entries.length
+      } catch {
+        // A provider whose directory cannot be read is still a provider: the key
+        // state is what this route is for, and the workflow count is a courtesy.
+        workflows = null
+      }
+      rows.push({ ...status, workflows })
+    }
+    return { providers: rows }
+  }
+
+  /** One provider's key: read, link, or remove. The wallet route, per provider. */
+  const providerKey = async (provider, req, res) => {
     const method = (req.method || 'GET').toUpperCase()
     const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
 
     if (method === 'GET') {
-      send(res, 200, await status(ctx, base))
+      send(res, 200, await keyStatus(provider))
       return
     }
 
@@ -604,17 +513,19 @@ export function apply(ctx, config = {}) {
         send(res, 400, { error: 'key-required' })
         return
       }
-      const probe = await readAccount(base, key)
+      const probe = await provider.account({ base: base || provider.base, key })
       if (!probe.account) {
-        // Nothing is stored on a rejected key: an unvalidated secret is worse
-        // than no secret.
+        // Nothing is stored on a rejected key: an unvalidated secret is worse than
+        // no secret.
         send(res, probe.error === 'invalid-key' ? 400 : 502, {
+          id: provider.id,
+          label: provider.label,
           linked: false,
           writable: true,
           source: null,
           account: null,
           error: probe.error,
-          accountUrl: ACCOUNT_URL,
+          accountUrl: provider.accountUrl,
         })
         return
       }
@@ -623,32 +534,36 @@ export function apply(ctx, config = {}) {
         return
       }
       try {
-        await credentials.set(KEY_REF, key)
+        await credentials.set(provider.keyRef, key)
       } catch (error) {
         // The seam refuses while a read-only source shadows the reference. Say
         // which, because "the key did not change" is otherwise unexplainable.
         send(res, 409, {
+          id: provider.id,
+          label: provider.label,
           linked: true,
           writable: false,
           source: null,
           account: probe.account,
           error: 'read-only',
           detail: String((error && error.message) || error),
-          accountUrl: ACCOUNT_URL,
+          accountUrl: provider.accountUrl,
         })
         return
       }
       send(res, 200, {
+        id: provider.id,
+        label: provider.label,
         linked: true,
         writable: true,
         // The seam's own word for the value it manages: a `credentials` read after
-        // this save reports `file`, and the surface's note is keyed on that. It
-        // said `store` here until 2026-09-22, which no read ever confirms — the
-        // strip then called a pasted key "from your environment".
+        // this save reports `file`, and the surface's note is keyed on that. It said
+        // `store` here until 2026-09-22, which no read ever confirms — the strip then
+        // called a pasted key "from your environment".
         source: 'file',
         account: probe.account,
         error: null,
-        accountUrl: ACCOUNT_URL,
+        accountUrl: provider.accountUrl,
       })
       return
     }
@@ -659,20 +574,22 @@ export function apply(ctx, config = {}) {
         return
       }
       try {
-        await credentials.unset(KEY_REF)
+        await credentials.unset(provider.keyRef)
       } catch (error) {
         send(res, 409, {
+          id: provider.id,
+          label: provider.label,
           linked: true,
           writable: false,
           source: null,
           account: null,
           error: 'read-only',
           detail: String((error && error.message) || error),
-          accountUrl: ACCOUNT_URL,
+          accountUrl: provider.accountUrl,
         })
         return
       }
-      send(res, 200, await status(ctx, base))
+      send(res, 200, await keyStatus(provider))
       return
     }
 
@@ -680,17 +597,14 @@ export function apply(ctx, config = {}) {
   }
 
   /**
-   * The installed list. A read of one directory, so it needs no key, no network
-   * and no wallet — the card draws on a fresh install, before anything is linked
-   * (§10: the card ships with no apps, and that empty state is correct).
+   * One provider's workflows: the list the pane's cards are drawn from.
+   *
+   * A read of one directory, so it needs no key, no network and no account — the
+   * cards draw on a fresh install, before anything is linked.
    */
-  const adapters = async (req, res) => {
-    if ((req.method || 'GET').toUpperCase() !== 'GET') {
-      methodNotAllowed(res, 'GET')
-      return
-    }
+  const providerWorkflows = async (provider, res) => {
     try {
-      send(res, 200, await listAdapters(paths.adapters))
+      send(res, 200, await provider.listWorkflows({ dir: provider.data(root.root).adapters }))
     } catch (error) {
       // The directory exists but cannot be read: a permission or a filesystem
       // problem, not an empty install, and the two must not look alike.
@@ -706,13 +620,8 @@ export function apply(ctx, config = {}) {
    * mistake, a missing file is an empty slot, and a file that is not a listable
    * adapter is neither.
    */
-  const adapter = async (req, res) => {
-    if ((req.method || 'GET').toUpperCase() !== 'GET') {
-      methodNotAllowed(res, 'GET')
-      return
-    }
-    const url = new URL(req.url || '/', 'http://127.0.0.1')
-    const read = await readAdapter(paths.adapters, url.searchParams.get('name'))
+  const providerWorkflow = async (provider, url, res) => {
+    const read = await provider.readWorkflow({ dir: provider.data(root.root).adapters, name: url.searchParams.get('name') })
     if (read.error) {
       const status = read.error === 'not-found' ? 404 : read.error === 'bad-name' ? 400 : 500
       send(res, status, { error: read.error, detail: read.detail || null })
@@ -721,11 +630,59 @@ export function apply(ctx, config = {}) {
     send(res, 200, read.adapter)
   }
 
+  /** `/providers/<id>/<action>`, with the provider resolved before any work happens. */
+  const route = async (req, res) => {
+    const url = new URL(req.url || '/', 'http://127.0.0.1')
+    const tail = url.pathname.slice(PROVIDERS_PREFIX.length)
+    const [id, action] = tail.split('/')
+
+    if (action === undefined || action === '') {
+      // The bare `/providers/` answers the same list as the exact route, so a caller
+      // that adds the slash is not punished for it.
+      send(res, 200, await providerList())
+      return
+    }
+
+    const provider = providerById(id)
+    if (!provider) {
+      send(res, 404, { error: 'unknown-provider', detail: 'no provider is registered as "' + String(id) + '"' })
+      return
+    }
+
+    if (action === 'key') {
+      await providerKey(provider, req, res)
+      return
+    }
+
+    const method = (req.method || 'GET').toUpperCase()
+    if (method !== 'GET') {
+      methodNotAllowed(res, 'GET')
+      return
+    }
+    if (action === 'workflows') {
+      await providerWorkflows(provider, res)
+      return
+    }
+    if (action === 'workflow') {
+      await providerWorkflow(provider, url, res)
+      return
+    }
+
+    send(res, 404, { error: 'unknown-action', detail: '"' + String(action) + '" is not a provider route' })
+  }
+
+  const list = async (req, res) => {
+    if ((req.method || 'GET').toUpperCase() !== 'GET') {
+      methodNotAllowed(res, 'GET')
+      return
+    }
+    send(res, 200, await providerList())
+  }
+
   const mount = (server) => {
     if (!server || typeof server.register !== 'function') return
-    ctx.effect(() => server.register({ kind: 'exact', path: WALLET_PATH, handler: wallet }), 'runninghub: wallet')
-    ctx.effect(() => server.register({ kind: 'exact', path: ADAPTERS_PATH, handler: adapters }), 'runninghub: adapters')
-    ctx.effect(() => server.register({ kind: 'exact', path: ADAPTER_PATH, handler: adapter }), 'runninghub: adapter')
+    ctx.effect(() => server.register({ kind: 'exact', path: PROVIDERS_PATH, handler: list }), 'generate: providers')
+    ctx.effect(() => server.register({ kind: 'prefix', path: PROVIDERS_PREFIX, handler: route }), 'generate: provider routes')
   }
 
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined
@@ -739,7 +696,7 @@ export function apply(ctx, config = {}) {
   }
 
   // S3: the install. Both registrations are optional in the same way the web server
-  // is — a profile without the tools or skills service still gets the wallet, and a
+  // is — a profile without the tools or skills service still gets the routes, and a
   // missing registration is reported rather than thrown.
   const mountOptional = (name, register) => {
     if (register()) return
@@ -750,6 +707,6 @@ export function apply(ctx, config = {}) {
       // The service never arrives in this profile. Nothing to report to a page.
     }
   }
-  mountOptional('tools', () => mountTools(ctx, { base, paths, root }))
+  mountOptional('tools', () => mountTools(ctx, { base: base || runninghub.base, paths: runninghub.data(root.root), root }))
   mountOptional('skills', () => mountSkill(ctx))
 }

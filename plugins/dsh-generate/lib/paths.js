@@ -2,9 +2,11 @@
  * Where the surface's own data lives.
  *
  * Epic 61 D2 puts an adapter in the profile, not in a repo and not in a database:
- * `<profile>/runninghub/adapters/<name>.json`. The directory is named after the
- * cordis row id (`runninghub`), which is why the rename from `generate-space` had
- * to happen before S3 wrote anything (D10/Q4).
+ * `<profile>/generate/<provider>/adapters/<name>.json`. The directory is named after
+ * the cordis row id (`generate`), and inside it one directory per provider: the
+ * plugin is provider-neutral (founder, 2026-09-22), so the row id must not name a
+ * provider, and each provider's own data (its adapters, later its uploads) stays
+ * together under its own name.
  *
  * THE HARNESS EXPOSES NO "PROFILE DIRECTORY" SERVICE, so this is resolved from two
  * facts that are already in the process:
@@ -23,13 +25,13 @@
  * is the writer's act, and in S3 the only writer is the agent, through its own file
  * tools, after the user has confirmed the door list.
  *
- * @module @muen/dsh-runninghub/lib/paths
+ * @module @muen/dsh-generate/lib/paths
  */
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 /** The row id, which is also the profile directory name. Matches cordis.patch.yml. */
-export const ROW_ID = 'runninghub'
+export const ROW_ID = 'generate'
 
 /**
  * The profile name in `argv`, or null.
@@ -78,11 +80,22 @@ export function resolveDataRoot({ argv = process.argv, env = process.env } = {})
   return { root: join(dshHome(env), ROW_ID), kind: 'home', profile: null }
 }
 
-/** The adapters directory, and the house-style file, under one root. */
-export function dataPaths(root) {
+/**
+ * One provider's data, under the plugin's root: its adapters directory and its
+ * house-style file.
+ *
+ * THE PROVIDER IS REQUIRED, not optional. A default of "the root itself" would let a
+ * caller read every provider's adapters as if they were one provider's — which is
+ * exactly the confusion the per-provider directory exists to prevent.
+ *
+ * @param {string} root - the plugin's own root (`<profile>/generate`)
+ * @param {string} providerId - the provider's id, which is also its directory name
+ */
+export function dataPaths(root, providerId) {
+  const own = join(root, providerId)
   return {
-    root,
-    adapters: join(root, 'adapters'),
-    house: join(root, '_house.json'),
+    root: own,
+    adapters: join(own, 'adapters'),
+    house: join(own, '_house.json'),
   }
 }

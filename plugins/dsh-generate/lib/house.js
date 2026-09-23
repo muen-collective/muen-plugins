@@ -19,7 +19,7 @@
  * first photographer who installs it, and the default is the one artefact every
  * stranger reads.
  *
- * @module @muen/dsh-runninghub/lib/house
+ * @module @muen/dsh-generate/lib/house
  */
 import { readFile } from 'node:fs/promises'
 

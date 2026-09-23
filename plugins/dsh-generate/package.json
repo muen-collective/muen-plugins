@@ -1,12 +1,12 @@
 {
-  "name": "@muen/dsh-runninghub",
+  "name": "@muen/dsh-generate",
   "version": "0.1.0-dev",
-  "description": "The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a workflow by pasting its app link, and open each installed workflow as a surface inside the one Generate pane. Epic 61 — S1–S2 accepted; S3 is the install flow (rh_workflow_graph, rh_adapter_validate, the add-rh-workflow skill); the pane is the hub, with a card per workflow and its doors as controls; the payload gate and the run (S5), and the pane's one-field install form, are still owed.",
+  "description": "The Generate space for DeepSeek Harness: one provider-neutral plugin that holds several providers (RunningHub today; Krea and Comfy Cloud later), each with its own key and its own workflows, all opened as surfaces inside the one Generate pane. Epic 61 — the install flow, the provider registry, the one settings page and the pane as a hub are built; the payload gate and the run (S5), and the pane's one-field install form, are still owed.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/muen-collective/muen-plugins",
-    "directory": "plugins/dsh-runninghub"
+    "directory": "plugins/dsh-generate"
   },
   "type": "module",
   "main": "lib/index.js",

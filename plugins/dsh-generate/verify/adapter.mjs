@@ -241,7 +241,7 @@ const GRAPH = 'rh_workflow_graph'
 const VALIDATE = 'rh_adapter_validate'
 
 const tmp = mkdtempSync(join(tmpdir(), 'rh-adapter-'))
-const dataRoot = join(tmp, 'runninghub')
+const dataRoot = join(tmp, 'generate')
 process.env.RH_DATA_DIR = dataRoot
 process.env.DSH_HOME = join(tmp, 'dsh-home')
 
@@ -384,7 +384,7 @@ check('the tool hands back a starter adapter with the app\'s own numbers', (() =
   return read.adapter.schema === ADAPTER_SCHEMA && door.nodeId === '951' && door.type === 'text' && door.multiline === true
 })(), JSON.stringify(read.adapter.doors))
 check('the starter adapter leaves the origin unset, because the API cannot know it', read.adapter.origin === '')
-check('the tool says where the adapter file goes', typeof read.adaptersDir === 'string' && read.adaptersDir.endsWith(join('runninghub', 'adapters')), read.adaptersDir)
+check('the tool says where the adapter file goes', typeof read.adaptersDir === 'string' && read.adaptersDir.endsWith(join('generate', 'runninghub', 'adapters')), read.adaptersDir)
 check('the tool says which rule resolved that directory', typeof read.rootKind === 'string' && read.notes.some((note) => note.includes('adapters directory')))
 check('the tool tells the agent to write nothing before the confirmation', read.notes.some((note) => note.includes('write nothing until the user confirms')))
 check('the key never appears in the tool result', !JSON.stringify(read).includes(SECRET))
@@ -551,13 +551,13 @@ check('a missing adapter file is reported as unreadable', missingFile.error === 
 // ── 7. nothing was written ───────────────────────────────────────────────────
 
 check('no tool created the data directory or a file in it', !existsSync(dataRoot), dataRoot)
-check('the adapters directory the tool reports is the profile-relative one', read.adaptersDir === dataPaths(dataRoot).adapters)
+check('the adapters directory the tool reports is the provider-relative one', read.adaptersDir === dataPaths(dataRoot, 'runninghub').adapters)
 
 // ── 8. the data root, from argv and the environment ──────────────────────────
 
 check('a profile in argv resolves inside that profile', (() => {
   const root = resolveDataRoot({ argv: ['node', 'dsh', '--profile', 'mitsu', 'web'], env: { DSH_HOME: '/home/x/.dsh' } })
-  return root.kind === 'profile' && root.profile === 'mitsu' && root.root === join('/home/x/.dsh', 'profiles', 'mitsu', 'runninghub')
+  return root.kind === 'profile' && root.profile === 'mitsu' && root.root === join('/home/x/.dsh', 'profiles', 'mitsu', 'generate')
 })(), JSON.stringify(resolveDataRoot({ argv: ['node', 'dsh', '--profile', 'mitsu', 'web'], env: { DSH_HOME: '/home/x/.dsh' } })))
 check('the --profile=name spelling resolves the same way', (() => {
   const root = resolveDataRoot({ argv: ['--profile=mitsu'], env: { DSH_HOME: '/home/x/.dsh' } })
@@ -569,11 +569,11 @@ check('RH_DATA_DIR overrides everything', (() => {
 })())
 check('with no profile anywhere the root falls back to the home, and says so', (() => {
   const root = resolveDataRoot({ argv: ['node', 'dsh', 'web'], env: { DSH_HOME: '/home/x/.dsh' } })
-  return root.kind === 'home' && root.profile === null && root.root === join('/home/x/.dsh', 'runninghub')
+  return root.kind === 'home' && root.profile === null && root.root === join('/home/x/.dsh', 'generate')
 })())
 check('the default DSH home is used when the environment has none', (() => {
   const root = resolveDataRoot({ argv: ['--profile', 'mitsu'], env: {} })
-  return root.root.endsWith(join('.dsh', 'profiles', 'mitsu', 'runninghub'))
+  return root.root.endsWith(join('.dsh', 'profiles', 'mitsu', 'generate'))
 })(), resolveDataRoot({ argv: ['--profile', 'mitsu'], env: {} }).root)
 
 // ── 9. the optional services ─────────────────────────────────────────────────

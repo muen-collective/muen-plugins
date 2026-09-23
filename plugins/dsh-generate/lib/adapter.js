@@ -24,7 +24,7 @@
  * no submit) and reports; the writer is the agent, through its own file tools,
  * after the user has confirmed the door list.
  *
- * @module @muen/dsh-runninghub/lib/adapter
+ * @module @muen/dsh-generate/lib/adapter
  */
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'

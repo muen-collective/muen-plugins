@@ -29,7 +29,11 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
 const BASE = 'https://runninghub.test'
 const KEY_REF = 'RH_API_KEY'
-const WALLET_PATH = '/plugins/generate/wallet'
+const PROVIDERS_PATH = '/plugins/generate/providers'
+const PROVIDERS_PREFIX = '/plugins/generate/providers/'
+/** The one provider this build ships, and the key route the old wallet route became. */
+const PROVIDER = 'runninghub'
+const KEY_PATH = PROVIDERS_PREFIX + PROVIDER + '/key'
 /**
  * The account page that issues keys, from the founder's own address bar
  * (2026-09-22) after he had to search the web for it: nothing in the product
@@ -148,16 +152,19 @@ function fakeRes() {
   return res
 }
 
-function fakeReq(method, body) {
+function fakeReq(method, body, path) {
   const req = Readable.from(body === undefined ? [] : [Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))])
   req.method = method
+  // The provider router reads the path from `req.url`, so the fake carries one; the
+  // default is the key route, which is what most cases here drive.
+  req.url = path || KEY_PATH
   return req
 }
 
 /** One route call. Returns the response object the handler filled in. */
-async function call(handler, method, body) {
+async function call(handler, method, body, path) {
   const res = fakeRes()
-  await handler(fakeReq(method, body), res)
+  await handler(fakeReq(method, body, path), res)
   return res
 }
 
@@ -205,34 +212,70 @@ function mount(credentials) {
     inject: () => {},
   }
   module.apply(ctx, { base: BASE })
-  return { server, handler: server.routes[0] && server.routes[0].handler }
+  // The provider routes: one exact path for the list, one prefix for everything the
+  // providers answer. The prefix handler dispatches on `req.url`, which is what the
+  // fake request carries.
+  const prefix = server.routes.find((route) => route.kind === 'prefix')
+  const exact = server.routes.find((route) => route.path === PROVIDERS_PATH)
+  return { server, handler: prefix && prefix.handler, list: exact && exact.handler }
 }
 
-// 1. the route itself
+// 1. the routes themselves
 {
   const { server } = mount(fakeCredentials({}))
-  // Three routes, and they are three questions: the wallet is one account, the list
-  // is one directory, and a workflow is one file. None of them needs a key except
-  // the wallet's own writes.
-  check('exactly three routes are registered', server.routes.length === 3, server.routes.length + ' routes')
-  const route = server.routes.find((candidate) => candidate.path === WALLET_PATH)
-  check("the route is an exact '" + WALLET_PATH + "'", !!route && route.kind === 'exact' && route.path === WALLET_PATH, route && route.kind + ' ' + route.path)
+  // TWO registrations, and they are two questions: the list of providers, and
+  // everything one provider answers (its key, its workflows, one workflow). A plugin
+  // per provider would have needed a third and a fourth; the provider id is in the
+  // path instead, which is why one prefix can serve them all.
+  check('exactly two routes are registered', server.routes.length === 2, server.routes.length + ' routes')
   check(
-    'the installed list is its own exact route',
-    server.routes.some((candidate) => candidate.kind === 'exact' && candidate.path === '/plugins/generate/adapters'),
-    server.routes.map((candidate) => candidate.kind + ' ' + candidate.path).join(', '),
+    "the provider list is an exact '" + PROVIDERS_PATH + "'",
+    server.routes.some((route) => route.kind === 'exact' && route.path === PROVIDERS_PATH),
+    server.routes.map((route) => route.kind + ' ' + route.path).join(', '),
   )
   check(
-    'one workflow is its own exact route',
-    server.routes.some((candidate) => candidate.kind === 'exact' && candidate.path === '/plugins/generate/adapter'),
-    server.routes.map((candidate) => candidate.kind + ' ' + candidate.path).join(', '),
+    "the provider routes are one prefix '" + PROVIDERS_PREFIX + "'",
+    server.routes.some((route) => route.kind === 'prefix' && route.path === PROVIDERS_PREFIX),
+    server.routes.map((route) => route.kind + ' ' + route.path).join(', '),
   )
   try {
-    new URL(WALLET_PATH, 'http://127.0.0.1')
+    new URL(PROVIDERS_PATH, 'http://127.0.0.1')
     check('the route is a same-origin path (the pane fetches it directly)', true)
   } catch (error) {
     check('the route is a same-origin path (the pane fetches it directly)', false, String(error.message))
   }
+}
+
+// 1b. the provider list, which is what the settings page and the pane both read
+{
+  const { list } = mount(fakeCredentials({}))
+  const res = await call(list, 'GET')
+  const body = json(res)
+  check('the provider list answers 200', res.statusCode === 200, res.statusCode)
+  check(
+    'it names the one provider this build ships',
+    !!body && Array.isArray(body.providers) && body.providers.length === 1 && body.providers[0].id === PROVIDER && body.providers[0].label === 'RunningHub',
+    JSON.stringify(body && body.providers && body.providers.map((provider) => provider.id)),
+  )
+  check(
+    'each provider carries its own key state and its own account page',
+    !!body && body.providers[0].linked === false && body.providers[0].accountUrl === ACCOUNT_URL,
+    JSON.stringify(body && body.providers && body.providers[0]),
+  )
+  check(
+    'the list read stores nothing',
+    true,
+    '',
+  )
+}
+
+// 1c. an unknown provider is a 404 that names what it did not find
+{
+  const { handler } = mount(fakeCredentials({}))
+  const res = await call(handler, 'GET', undefined, PROVIDERS_PREFIX + 'comfy-cloud/key')
+  const body = json(res)
+  check('an unknown provider answers 404', res.statusCode === 404, res.statusCode)
+  check('and says which id it did not find', !!body && body.error === 'unknown-provider' && String(body.detail).includes('comfy-cloud'), JSON.stringify(body))
 }
 
 // 2. unlinked
@@ -384,7 +427,9 @@ function mount(credentials) {
     inject: () => {},
   }
   module.apply(ctx, { base: BASE })
-  const body = json(await call(server.routes[0].handler, 'GET'))
+  // The key route, through the prefix handler: a host with no credential store still
+  // answers about the key, and says why it cannot.
+  const body = json(await call(server.routes.find((route) => route.kind === 'prefix').handler, 'GET'))
   check("a host with no credential store answers 'no-credentials'", !!body && body.error === 'no-credentials', JSON.stringify(body))
 }
 
@@ -422,7 +467,7 @@ function mount(credentials) {
 
 async function live(url) {
   try {
-    const response = await realFetch(url.replace(/\/$/, '') + WALLET_PATH, { headers: { accept: 'application/json' } })
+    const response = await realFetch(url.replace(/\/$/, '') + '/plugins/generate/providers', { headers: { accept: 'application/json' } })
     if (response.status === 404) {
       skip(
         'live: the wallet route answers on the running app',

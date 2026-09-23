@@ -33,7 +33,7 @@ import vm from 'node:vm'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
-const PKG_NAME = '@muen/dsh-runninghub'
+const PKG_NAME = '@muen/dsh-generate'
 const NS = 'generate'
 const argv = process.argv.slice(2)
 /** `--show` prints the dialog's own lines, in order, without restarting the app. */
@@ -334,6 +334,16 @@ function recordingCtx(locale = 'en') {
 // ── the stubbed wallet route ─────────────────────────────────────────────────
 
 const ACCOUNT_URL = 'https://www.runninghub.ai/call-api/bill-task?tab=keys'
+const PROVIDER = 'runninghub'
+const PROVIDERS_API = '/plugins/generate/providers'
+const KEY_PATH = PROVIDERS_API + '/' + PROVIDER + '/key'
+const WORKFLOWS_PATH = PROVIDERS_API + '/' + PROVIDER + '/workflows'
+
+/** One provider row, as the host builds it: key state plus what it has installed. */
+const row = (status) => ({ id: PROVIDER, label: 'RunningHub', workflows: 0, ...status })
+/** The list route's body: the one provider this build ships. */
+const list = (status) => ({ providers: [row(status)] })
+
 const UNLINKED = { linked: false, writable: true, source: null, account: null, error: null, accountUrl: ACCOUNT_URL }
 // `source: 'file'` is the seam's own word for the store it manages, which is what
 // the live route reports after a paste (read from the running app 2026-09-22).
@@ -362,8 +372,8 @@ function stubFetch(routes) {
   }
 }
 
-/** What the installed-workflow list answers when a case is about the wallet. */
-const NO_WORKFLOWS = { method: 'GET', url: '/plugins/generate/adapters', body: { entries: [], skipped: [] } }
+/** What one provider's installed-workflow list answers when a case is about a key. */
+const NO_WORKFLOWS = { method: 'GET', url: WORKFLOWS_PATH, body: { entries: [], skipped: [] } }
 
 // ── the cases ────────────────────────────────────────────────────────────────
 
@@ -401,8 +411,8 @@ if (pane && settings) {
   {
     const { tree } = await render(pane.component, [
       NO_WORKFLOWS,
-      { method: 'GET', body: UNLINKED },
-      { method: 'POST', body: LINKED },
+      { method: 'GET', body: list(UNLINKED) },
+      { method: 'POST', body: row(LINKED) },
     ], 'pane-linked')
     check(
       'the pane opens on the key field when nothing is linked',
@@ -473,8 +483,8 @@ if (pane && settings) {
   {
     const { tree } = await render(pane.component, [
       NO_WORKFLOWS,
-      { method: 'GET', body: UNLINKED },
-      { method: 'POST', body: REFUSED, ok: false, status: 400 },
+      { method: 'GET', body: list(UNLINKED) },
+      { method: 'POST', body: row(REFUSED), ok: false, status: 400 },
     ], 'pane-refused')
     const input = firstOf(tree, 'input')
     input.props.onChange({ target: { value: 'rh-a-bad-key' } })
@@ -489,8 +499,8 @@ if (pane && settings) {
   // 3. the settings page: changing a key on a linked wallet
   {
     const { tree } = await render(settings.component, [
-      { method: 'GET', body: LINKED },
-      { method: 'POST', body: LINKED },
+      { method: 'GET', body: list(LINKED) },
+      { method: 'POST', body: row(LINKED) },
     ], 'settings-change')
     const input = firstOf(tree, 'input')
     check('the settings page offers the field for a linked wallet', !!input, textOf(tree).join(' | ').slice(0, 160))
@@ -521,13 +531,13 @@ if (pane && settings) {
 
   // 5. the settings page: a wallet that cannot be written to offers no field at all
   {
-    const { tree } = await render(settings.component, [{ method: 'GET', body: { ...LINKED, writable: false, source: 'env' } }], 'settings-readonly')
+    const { tree } = await render(settings.component, [{ method: 'GET', body: list({ ...LINKED, writable: false, source: 'env' }) }], 'settings-readonly')
     const text = textOf(tree).join(' ')
     check('a read-only key shows the reason instead of a field', !firstOf(tree, 'input') && text.includes(EN['settings.readOnly']), text.slice(0, 200))
     check('a read-only key opens no dialog', !nodesOf(tree).some((node) => node.props && node.props['data-stub'] === 'modal'), text.slice(0, 200))
     check(
       'a read-only key cannot be removed from here either',
-      !nodesOf(tree).some((node) => node.props && node.props['data-generate-remove'] === 'yes'),
+      !nodesOf(tree).some((node) => node.props && typeof node.props['data-generate-remove'] === 'string'),
       'an unremovable key must not offer the control',
     )
   }
@@ -535,15 +545,15 @@ if (pane && settings) {
   // 6. removing the key: rotation's other half, and the way back to a first-run field
   {
     const { tree, stub } = await render(settings.component, [
-      { method: 'GET', body: LINKED },
-      { method: 'DELETE', body: UNLINKED },
+      { method: 'GET', body: list(LINKED) },
+      { method: 'DELETE', body: row(UNLINKED) },
     ], 'settings-remove')
     check(
       'a linked wallet says the field replaces the stored key',
       textOf(tree).join(' ').includes(EN['wallet.replace.hint']),
       textOf(tree).join(' | ').slice(0, 180),
     )
-    const remove = nodesOf(tree).find((node) => node.props && node.props['data-generate-remove'] === 'yes')
+    const remove = nodesOf(tree).find((node) => node.props && typeof node.props['data-generate-remove'] === 'string')
     check('a linked wallet offers removing the key', !!remove, remove ? 'control present' : 'no remove control')
     if (remove) {
       remove.props.onClick()
@@ -612,10 +622,10 @@ if (pane && settings) {
   // 7. declining the removal question leaves the key alone
   {
     const { tree, stub } = await render(settings.component, [
-      { method: 'GET', body: LINKED },
-      { method: 'DELETE', body: UNLINKED },
+      { method: 'GET', body: list(LINKED) },
+      { method: 'DELETE', body: row(UNLINKED) },
     ], 'settings-cancel-remove')
-    const remove = nodesOf(tree).find((node) => node.props && node.props['data-generate-remove'] === 'yes')
+    const remove = nodesOf(tree).find((node) => node.props && typeof node.props['data-generate-remove'] === 'string')
     remove.props.onClick()
     const asked = await settle(settings.component, { t }, 'settings-cancel-remove')
     const buttons = nodesOf(asked).filter((node) => node.type === 'button')
@@ -671,7 +681,7 @@ if (pane && settings) {
     for (const item of sources) {
       const { tree } = await render(
         settings.component,
-        [{ method: 'GET', body: { ...LINKED, writable: item.writable, source: item.source } }],
+        [{ method: 'GET', body: list({ ...LINKED, writable: item.writable, source: item.source }) }],
         'settings-source-' + item.source,
       )
       const note = noteOf(tree)
@@ -683,7 +693,7 @@ if (pane && settings) {
     }
     const unknown = await render(
       settings.component,
-      [{ method: 'GET', body: { ...LINKED, source: 'mystery' } }],
+      [{ method: 'GET', body: list({ ...LINKED, source: 'mystery' }) }],
       'settings-source-unknown',
     )
     const unknownNote = noteOf(unknown.tree)
@@ -704,8 +714,8 @@ if (pane && settings) {
   {
     const fresh = await render(pane.component, [
       NO_WORKFLOWS,
-      { method: 'GET', body: UNLINKED },
-      { method: 'POST', body: LINKED },
+      { method: 'GET', body: list(UNLINKED) },
+      { method: 'POST', body: row(LINKED) },
     ], 'pane-guidance')
     const freshText = textOf(fresh.tree).join(' ')
     if (SHOW) panePreview.push({ label: 'a fresh install lands on this pane', lines: linesOf(fresh.tree) })
@@ -725,7 +735,7 @@ if (pane && settings) {
       'an unmarked sentence reads as one more instruction',
     )
 
-    const linked = await render(pane.component, [NO_WORKFLOWS, { method: 'GET', body: LINKED }], 'pane-guidance-linked')
+    const linked = await render(pane.component, [NO_WORKFLOWS, { method: 'GET', body: list(LINKED) }], 'pane-guidance-linked')
     const linkedText = textOf(linked.tree).join(' ')
     if (SHOW) panePreview.push({ label: 'once linked, the same pane', lines: linesOf(linked.tree) })
     check(
@@ -848,7 +858,7 @@ if (pane && settings) {
     zhModule.apply(zhCtx)
     const zhCopy = zhSeen.locales.find((entry) => entry.ns === NS)
     const zhT = zhCtx.locale.bind(NS)
-    const stub = stubFetch([{ method: 'GET', body: LINKED }, { method: 'POST', body: LINKED }])
+    const stub = stubFetch([{ method: 'GET', body: list(LINKED) }, { method: 'POST', body: row(LINKED) }])
     globalThis.fetch = stub.fetch
     const zhSettings = zhSeen.slots.find((slot) => slot.options.name === 'settings.section').component
     const tree = await settle(zhSettings, { t: zhT }, 'settings-zh')
@@ -866,7 +876,7 @@ if (pane && settings) {
     // The add trigger is the one sentence that must NOT be translated: it is the
     // phrase the skill answers to, so a localized version would be a sentence the
     // user types and nothing picks up.
-    const zhStub = stubFetch([{ method: 'GET', body: UNLINKED }])
+    const zhStub = stubFetch([{ method: 'GET', body: list(UNLINKED) }])
     globalThis.fetch = zhStub.fetch
     const zhPane = zhSeen.slots.find((slot) => slot.options.name === 'sidebar.right.pane.tab').component
     const zhFresh = nodesOf(await settle(zhPane, { t: zhT }, 'pane-zh'))

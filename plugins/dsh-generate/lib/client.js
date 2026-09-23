@@ -1,4 +1,4 @@
-// @muen/dsh-runninghub — browser half (Epic 61 S1, S2, and S4's card).
+// @muen/dsh-generate — browser half (Epic 61, provider-neutral).
 //
 // WHAT THIS REGISTERS:
 //
@@ -7,30 +7,36 @@
 //                 `type.label`.
 //   its body      the keyed `sidebar.right.pane.tab` seat under this package's id.
 //   its chip      the keyed `sidebar.right.pane.tab.title` seat under the same id.
-//   its card      the guide entry that puts "Generate" on the right panel's start
-//                 page beside "Workspace files", "New terminal" and "Browser", and
-//                 — under the same id — the card renderer at
-//                 `sidebar.right.tab.guide.entry` that lists what is installed and
-//                 opens one of them (S4, §10). The standard card is the fallback.
-//   its settings  one `settings.section` page, which is where a key is changed or
-//                 unlinked once the surface is in use (S2).
+//   its card      the guide entry that puts "Generate with RunningHub" on the right
+//                 panel's start page beside "Workspace files", "New terminal" and
+//                 "Browser". It is the HARNESS'S OWN standard card: no renderer of
+//                 ours is registered, because a card that lists workflows stops
+//                 saying what it opens (founder, 2026-09-22).
+//   its settings  ONE `settings.section` page listing every provider — the Models →
+//                 Providers shape. `settings.section` is a list slot, so a plugin per
+//                 provider would be one Generate page per provider, which is exactly
+//                 what the founder ruled out.
 //
-// THE PANE IS THE WALLET AND AN EMPTY STATE. S2's whole claim is that a key can be
-// linked, validated at the field, and seen as a balance; the run view is S5 and is
-// not faked here. The card's leaf selection therefore opens the pane with
-// `params.unit` set, which is the seam S5 reads — the run form itself does not
-// exist yet, and nothing pretends it does.
+// ONE PLUGIN, SEVERAL PROVIDERS (founder, 2026-09-22). The pane is the hub: a meter
+// per linked provider, then a card per installed workflow from every provider, and a
+// card opens that workflow's surface in the same pane. The provider list, each
+// provider's key and each provider's workflows come from the host over
+// `/plugins/generate/providers/…`; the browser half never reads a file and never
+// holds a key.
 //
-// THE KEY NEVER REACHES THIS HALF (§12 rule 2). This file has no key in state
-// beyond the field being typed into, no `localStorage`, and no route that returns
-// one: a save posts the value once, and every read afterwards is a balance. That
-// is why the browser half cannot check whether the key is still valid — it asks
-// the host, and the host answers with the account.
+// THE RUN IS NOT HERE. The surface renders the doors as controls, in `ui.order`, with
+// the app's own bounds and defaults, and nothing is submitted: the payload gate, the
+// run strip and the result are the next slice (§10, S5). The surface says so at its
+// foot rather than offering a button that lies.
 //
-// `multiple` IS DELIBERATELY ABSENT. With it, every open of the kind makes a new
-// tab, and the guide card — which carries no params — would duplicate itself on
-// every click. One page per pane is right until a tab carries a unit's params
-// (S5, D17).
+// THE KEY NEVER REACHES THIS HALF (§12 rule 2). This file has no key in state beyond
+// the field being typed into, no `localStorage`, and no route that returns one: a
+// save posts the value once, and every read afterwards is a balance. That is why the
+// browser half cannot check whether a key is still valid — it asks the host, and the
+// host answers with the account.
+//
+// `multiple` IS DELIBERATELY ABSENT. One pane holds every surface, so a second tab of
+// the same kind would only duplicate the hub (§10).
 //
 // NOTHING MUEN-SPECIFIC IS IN HERE (§5 rule 1): only upstream `@deepseek-ai/*`
 // services, the harness's own theme aliases, and this package's own copy.
@@ -39,7 +45,7 @@
 // React arrives through factory(require); the right-panel registry and the slot
 // registry arrive on ctx.
 window.__ModuleLoader__.load({
-  id: '@muen/dsh-runninghub',
+  id: '@muen/dsh-generate',
   factory: (require) => {
     const React = require('react')
     // The harness's own icon set and its dialog, not hand-rolled glyphs or a
@@ -58,23 +64,20 @@ window.__ModuleLoader__.load({
     const h = React.createElement
 
     /** The implementation id: the key this type's body and title register under. */
-    const GENERATE_ID = '@muen/dsh-runninghub'
+    const GENERATE_ID = '@muen/dsh-generate'
     /** The kind `openTab` names and the guide card opens. */
     const GENERATE_KIND = 'generate'
     /** This package's namespace in the client locale registry. */
     const NS = 'generate'
-    /** The host's wallet route. One of the three endpoints this half talks to. */
-    const WALLET_API = '/plugins/generate/wallet'
     /**
-     * The host's installed-workflow list. A disk read on the host, so the pane's
-     * cards draw what is installed without a key, a network call or a coin.
+     * The host's provider routes. One plugin, several providers (founder,
+     * 2026-09-22): the list carries each provider's key state and its workflow count,
+     * and everything else hangs off the provider's own id — its key, its installed
+     * workflows, and one workflow by name.
      */
-    const ADAPTERS_API = '/plugins/generate/adapters'
-    /**
-     * One workflow, whole. The list carries what a card draws; the surface needs the
-     * doors, their bounds and `ui.order`, so it reads the file by name.
-     */
-    const ADAPTER_API = '/plugins/generate/adapter'
+    const PROVIDERS_API = '/plugins/generate/providers'
+    /** `<providers>/<id>/<action>`, with the id escaped: it is data, not a path. */
+    const providerUrl = (id, action) => PROVIDERS_API + '/' + encodeURIComponent(id) + '/' + action
 
     const EN = {
       'type.label': 'Generate',
@@ -148,8 +151,15 @@ window.__ModuleLoader__.load({
       'wallet.notLinked': 'No key linked',
       'wallet.fromEnvironment': 'from your environment',
       'wallet.fromStore': 'stored on this machine',
-      'settings.title': 'RunningHub wallet',
-      'settings.body': 'The key stays on this machine. The browser never sees it.',
+      // ONE settings page for every provider (founder, 2026-09-22), so the title is
+      // the surface's and each provider's own name is drawn on its own row.
+      'settings.title': 'Generate',
+      'settings.body': 'Each provider keeps its own key on this machine. The browser never sees it.',
+      'settings.workflows.none': 'No workflows installed yet.',
+      'settings.workflows.one': 'workflow installed',
+      'settings.workflows.many': 'workflows installed',
+      'settings.workflows.unknown': 'Workflows could not be read.',
+      'pane.noProviders': 'This build has no providers registered.',
       // Rotation is a normal act, not an edge case: a person creates a new key on
       // RunningHub and pastes it here. The hint says the field is the way to do
       // that, and the remove dialog is the way to go back to nothing.
@@ -219,8 +229,13 @@ window.__ModuleLoader__.load({
       'wallet.notLinked': '未连接密钥',
       'wallet.fromEnvironment': '来自环境变量',
       'wallet.fromStore': '保存在本机',
-      'settings.title': 'RunningHub 钱包',
-      'settings.body': '密钥保存在这台机器上，浏览器不会看到它。',
+      'settings.title': '生成',
+      'settings.body': '每个服务商的密钥都保存在这台机器上，浏览器不会看到它。',
+      'settings.workflows.none': '还没有安装工作流。',
+      'settings.workflows.one': '个工作流已安装',
+      'settings.workflows.many': '个工作流已安装',
+      'settings.workflows.unknown': '无法读取工作流。',
+      'pane.noProviders': '此版本没有注册任何服务商。',
       'wallet.replace.hint': '在这里粘贴密钥会替换本机已保存的那个。',
       'remove.action': '移除密钥',
       'remove.title': '移除已保存的密钥？',
@@ -454,6 +469,23 @@ window.__ModuleLoader__.load({
         fontSize: 12,
         color: 'var(--dsw-alias-label-primary)',
       },
+      /** A strip row's provider name. Drawn only when more than one is linked. */
+      stripLabel: {
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        color: 'var(--dsw-alias-label-secondary)',
+      },
+      /** One provider's block on the one settings page. */
+      providerCard: {
+        marginTop: 18,
+        paddingBottom: 14,
+        borderBottom: '1px solid var(--dsw-alias-border-l1)',
+      },
+      providerName: {
+        fontSize: 13,
+        fontWeight: 600,
+        color: 'var(--dsw-alias-label-primary)',
+      },
       stripValue: {
         fontWeight: 600,
         whiteSpace: 'nowrap',
@@ -624,109 +656,33 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The wallet, as this half is allowed to know it: a balance and a boolean.
-     * Every read goes through the host, and a save posts the key exactly once —
-     * it is never kept here, so nothing in this component tree can leak it.
-     */
-    function useWallet() {
-      const [wallet, setWallet] = React.useState(null)
-      const [busy, setBusy] = React.useState(false)
-      // The last save's outcome, held by the surface rather than by the field:
-      // a successful link replaces the field with the wallet view, so a
-      // confirmation kept inside `KeyForm` would unmount with it.
-      const [confirmed, setConfirmed] = React.useState(false)
-
-      const load = React.useCallback(async () => {
-        try {
-          const response = await fetch(WALLET_API, { headers: { accept: 'application/json' } })
-          setWallet(await response.json())
-        } catch {
-          setWallet({ linked: false, writable: false, source: null, account: null, error: 'unreachable', accountUrl: null })
-        }
-      }, [])
-
-      React.useEffect(() => {
-        load()
-      }, [load])
-
-      const save = React.useCallback(async (key) => {
-        setBusy(true)
-        setConfirmed(false)
-        try {
-          const response = await fetch(WALLET_API, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', accept: 'application/json' },
-            body: JSON.stringify({ key }),
-          })
-          let body = null
-          try {
-            body = await response.json()
-          } catch {
-            body = null
-          }
-          if (body) setWallet(body)
-          if (response.ok) setConfirmed(true)
-          return { ok: response.ok, error: response.ok ? null : (body && body.error) || 'unreachable' }
-        } catch {
-          return { ok: false, error: 'unreachable' }
-        } finally {
-          setBusy(false)
-        }
-      }, [])
-
-      const unlink = React.useCallback(async () => {
-        setBusy(true)
-        setConfirmed(false)
-        try {
-          const response = await fetch(WALLET_API, { method: 'DELETE', headers: { accept: 'application/json' } })
-          let body = null
-          try {
-            body = await response.json()
-          } catch {
-            body = null
-          }
-          if (body && response.ok) setWallet(body)
-          return { ok: response.ok, error: response.ok ? null : (body && body.error) || 'unreachable' }
-        } catch {
-          return { ok: false, error: 'unreachable' }
-        } finally {
-          setBusy(false)
-        }
-      }, [])
-
-      /** A new keystroke makes the previous confirmation stale. */
-      const forget = React.useCallback(() => setConfirmed(false), [])
-
-      return { wallet, busy, load, save, unlink, confirmed, forget }
-    }
-
-    /**
-     * The installed workflows, as the card draws them.
+     * Every provider, with the state of its key.
      *
-     * THE CARD NEVER READS A FILE ITSELF. This half has no filesystem and no idea
-     * where the profile is, so the host answers `/plugins/generate/adapters` from the
-     * directory the install writes into (§10). The read needs no key and no network,
-     * which is why the card draws on a fresh install like every other start-page card.
+     * THE KEY NEVER REACHES THIS HALF (§12 rule 2): a save posts the value once and
+     * every read afterwards is a balance. That was true of one wallet and stays true
+     * of several providers — including the shape of this hook, which holds statuses
+     * rather than secrets.
      */
-    function useAdapters() {
-      const [state, setState] = React.useState({ phase: 'loading', entries: [], skipped: [] })
+    function useProviders() {
+      const [state, setState] = React.useState({ phase: 'loading', providers: [] })
+      const [busy, setBusy] = React.useState(false)
+      // The last save's outcome, held by the surface rather than by the field: a
+      // successful link replaces the field with the account view, so a confirmation
+      // kept inside `KeyForm` would unmount with it. It is an id now, because with
+      // several providers "which key was just linked" is part of the fact.
+      const [confirmed, setConfirmed] = React.useState(null)
 
       const load = React.useCallback(async (apply) => {
         try {
-          const response = await fetch(ADAPTERS_API, { headers: { accept: 'application/json' } })
-          let body = null
-          try {
-            body = await response.json()
-          } catch {
-            body = null
-          }
-          if (!response.ok || !body || !Array.isArray(body.entries)) {
-            apply({ phase: 'failed', entries: [], skipped: [] })
+          const response = await fetch(PROVIDERS_API, { headers: { accept: 'application/json' } })
+          const body = await response.json()
+          if (!response.ok || !body || !Array.isArray(body.providers)) {
+            apply({ phase: 'failed', providers: [] })
             return
           }
-          apply({ phase: 'ready', entries: body.entries, skipped: Array.isArray(body.skipped) ? body.skipped : [] })
+          apply({ phase: 'ready', providers: body.providers })
         } catch {
-          apply({ phase: 'failed', entries: [], skipped: [] })
+          apply({ phase: 'failed', providers: [] })
         }
       }, [])
 
@@ -740,9 +696,121 @@ window.__ModuleLoader__.load({
         }
       }, [load])
 
+      /** Replace one provider's row without dropping the others. */
+      const replace = React.useCallback(
+        (row) =>
+          setState((current) => ({
+            ...current,
+            providers: current.providers.map((provider) => (provider.id === row.id ? { ...provider, ...row } : provider)),
+          })),
+        [],
+      )
+
+      const save = React.useCallback(
+        async (id, key) => {
+          setBusy(true)
+          setConfirmed(null)
+          try {
+            const response = await fetch(providerUrl(id, 'key'), {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', accept: 'application/json' },
+              body: JSON.stringify({ key }),
+            })
+            let body = null
+            try {
+              body = await response.json()
+            } catch {
+              body = null
+            }
+            if (body && body.id) replace(body)
+            if (response.ok) setConfirmed(id)
+            return { ok: response.ok, error: response.ok ? null : (body && body.error) || 'unreachable' }
+          } catch {
+            return { ok: false, error: 'unreachable' }
+          } finally {
+            setBusy(false)
+          }
+        },
+        [replace],
+      )
+
+      const unlink = React.useCallback(
+        async (id) => {
+          setBusy(true)
+          setConfirmed(null)
+          try {
+            const response = await fetch(providerUrl(id, 'key'), { method: 'DELETE', headers: { accept: 'application/json' } })
+            let body = null
+            try {
+              body = await response.json()
+            } catch {
+              body = null
+            }
+            if (body && response.ok && body.id) replace(body)
+            return { ok: response.ok, error: response.ok ? null : (body && body.error) || 'unreachable' }
+          } catch {
+            return { ok: false, error: 'unreachable' }
+          } finally {
+            setBusy(false)
+          }
+        },
+        [replace],
+      )
+
+      /** A new keystroke makes the previous confirmation stale. */
+      const forget = React.useCallback(() => setConfirmed(null), [])
+      const reload = React.useCallback(() => load(setState), [load])
+
+      return { phase: state.phase, providers: state.providers, busy, load: reload, save, unlink, confirmed, forget }
+    }
+
+    /**
+     * Every provider's installed workflows, as one list of cards.
+     *
+     * ONE REQUEST PER PROVIDER, because that is where the files are: each provider
+     * reads its own directory, and the host keeps them apart on purpose. A provider
+     * that cannot answer is reported rather than silently missing, and the list is
+     * only "failed" when nothing answered at all — which with one provider is exactly
+     * the old single-route behaviour.
+     */
+    function useWorkflows(providers) {
+      const [state, setState] = React.useState({ phase: 'loading', units: [], failed: [] })
+
+      // THE LIST IS PASSED IN, not closed over: `load` is memoized on nothing, so a
+      // captured `providers` would be the empty array from the first render forever —
+      // the effect would re-run and still ask no one. (Found by verify:start.)
+      const load = React.useCallback(async (list, apply) => {
+        const units = []
+        const failed = []
+        for (const provider of list) {
+          try {
+            const response = await fetch(providerUrl(provider.id, 'workflows'), { headers: { accept: 'application/json' } })
+            const body = await response.json()
+            if (!response.ok || !body || !Array.isArray(body.entries)) {
+              failed.push(provider.id)
+              continue
+            }
+            for (const entry of body.entries) units.push({ ...entry, provider: provider.id, providerLabel: provider.label })
+          } catch {
+            failed.push(provider.id)
+          }
+        }
+        apply({ phase: list.length > 0 && failed.length === list.length ? 'failed' : 'ready', units, failed })
+      }, [])
+
+      React.useEffect(() => {
+        let live = true
+        load(providers, (next) => {
+          if (live) setState(next)
+        })
+        return () => {
+          live = false
+        }
+      }, [load, providers.length])
+
       // The same read again, for Refresh: a host that did not answer is a state the
       // user can leave, not one they are stuck in.
-      const reload = React.useCallback(() => load(setState), [load])
+      const reload = React.useCallback(() => load(providers, setState), [load, providers])
       return { ...state, reload }
     }
 
@@ -861,7 +929,11 @@ window.__ModuleLoader__.load({
      * criterion is that a bad key fails *at the field* rather than three screens
      * later inside a paid run (§9).
      */
-    function KeyForm({ t, onSave, busy, autofocus, accountUrl, onEdit }) {
+    function KeyForm({ t, onSave, busy, autofocus, accountUrl, onEdit, suffix }) {
+      // One page can carry several providers' fields now, so the input's id and
+      // its label's htmlFor are per provider: two fields sharing `generate-key`
+      // would make the second label point at the first input.
+      const fieldId = 'generate-key' + (suffix ? '-' + suffix : '')
       const [value, setValue] = React.useState('')
       const [error, setError] = React.useState(null)
 
@@ -884,9 +956,9 @@ window.__ModuleLoader__.load({
       return h(
         'form',
         { style: S.formBody, onSubmit: submit },
-        h('label', { style: S.label, htmlFor: 'generate-key' }, t('wallet.key.label')),
+        h('label', { style: S.label, htmlFor: fieldId }, t('wallet.key.label')),
         h('input', {
-          id: 'generate-key',
+          id: fieldId,
           style: S.field,
           type: 'password',
           value,
@@ -942,12 +1014,23 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** The meter (§9): what is left, whose environment it came from, and the way out to top up. */
-    function WalletStrip({ t, wallet }) {
-      const parts = balanceParts(t, wallet)
+    /**
+     * The meter (§9): what is left, whose environment it came from, and the way out to
+     * top up — ONE ROW PER PROVIDER.
+     *
+     * Several providers is the point of the plugin now, so a single balance would have
+     * to pick one and be wrong about the others. With one provider this draws exactly
+     * what it always did.
+     *
+     * `showLabel` is what keeps that true: with one provider the row reads as a plain
+     * balance, and only when there are several does the provider's name appear.
+     */
+    function ProviderStrip({ t, provider, showLabel }) {
+      const parts = balanceParts(t, provider)
       return h(
         'div',
-        { style: S.strip },
+        { style: S.strip, 'data-generate-provider-strip': provider.id },
+        showLabel ? h('span', { style: S.stripLabel }, provider.label) : null,
         h('span', { style: S.stripValue }, parts.length ? parts.join(' · ') : t('wallet.notLinked')),
         h(
           'span',
@@ -956,18 +1039,16 @@ window.__ModuleLoader__.load({
             // The note's own text is the contract the verify reads; matching the
             // phrase across the page would also hit the replace hint, which says
             // "the one stored on this machine" for a different reason.
-            'data-generate-source': wallet.source || 'none',
+            'data-generate-source': provider.source || 'none',
           },
-          wallet.writable === false ? t('settings.readOnly') : null,
-          wallet.writable !== false && wallet.source === STORED_SOURCE ? t('wallet.fromStore') : null,
-          wallet.writable !== false && ENVIRONMENT_SOURCES.includes(wallet.source)
-            ? t('wallet.fromEnvironment')
-            : null,
+          provider.writable === false ? t('settings.readOnly') : null,
+          provider.writable !== false && provider.source === STORED_SOURCE ? t('wallet.fromStore') : null,
+          provider.writable !== false && ENVIRONMENT_SOURCES.includes(provider.source) ? t('wallet.fromEnvironment') : null,
         ),
-        wallet.accountUrl
+        provider.accountUrl
           ? h(
               'a',
-              { href: wallet.accountUrl, target: '_blank', rel: 'noreferrer', style: S.link },
+              { href: provider.accountUrl, target: '_blank', rel: 'noreferrer', style: S.link },
               t('wallet.topup'),
               h(IconRightUpOutline16, { size: 12 }),
             )
@@ -978,17 +1059,17 @@ window.__ModuleLoader__.load({
     /**
      * One workflow, whole, for the surface that renders its doors.
      *
-     * The pane mounts this per open unit, keyed by name, so switching units mounts
-     * a fresh reader rather than reusing the previous file's state.
+     * The pane mounts this per open unit, keyed by provider and name, so switching
+     * units mounts a fresh reader rather than reusing the previous file's state.
      */
-    function useAdapter(name) {
+    function useWorkflow(provider, name) {
       const [state, setState] = React.useState({ phase: 'loading', adapter: null })
 
       React.useEffect(() => {
         let live = true
         const read = async () => {
           try {
-            const response = await fetch(ADAPTER_API + '?name=' + encodeURIComponent(name), { headers: { accept: 'application/json' } })
+            const response = await fetch(providerUrl(provider, 'workflow') + '?name=' + encodeURIComponent(name), { headers: { accept: 'application/json' } })
             let body = null
             try {
               body = await response.json()
@@ -1048,7 +1129,8 @@ window.__ModuleLoader__.load({
           type: 'button',
           style: S.card,
           'data-generate-unit': unit.name,
-          onClick: () => onOpen(unit.name),
+          'data-generate-provider': unit.provider,
+          onClick: () => onOpen(unit.provider, unit.name),
         },
         unit.cover ? h('img', { src: unit.cover, alt: '', style: S.cardCover }) : null,
         h(
@@ -1056,9 +1138,14 @@ window.__ModuleLoader__.load({
           { style: S.cardBody },
           h('span', { style: S.cardTitle }, unit.title),
           unit.blurb ? h('span', { style: S.cardBlurb }, unit.blurb) : null,
-          // Whose app it is. The API cannot say, so the adapter is where a person
-          // said it, and this is where a reader is told (§2).
-          unit.origin === 'community' ? h('span', { style: S.cardMark }, t('card.community')) : null,
+          // WHICH PROVIDER it runs on, and whose app it is: with several providers
+          // the first is a fact a reader needs, and the second is one the API cannot
+          // supply, so the adapter is where a person said it (§2).
+          h(
+            'span',
+            { style: S.cardMark },
+            unit.providerLabel + (unit.origin === 'community' ? ' · ' + t('card.community') : ''),
+          ),
         ),
       )
     }
@@ -1076,8 +1163,8 @@ window.__ModuleLoader__.load({
      * the run strip and the result are the next slice (§10, S5), and the line at the
      * foot says so rather than leaving a button that lies.
      */
-    function WorkflowSurface({ t, name, onBack }) {
-      const { phase, adapter } = useAdapter(name)
+    function WorkflowSurface({ t, provider, name, onBack }) {
+      const { phase, adapter } = useWorkflow(provider, name)
       const [values, setValues] = React.useState({})
       const [showAdvanced, setShowAdvanced] = React.useState(false)
 
@@ -1155,7 +1242,7 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { style: S.surface, 'data-generate-surface': 'ready', 'data-generate-unit': adapter.name },
+        { style: S.surface, 'data-generate-surface': 'ready', 'data-generate-unit': adapter.name, 'data-generate-provider': provider },
         head,
         h('div', { style: S.title }, adapter.title),
         adapter.blurb ? h('div', { style: S.body }, adapter.blurb) : null,
@@ -1177,27 +1264,46 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** Stage two: the body, under the type's own id. */
+    /**
+     * Stage two: the body, under the type's own id.
+     *
+     * ONE PANE HOLDS EVERY WORKFLOW SURFACE (founder, 2026-09-22). Its first screen is
+     * a meter for every linked provider, then one card per installed workflow from
+     * every provider; a card opens that workflow's surface in place. A provider with
+     * no key contributes no cards, and the pane asks for the first key rather than
+     * showing an empty list.
+     */
     function GeneratePane(props) {
       const t = translatorOf(props)
-      const { wallet, busy, load, save, confirmed, forget } = useWallet()
-      const units = useAdapters()
+      const providers = useProviders()
+      const units = useWorkflows(providers.providers)
+      // `null` means the user has not chosen; `{ provider, name }` opens that
+      // workflow's surface; `''` is the way back to the cards.
       const [chosen, setChosen] = React.useState(null)
 
-      // A tab may be opened at a unit by an opener that passed `params.unit`; the
-      // card carries no params, so the first screen is normally the list. `null`
-      // means "the user has not chosen yet".
+      // A tab may be opened at a unit by an opener that passed `params.unit` — and
+      // `params.provider` when there is more than one place it could live.
       const tab = typeof props.useTabInfo === 'function' ? props.useTabInfo() : null
-      const requested = tab && tab.tab && tab.tab.navigation ? tab.tab.navigation.params : null
-      const asked = requested && typeof requested.unit === 'string' ? requested.unit : null
-      const installed = units.entries.some((entry) => entry.name === asked)
-      const active = chosen === null ? (installed ? asked : null) : chosen || null
+      const params = tab && tab.tab && tab.tab.navigation ? tab.tab.navigation.params : null
+      const asked = params && typeof params.unit === 'string' ? params.unit : null
+      const askedProvider = params && typeof params.provider === 'string' ? params.provider : null
+      const opened =
+        asked === null
+          ? null
+          : units.units.find((unit) => unit.name === asked && (askedProvider === null || unit.provider === askedProvider)) || null
+      const active = chosen === null ? opened : chosen || null
 
-      if (wallet === null) {
+      if (providers.phase === 'loading') {
         return h('div', { style: S.root, 'data-generate-pane': 'loading' }, h('div', { style: S.empty }, h('div', { style: S.body }, t('pane.loading'))))
       }
 
-      if (!wallet.linked) {
+      const linked = providers.providers.filter((provider) => provider.linked)
+      const first = providers.providers[0] || null
+      const several = providers.providers.length > 1
+
+      // No provider linked yet: the pane asks for the first one's key. That is the
+      // first-run screen a new install lands on, unchanged in shape.
+      if (linked.length === 0) {
         return h(
           'div',
           { style: S.root, 'data-generate-pane': 'first-run' },
@@ -1207,14 +1313,25 @@ window.__ModuleLoader__.load({
             h(GenerateMark, null),
             h('div', { style: S.title }, t('pane.first.title')),
             h('div', { style: S.body }, t('pane.first.body')),
-            h(KeyForm, { t, onSave: save, busy, autofocus: true, accountUrl: wallet.accountUrl, onEdit: forget }),
-            // The pane can link a key but cannot change or remove one, so the
-            // place that can is named here, where the person first meets the field.
+            several && first ? h('div', { style: S.label }, first.label) : null,
+            first
+              ? h(KeyForm, {
+                  t,
+                  suffix: first.id,
+                  onSave: (key) => providers.save(first.id, key),
+                  busy: providers.busy,
+                  autofocus: true,
+                  accountUrl: first.accountUrl,
+                  onEdit: providers.forget,
+                })
+              : h('div', { style: S.hint }, t('pane.noProviders')),
+            // The pane can link a key but cannot change or remove one, so the place
+            // that can is named here, where the person first meets the field.
             h(Note, {
               text: t('pane.first.manage'),
               attrs: { 'data-generate-manage-hint': 'yes' },
             }),
-            // And how an app gets added, under the key directions: linking a wallet
+            // And how an app gets added, under the key directions: linking an account
             // is the first thing this screen asks for, and adding a workflow is the
             // next one, so both answers sit together (founder, 2026-09-22).
             h(Note, {
@@ -1225,33 +1342,39 @@ window.__ModuleLoader__.load({
         )
       }
 
+      const saved = providers.providers.find((provider) => provider.id === providers.confirmed) || null
+
       return h(
         'div',
         { style: S.root, 'data-generate-pane': active === null ? 'home' : 'unit' },
-        // The link just happened. The dialog says the key works, that the wallet
-        // answered, and where the balance went; the strip below it is the thing
-        // the dialog is pointing at.
-        confirmed && active === null ? h(SaveDialog, { t, wallet, onClose: forget }) : null,
-        h(WalletStrip, { t, wallet }),
-        wallet.error
-          ? h(
+        // The link just happened. The dialog says the key works, that the provider
+        // answered, and where the balance went; the strip below it is the thing the
+        // dialog is pointing at.
+        saved && active === null ? h(SaveDialog, { t, wallet: saved, onClose: providers.forget }) : null,
+        linked.map((provider) => h(ProviderStrip, { key: provider.id, t, provider, showLabel: several })),
+        linked
+          .filter((provider) => provider.error)
+          .map((provider) =>
+            h(
               'div',
-              { style: S.warn, role: 'alert' },
+              { key: provider.id, style: S.warn, role: 'alert' },
               h(IconWarningOutline16, { size: 14 }),
-              // A stored key that stopped working is a different fact from a
-              // field that was just typed into, and the fix is different too.
-              h('span', null, wallet.error === 'invalid-key' ? t('error.storedKeyRejected') : errorText(t, wallet.error)),
-            )
-          : null,
+              // A stored key that stopped working is a different fact from a field
+              // that was just typed into, and the fix is different too.
+              h('span', null, provider.error === 'invalid-key' ? t('error.storedKeyRejected') : errorText(t, provider.error)),
+            ),
+          ),
         // ONE PANE HOLDS EVERY WORKFLOW SURFACE (founder, 2026-09-22). The first
         // screen is the cards; a card opens that workflow's surface in place, and the
         // way back is the surface's own first control.
         active === null
-          ? units.entries.length > 0
+          ? units.units.length > 0
             ? h(
                 'div',
-                { style: S.cards, 'data-generate-cards': String(units.entries.length) },
-                units.entries.map((unit) => h(UnitCard, { key: unit.name, t, unit, onOpen: setChosen })),
+                { style: S.cards, 'data-generate-cards': String(units.units.length) },
+                units.units.map((unit) =>
+                  h(UnitCard, { key: unit.provider + '/' + unit.name, t, unit, onOpen: (provider, name) => setChosen({ provider, name }) }),
+                ),
               )
             : units.phase === 'failed'
               ? h(
@@ -1267,7 +1390,13 @@ window.__ModuleLoader__.load({
                   h('div', { style: S.title }, t('pane.empty.title')),
                   h('div', { style: S.body }, t('pane.empty.body')),
                 )
-          : h(WorkflowSurface, { key: active, t, name: active, onBack: () => setChosen('') }),
+          : h(WorkflowSurface, {
+              key: active.provider + '/' + active.name,
+              t,
+              provider: active.provider,
+              name: active.name,
+              onBack: () => setChosen(''),
+            }),
         active === null
           ? h(
               'div',
@@ -1279,9 +1408,9 @@ window.__ModuleLoader__.load({
                 text: t('pane.linked.manage'),
                 attrs: { 'data-generate-manage-hint': 'yes' },
               }),
-              // And under those, how to add an app: this is the screen a person
-              // lands on with a linked wallet, so the one action that fills it has
-              // to be on it, in words they can repeat into the chat.
+              // And under those, how to add an app: this is the screen a person lands
+              // on with a linked account, so the one action that fills it has to be
+              // on it, in words they can repeat into the chat.
               h(Note, {
                 text: t('pane.add.hint'),
                 attrs: { 'data-generate-add-hint': 'yes' },
@@ -1297,12 +1426,12 @@ window.__ModuleLoader__.load({
                 {
                   type: 'button',
                   style: S.ghost,
-                  // Both reads again: the wallet and the installed list.
+                  // Both reads again: the provider statuses and the installed lists.
                   onClick: () => {
-                    load()
+                    providers.load()
                     units.reload()
                   },
-                  disabled: busy,
+                  disabled: providers.busy,
                   title: t('wallet.refresh'),
                 },
                 h(IconRefreshOutline16, { size: 12 }),
@@ -1313,7 +1442,6 @@ window.__ModuleLoader__.load({
           : null,
       )
     }
-
     /**
      * Removing the stored key: one dialog with two states, the question and the
      * receipt. It asks first because a key is a secret that was hard to get and is
@@ -1375,82 +1503,120 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** The settings page: where a working key is replaced or removed. */
+    /**
+     * The settings page: ONE page, listing every provider.
+     *
+     * "we should only have 1 generate settings with the different adapters" (founder,
+     * 2026-09-22) — and that is the reason the providers live inside this plugin
+     * instead of one plugin each: `settings.section` is a list, so a plugin per
+     * provider would be one Generate page per provider. This page is the Models →
+     * Providers shape: a row per provider with its key state, the way to link, replace
+     * or remove it, and what it has installed.
+     */
     function GenerateSettings(props) {
       const t = translatorOf(props)
-      const { wallet, busy, save, unlink, confirmed, forget } = useWallet()
-      // null · 'ask' · 'done'. The question and the receipt are the same dialog.
+      const { phase, providers, busy, save, unlink, confirmed, forget } = useProviders()
+      // The provider being asked about, and whether the answer is the question or the
+      // receipt. The two states are one dialog.
       const [removing, setRemoving] = React.useState(null)
       const [removeError, setRemoveError] = React.useState(null)
 
-      if (wallet === null) {
+      if (phase === 'loading') {
         return h('div', { style: S.page }, h('div', { style: S.body }, t('pane.loading')))
       }
 
-      const askRemove = () => {
+      const saved = providers.find((provider) => provider.id === confirmed) || null
+      const asking = removing === null ? null : providers.find((provider) => provider.id === removing.replace(/:done$/, '')) || null
+
+      const askRemove = (id) => {
         setRemoveError(null)
-        setRemoving('ask')
+        setRemoving(id)
       }
       const cancelRemove = () => {
         setRemoveError(null)
         setRemoving(null)
       }
       const confirmRemove = async () => {
+        if (!asking) return
         setRemoveError(null)
-        const outcome = await unlink()
+        const outcome = await unlink(asking.id)
         if (outcome.ok) {
           forget()
-          setRemoving('done')
+          setRemoving(asking.id + ':done')
         } else {
           setRemoveError(outcome.error || 'unreachable')
         }
       }
-      // Editing the field is the other way out of a removed key: the confirmation
-      // is about the last action, so a new one takes it away.
+      // Editing a field is the other way out of a removed key: the confirmation is
+      // about the last action, so a new one takes it away.
       const edited = () => {
         forget()
         setRemoveError(null)
-        if (removing === 'done') setRemoving(null)
+        if (removing !== null && removing.endsWith(':done')) setRemoving(null)
       }
 
       return h(
         'div',
-        { style: S.page, 'data-generate-settings': wallet.linked ? 'linked' : 'unlinked' },
-        confirmed ? h(SaveDialog, { t, wallet, onClose: forget }) : null,
-        removing ? h(RemoveKeyDialog, {
-          t,
-          stage: removing,
-          busy,
-          error: removeError,
-          onCancel: cancelRemove,
-          onRemove: confirmRemove,
-          onClose: cancelRemove,
-        }) : null,
+        { style: S.page, 'data-generate-settings': providers.some((provider) => provider.linked) ? 'linked' : 'unlinked' },
+        saved ? h(SaveDialog, { t, wallet: saved, onClose: forget }) : null,
+        asking
+          ? h(RemoveKeyDialog, {
+              t,
+              stage: removing.endsWith(':done') ? 'done' : 'ask',
+              busy,
+              error: removeError,
+              onCancel: cancelRemove,
+              onRemove: confirmRemove,
+              onClose: cancelRemove,
+            })
+          : null,
         h('div', { style: S.title }, t('settings.title')),
         h('div', { style: S.body }, t('settings.body')),
-        wallet.linked ? h(WalletStrip, { t, wallet }) : null,
-        wallet.linked && wallet.writable === false
-          ? h('div', { style: S.hint }, t('settings.readOnly'))
-          : h(
-              React.Fragment,
-              null,
-              wallet.linked ? h('div', { style: S.hint }, t('wallet.replace.hint')) : null,
-              h(KeyForm, { t, onSave: save, busy, accountUrl: wallet.accountUrl, onEdit: edited }),
-            ),
-        wallet.linked && wallet.writable !== false
-          ? h(
+        providers.map((provider) =>
+          h(
+            'div',
+            { key: provider.id, style: S.providerCard, 'data-generate-provider-card': provider.id },
+            h('div', { style: S.providerName }, provider.label),
+            provider.linked ? h(ProviderStrip, { t, provider, showLabel: false }) : null,
+            provider.linked && provider.writable === false
+              ? h('div', { style: S.hint }, t('settings.readOnly'))
+              : h(
+                  React.Fragment,
+                  null,
+                  provider.linked ? h('div', { style: S.hint }, t('wallet.replace.hint')) : null,
+                  h(KeyForm, {
+                    t,
+                    suffix: provider.id,
+                    onSave: (key) => save(provider.id, key),
+                    busy,
+                    accountUrl: provider.accountUrl,
+                    onEdit: edited,
+                  }),
+                ),
+            provider.linked && provider.writable !== false
+              ? h(
+                  'div',
+                  { style: S.row },
+                  h(
+                    'button',
+                    { type: 'button', style: S.ghost, disabled: busy, 'data-generate-remove': provider.id, onClick: () => askRemove(provider.id) },
+                    t('remove.action'),
+                  ),
+                )
+              : null,
+            h(
               'div',
-              { style: S.row },
-              h(
-                'button',
-                { type: 'button', style: S.ghost, disabled: busy, 'data-generate-remove': 'yes', onClick: askRemove },
-                t('remove.action'),
-              ),
-            )
-          : null,
+              { style: S.hint, 'data-generate-provider-workflows': provider.id },
+              provider.workflows === 0
+                ? t('settings.workflows.none')
+                : provider.workflows === null
+                  ? t('settings.workflows.unknown')
+                  : provider.workflows + ' ' + (provider.workflows === 1 ? t('settings.workflows.one') : t('settings.workflows.many')),
+            ),
+          ),
+        ),
       )
     }
-
     /** The chip's live text. Thunked copy is read again on every use, not captured. */
     function GenerateTitle(props) {
       return translatorOf(props)('type.label')
@@ -1508,8 +1674,8 @@ window.__ModuleLoader__.load({
      */
     function apply(ctx) {
       const t = ctx.locale.bind(NS)
-      ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'runninghub.copy')
-      ctx.effect(() => ctx.sidebarRightTabs.register(generateDefinition(t)), 'runninghub.type')
+      ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'generate.copy')
+      ctx.effect(() => ctx.sidebarRightTabs.register(generateDefinition(t)), 'generate.type')
       ctx.effect(
         () =>
           ctx.slots.inject('sidebar.right.pane.tab', () =>
@@ -1518,7 +1684,7 @@ window.__ModuleLoader__.load({
               GeneratePane,
             ),
           ),
-        'runninghub.body',
+        'generate.body',
       )
       ctx.effect(
         () =>
@@ -1528,7 +1694,7 @@ window.__ModuleLoader__.load({
               GenerateTitle,
             ),
           ),
-        'runninghub.title',
+        'generate.title',
       )
       // THE GUIDE CARD IS THE HARNESS'S OWN (founder, 2026-09-22). An earlier cut of
       // this slice registered a renderer at `sidebar.right.tab.guide.entry` that
@@ -1545,7 +1711,7 @@ window.__ModuleLoader__.load({
             ctx.slots.register(
               {
                 name: 'settings.section',
-                id: 'runninghub-wallet',
+                id: 'generate',
                 order: 17,
                 // Without this the page body keeps the language it first rendered
                 // in: the nav label is a thunk and re-reads, the page is not.
@@ -1555,7 +1721,7 @@ window.__ModuleLoader__.load({
               GenerateSettings,
             ),
           ),
-        'runninghub.settings',
+        'generate.settings',
       )
     }
 

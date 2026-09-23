@@ -27,7 +27,7 @@
  * Nothing here writes, spends coins or calls the model. It reads one app and
  * derives what the API already knows.
  *
- * @module @muen/dsh-runninghub/lib/doors
+ * @module @muen/dsh-generate/lib/doors
  */
 import { glossaryLabel } from './house.js'
 
