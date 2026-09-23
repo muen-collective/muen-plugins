@@ -1,4 +1,4 @@
-// @muen/dsh-runninghub — browser half (Epic 61 S1 + S2).
+// @muen/dsh-runninghub — browser half (Epic 61 S1, S2, and S4's card).
 //
 // WHAT THIS REGISTERS:
 //
@@ -7,17 +7,19 @@
 //                 `type.label`.
 //   its body      the keyed `sidebar.right.pane.tab` seat under this package's id.
 //   its chip      the keyed `sidebar.right.pane.tab.title` seat under the same id.
-//   its card      one guide entry, which is what puts "Generate" on the right
-//                 panel's start page beside "Workspace files", "New terminal" and
-//                 "Browser". The standard card is used here; the categorized
-//                 flyout is S4 and registers a renderer at
-//                 `sidebar.right.tab.guide.entry` under this same id.
+//   its card      the guide entry that puts "Generate" on the right panel's start
+//                 page beside "Workspace files", "New terminal" and "Browser", and
+//                 — under the same id — the card renderer at
+//                 `sidebar.right.tab.guide.entry` that lists what is installed and
+//                 opens one of them (S4, §10). The standard card is the fallback.
 //   its settings  one `settings.section` page, which is where a key is changed or
 //                 unlinked once the surface is in use (S2).
 //
 // THE PANE IS THE WALLET AND AN EMPTY STATE. S2's whole claim is that a key can be
-// linked, validated at the field, and seen as a balance; the workflow list and the
-// run view are S3–S5 and are not faked here.
+// linked, validated at the field, and seen as a balance; the run view is S5 and is
+// not faked here. The card's leaf selection therefore opens the pane with
+// `params.unit` set, which is the seam S5 reads — the run form itself does not
+// exist yet, and nothing pretends it does.
 //
 // THE KEY NEVER REACHES THIS HALF (§12 rule 2). This file has no key in state
 // beyond the field being typed into, no `localStorage`, and no route that returns
@@ -51,6 +53,9 @@ window.__ModuleLoader__.load({
       IconRefreshOutline16,
       IconCheckOutline16,
       IconInfoOutline14,
+      IconChevronDownOutline14,
+      Button,
+      Menu,
       Modal,
     } = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
@@ -61,8 +66,15 @@ window.__ModuleLoader__.load({
     const GENERATE_KIND = 'generate'
     /** This package's namespace in the client locale registry. */
     const NS = 'generate'
-    /** The host's wallet route. The only endpoint this half talks to. */
+    /** The host's wallet route. One of the two endpoints this half talks to. */
     const WALLET_API = '/plugins/generate/wallet'
+    /**
+     * The host's installed-workflow list. A disk read on the host, so the card
+     * draws what is installed without a key, a network call or a coin.
+     */
+    const ADAPTERS_API = '/plugins/generate/adapters'
+    /** The flyout row that is not a workflow. It cannot collide with an adapter name. */
+    const ADD_ROW = 'add-a-workflow'
 
     const EN = {
       'type.label': 'Generate',
@@ -91,6 +103,18 @@ window.__ModuleLoader__.load({
       'pane.add.hint': 'To add a workflow, ask the agent in chat: “add this RunningHub workflow <app link>”.',
       'pane.empty.title': 'Nothing installed yet',
       'pane.empty.body': 'RunningHub apps you add open here, one tab each.',
+      // The card on the start page, and the flyout under it (§10). The card is the
+      // front door; the flyout is what a user with more than one workflow picks
+      // from. Its rows are the installed apps' own titles, so nothing here names a
+      // workflow — only the furniture around them.
+      'guide.flyout.label': 'Choose a workflow',
+      'guide.flyout.loading': 'Reading installed workflows…',
+      'guide.flyout.failed': 'The installed list could not be read.',
+      // The one thing the flyout offers when nothing is installed. It opens the
+      // pane, which is where the install sentence lives today; S4's one-field form
+      // takes that destination over when it lands.
+      'guide.flyout.add': 'Add a workflow…',
+      'guide.community': 'community',
       'wallet.key.label': 'RunningHub API key',
       'wallet.key.placeholder': 'Paste your key',
       'wallet.key.hint': 'Your key is on your RunningHub account page, under',
@@ -161,6 +185,11 @@ window.__ModuleLoader__.load({
       'pane.add.hint': '要添加工作流，在对话里对智能体说：「add this RunningHub workflow <app link>」。',
       'pane.empty.title': '还没有安装应用',
       'pane.empty.body': '你添加的 RunningHub 应用会在这里打开，每个应用一个标签页。',
+      'guide.flyout.label': '选择工作流',
+      'guide.flyout.loading': '正在读取已安装的工作流…',
+      'guide.flyout.failed': '无法读取已安装列表。',
+      'guide.flyout.add': '添加工作流…',
+      'guide.community': '社区',
       'wallet.key.label': 'RunningHub API 密钥',
       'wallet.key.placeholder': '粘贴你的密钥',
       'wallet.key.hint': '密钥在你的 RunningHub 账户页面里：',
@@ -449,6 +478,75 @@ window.__ModuleLoader__.load({
         lineHeight: 1.4,
         color: 'var(--dsw-alias-state-warn-primary)',
       },
+      /**
+       * The guide card (§10). The terminal's card is the shape to sit beside — a
+       * capsule with the glyph and two lines of text, and a chevron cell on the
+       * right — so the geometry below is the harness's own card geometry, written
+       * as inline style because this bundle carries no stylesheet. The values are
+       * the terminal card's, so the two cards line up on the start page.
+       */
+      card: {
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'stretch',
+        width: '100%',
+        overflow: 'hidden',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '.5px solid var(--dsw-alias-border-l4)',
+        borderRadius: 24,
+      },
+      cardMain: {
+        flex: 1,
+        minWidth: 0,
+        height: 'auto',
+        minHeight: 56,
+        padding: '14px 20px',
+        justifyContent: 'flex-start',
+        gap: 14,
+        textAlign: 'left',
+        borderRadius: '24px 0 0 24px',
+      },
+      /** The glyph must not be squeezed when the title beside it is long. */
+      cardIcon: {
+        flex: 'none',
+        display: 'inline-flex',
+      },
+      cardText: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        minWidth: 0,
+      },
+      cardTitle: {
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        fontSize: 15,
+        lineHeight: 1.4,
+        color: 'var(--dsw-alias-label-primary)',
+      },
+      cardDescription: {
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        fontSize: 13,
+        lineHeight: 1.4,
+        color: 'var(--dsw-alias-label-caption)',
+      },
+      /** The chevron cell: its own half of the capsule, so the two clicks are far apart. */
+      cardTrigger: {
+        flex: 'none',
+        alignSelf: 'stretch',
+        width: 44,
+        height: 'auto',
+        padding: 0,
+        borderRadius: '0 24px 24px 0',
+      },
+      cardMenu: {
+        flex: 'none',
+        alignSelf: 'stretch',
+        display: 'flex',
+      },
     }
 
     /** `props.t` when the slot supplies it, the key otherwise (never a blank). */
@@ -545,6 +643,51 @@ window.__ModuleLoader__.load({
       const forget = React.useCallback(() => setConfirmed(false), [])
 
       return { wallet, busy, load, save, unlink, confirmed, forget }
+    }
+
+    /**
+     * The installed workflows, as the card draws them.
+     *
+     * THE CARD NEVER READS A FILE ITSELF. This half has no filesystem and no idea
+     * where the profile is, so the host answers `/plugins/generate/adapters` from the
+     * directory the install writes into (§10). The read needs no key and no network,
+     * which is why the card draws on a fresh install like every other start-page card.
+     */
+    function useAdapters() {
+      const [state, setState] = React.useState({ phase: 'loading', entries: [], skipped: [] })
+
+      React.useEffect(() => {
+        let live = true
+        const read = async () => {
+          try {
+            const response = await fetch(ADAPTERS_API, { headers: { accept: 'application/json' } })
+            let body = null
+            try {
+              body = await response.json()
+            } catch {
+              body = null
+            }
+            if (!live) return
+            if (!response.ok || !body || !Array.isArray(body.entries)) {
+              setState({ phase: 'failed', entries: [], skipped: [] })
+              return
+            }
+            setState({
+              phase: 'ready',
+              entries: body.entries,
+              skipped: Array.isArray(body.skipped) ? body.skipped : [],
+            })
+          } catch {
+            if (live) setState({ phase: 'failed', entries: [], skipped: [] })
+          }
+        }
+        read()
+        return () => {
+          live = false
+        }
+      }, [])
+
+      return state
     }
 
     /** A quiet placeholder glyph — the surface's own, not the guide's cube. */
@@ -1027,6 +1170,178 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /**
+     * The flyout's rows, from the installed list (§10).
+     *
+     * Three levels, and each one is optional: capability (`group`) → workflow
+     * (`title`) → variant. A level is drawn only when it has something to hold,
+     * which is what keeps a one-workflow install from showing an empty hierarchy:
+     *
+     *   - several adapters sharing a title are that workflow's variants, each row
+     *     labelled with its own `variant`;
+     *   - a group becomes a capability submenu — unless it holds exactly one
+     *     workflow with no variants, in which case the group's name IS that row
+     *     (the "Upscale" case in §10);
+     *   - everything else is a leaf, labelled with the adapter's own title.
+     *
+     * Row ids are adapter names, because that is what the opener passes on. The two
+     * parent kinds are prefixed (`group:` / `title:`), which an adapter name cannot
+     * contain — `rh_adapter_validate` allows only lower case letters, digits, dot,
+     * dash and underscore — so a parent id can never be mistaken for a leaf.
+     *
+     * @param {readonly object[]} entries - from the host, in host order
+     * @param {(key: string) => string} t
+     * @returns {object[]} rows for the primitives `Menu`
+     */
+    function flyoutRows(entries, t) {
+      const byTitle = new Map()
+      for (const entry of entries) {
+        if (!byTitle.has(entry.title)) byTitle.set(entry.title, [])
+        byTitle.get(entry.title).push(entry)
+      }
+      /** A community app is marked as someone else's work wherever it is listed (§2). */
+      const mark = (text, entry) => (entry.origin === 'community' ? text + ' · ' + t('guide.community') : text)
+      /**
+       * One row per distinct title, in first-seen order. Collapsing happens HERE
+       * rather than per member, because two variants of one workflow are one row
+       * with two children — mapping each member would draw that row twice.
+       */
+      const rowsFor = (list) => {
+        const titles = []
+        for (const entry of list) if (!titles.includes(entry.title)) titles.push(entry.title)
+        return titles.map((title) => {
+          const same = byTitle.get(title)
+          if (same.length === 1) return { id: same[0].name, label: mark(title, same[0]) }
+          return {
+            id: 'title:' + title,
+            label: title,
+            submenu: same.map((variant) => ({ id: variant.name, label: mark(variant.variant || variant.title, variant) })),
+          }
+        })
+      }
+
+      const rows = []
+      const groups = new Map()
+      for (const entry of entries) {
+        if (entry.group === '') {
+          rows.push({ kind: 'entry', entry })
+          continue
+        }
+        if (!groups.has(entry.group)) {
+          const row = { kind: 'group', label: entry.group, members: [] }
+          groups.set(entry.group, row)
+          rows.push(row)
+        }
+        groups.get(entry.group).members.push(entry)
+      }
+
+      return rows.map((row) => {
+        if (row.kind === 'entry') return rowsFor([row.entry])[0]
+        const inner = rowsFor(row.members)
+        // One workflow, no variants: there is no hierarchy to show, so the group's
+        // own name is that row ("Upscale" in §10) rather than a parent with one child.
+        if (inner.length === 1 && inner[0].submenu === undefined) return { id: inner[0].id, label: row.label }
+        return { id: 'group:' + row.label, label: row.label, submenu: inner }
+      })
+    }
+
+    /**
+     * The guide card (§10): our door on the harness's own start page, beside
+     * "Workspace files", "New terminal" and "Browser".
+     *
+     * The type's own guide entry is what puts a card there at all; this renderer,
+     * registered at `sidebar.right.tab.guide.entry` under the same id, is what makes
+     * it list what is installed instead of being a second "open the pane" button.
+     *
+     * It DEGRADES TO ONE ENTRY, and that is a supported install (§10): a user with
+     * exactly one workflow sees that workflow's own label and no chevron, and the
+     * card opens it. A user with none sees the plain card, which opens the pane —
+     * the screen that says how an app is added. Between those two, the card is a
+     * categorized flyout.
+     *
+     * Selecting a workflow opens the `generate` kind with `params.unit`. That param
+     * is the seam S5 reads: it is what tells the tab which adapter it is for. The
+     * kind takes no `multiple` yet, so one pane holds one unit for now — `multiple`
+     * arrives with the run view, because a tab that carries no unit would duplicate
+     * itself on every click (§4).
+     */
+    function GenerateGuide(props) {
+      const t = translatorOf(props)
+      const { tab } = props.useTabInfo()
+      const { phase, entries } = useAdapters()
+      const [open, setOpen] = React.useState(false)
+      /** The degrade case: one installed workflow is the card, with no flyout. */
+      const single = entries.length === 1 ? entries[0] : null
+
+      const openUnit = React.useCallback((name) => tab.actions.openTab(GENERATE_KIND, { replaceTab: true, params: { unit: name } }), [tab])
+      const openPane = React.useCallback(() => tab.actions.openTab(GENERATE_KIND, { replaceTab: true }), [tab])
+
+      const items = []
+      if (phase === 'loading') items.push({ id: 'loading', label: t('guide.flyout.loading'), disabled: true })
+      else if (phase === 'failed') items.push({ id: 'failed', label: t('guide.flyout.failed'), disabled: true })
+      else if (entries.length > 0) {
+        items.push(...flyoutRows(entries, t))
+        items.push({ type: 'separator', id: 'guide-add-separator' })
+      }
+      // Last, always: the row that adds another workflow. It opens the pane, which
+      // is where the install sentence lives today; S4's one-field form takes that
+      // destination over when it lands.
+      items.push({ id: ADD_ROW, label: t('guide.flyout.add') })
+
+      const title = single ? single.title : props.title
+      const description = single ? single.blurb || props.description : props.description
+
+      return h(
+        'div',
+        { style: S.card, 'data-sidebar-right-guide-entry': props.kind, 'data-generate-card': phase },
+        h(
+          Button,
+          { variant: 'ghost', style: S.cardMain, onClick: () => (single ? openUnit(single.name) : openPane()) },
+          h('span', { style: S.cardIcon }, h(GenerateGuideIcon, { size: description === undefined ? 22 : 26 })),
+          h(
+            'span',
+            { style: S.cardText },
+            h('span', { style: S.cardTitle }, title),
+            description === undefined ? null : h('span', { style: S.cardDescription }, description),
+          ),
+        ),
+        // The chevron cell is absent when there is nothing to choose from. One
+        // workflow, one variant: there is no hierarchy, so none is shown.
+        entries.length === 1
+          ? null
+          : h(Menu, {
+              open,
+              portal: true,
+              autoFocus: true,
+              align: 'end',
+              className: S.cardMenu,
+              items,
+              onClose: () => setOpen(false),
+              onSelect: (id) => {
+                setOpen(false)
+                if (id === ADD_ROW) {
+                  openPane()
+                  return
+                }
+                const picked = entries.find((entry) => entry.name === id)
+                if (picked) openUnit(picked.name)
+              },
+              anchor: h(
+                Button,
+                {
+                  variant: 'ghost',
+                  style: S.cardTrigger,
+                  'aria-label': t('guide.flyout.label'),
+                  'aria-haspopup': 'menu',
+                  'aria-expanded': open,
+                  onClick: () => setOpen((value) => !value),
+                },
+                h(IconChevronDownOutline14, {}),
+              ),
+            }),
+      )
+    }
+
     /** Stage one: what a `generate` page IS. */
     function generateDefinition(t) {
       return {
@@ -1080,6 +1395,21 @@ window.__ModuleLoader__.load({
             ),
           ),
         'runninghub.title',
+      )
+      // The card (§10). The type's guide entry above is what puts a "Generate" card
+      // on the start page at all; this renderer, under the same id, is what turns it
+      // into the installed list with its flyout. REGISTERING NOTHING HERE IS A
+      // SUPPORTED FALLBACK: the guide draws its standard card, which opens the pane,
+      // so a host that never dispatches this key loses the flyout and nothing else.
+      ctx.effect(
+        () =>
+          ctx.slots.inject('sidebar.right.tab.guide.entry', () =>
+            ctx.slots.register(
+              { name: 'sidebar.right.tab.guide.entry', key: GENERATE_ID, locale: NS },
+              GenerateGuide,
+            ),
+          ),
+        'runninghub.card',
       )
       // The key is changed or unlinked here once the pane is in use (§9).
       ctx.effect(

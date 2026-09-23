@@ -413,8 +413,17 @@ function loadPuppeteer() {
   return null
 }
 
-/** The card's text, as the guide draws it from the registered thunks. */
-const CARD_TITLE = 'Generate'
+/**
+ * The card, found by our own attribute rather than by a phrase.
+ *
+ * It used to be looked up by the text "Generate", which stopped being the card's
+ * label the moment S4's card learned to degrade to a single installed workflow —
+ * with one app installed, the card IS that app, and the label is its title (§10).
+ * A data attribute is the card's own, so the check reads the card and not a phrase
+ * that another card could also carry (the rule this plugin's verifies already
+ * follow for the pane's two notes).
+ */
+const CARD_SELECTOR = '[data-sidebar-right-guide-entry="generate"]'
 
 async function live(url) {
   let puppeteer
@@ -451,19 +460,20 @@ async function live(url) {
     // The right column opens from the conversation header's corner control; the
     // guide page is what it shows when no tab is open.
     const findCard = () =>
-      page.evaluate((title) => {
-        const nodes = Array.from(document.querySelectorAll('body *'))
-        const hits = nodes.filter(
-          (node) => node.children.length === 0 && (node.textContent || '').trim() === title,
-        )
-        return hits.map((node) => {
-          const box = node.getBoundingClientRect()
-          return { tag: node.tagName, cls: node.className || '', w: Math.round(box.width), h: Math.round(box.height) }
-        })
-      }, CARD_TITLE)
+      page.evaluate((selector) => {
+        const node = document.querySelector(selector)
+        if (!node) return null
+        const box = node.getBoundingClientRect()
+        return {
+          tag: node.tagName,
+          text: (node.textContent || '').trim().slice(0, 120),
+          w: Math.round(box.width),
+          h: Math.round(box.height),
+        }
+      }, CARD_SELECTOR)
 
-    let hits = await findCard()
-    if (hits.length === 0) {
+    let hit = await findCard()
+    if (hit === null) {
       const opened = await page.evaluate(() => {
         const controls = Array.from(document.querySelectorAll('button, [role="button"]'))
         const wanted = controls.find((control) => {
@@ -476,14 +486,19 @@ async function live(url) {
       })
       if (opened) {
         await new Promise((resolve) => setTimeout(resolve, 1200))
-        hits = await findCard()
+        hit = await findCard()
       }
     }
 
     check(
-      'live: the guide card "' + CARD_TITLE + '" renders on the running page',
-      hits.length > 0,
-      hits.length > 0 ? JSON.stringify(hits[0]) : 'no element with that text; page errors: ' + (pageErrors.join(' | ') || 'none'),
+      'live: the guide card (' + CARD_SELECTOR + ') renders on the running page',
+      hit !== null,
+      hit !== null ? JSON.stringify(hit) : 'no element with that attribute; page errors: ' + (pageErrors.join(' | ') || 'none'),
+    )
+    check(
+      'live: the card is labelled and has size',
+      hit !== null && hit.text.length > 0 && hit.w > 0 && hit.h > 0,
+      hit === null ? 'no card' : JSON.stringify(hit),
     )
   } catch (error) {
     check('live: the guide card is on the running page', false, String((error && error.message) || error))

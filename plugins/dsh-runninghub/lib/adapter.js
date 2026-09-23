@@ -26,6 +26,8 @@
  *
  * @module @muen/dsh-runninghub/lib/adapter
  */
+import { readdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { DOOR_TYPES } from './doors.js'
 
 export const ADAPTER_SCHEMA = 'muen-rh-adapter/v1'
@@ -251,4 +253,87 @@ export function validateAdapter(adapter, { app }) {
     problems,
     doors: Object.keys(doors).length,
   }
+}
+
+/**
+ * Every adapter on disk, as a list the guide card can draw.
+ *
+ * The card is a DISK READ, not a network call: the pane asks the host for this when
+ * it mounts, and the host answers with what is installed right now. Nothing here
+ * talks to RunningHub, so drawing the card spends no coins and cannot fail on the
+ * network.
+ *
+ * AN ENTRY IS LISTED ONLY IF IT COULD BE OPENED. Three facts decide that, and each
+ * is a rule the epic already states:
+ *
+ *   1. `schema` is this version (§8): a file from some future shape is not ours to read;
+ *   2. `provenance.dryRun === 'ok'`: "an entry appears only after `rh_adapter_validate`
+ *      passes" (§10);
+ *   3. `origin` is set: the API cannot say whose app it is, so an adapter that never
+ *      answered that question was never confirmed by a person (§2 rule 1).
+ *
+ * A file that fails one of those is REPORTED, never silently dropped — the card is
+ * what the user sees, and "I installed it and it is not there" needs an answer.
+ *
+ * @param {string} dir - `<profile>/runninghub/adapters`
+ * @returns {Promise<{ entries: Array<object>, skipped: Array<{file: string, reason: string}> }>}
+ *   `entries` in a stable order (title, then variant, then name), each carrying only
+ *   what a card draws.
+ */
+export async function listAdapters(dir, { readDirectory = readdir, readText = readFile } = {}) {
+  let names
+  try {
+    names = await readDirectory(dir)
+  } catch (error) {
+    // No directory is the fresh-install case, not a failure: the card is empty.
+    if (error && error.code === 'ENOENT') return { entries: [], skipped: [] }
+    throw error
+  }
+
+  const entries = []
+  const skipped = []
+  for (const file of names.filter((name) => name.endsWith('.json')).sort()) {
+    let adapter
+    try {
+      adapter = JSON.parse(await readText(join(dir, file), 'utf8'))
+    } catch {
+      skipped.push({ file, reason: 'invalid-json' })
+      continue
+    }
+    const read = adapter && typeof adapter === 'object' && !Array.isArray(adapter) ? adapter : null
+    const name = str(read && read.name) || file.slice(0, -'.json'.length)
+    if (!read || read.schema !== ADAPTER_SCHEMA) {
+      skipped.push({ file, reason: 'schema' })
+      continue
+    }
+    if (!read.provenance || read.provenance.dryRun !== 'ok') {
+      skipped.push({ file, reason: 'not-validated' })
+      continue
+    }
+    if (!ORIGINS.includes(read.origin)) {
+      skipped.push({ file, reason: 'origin-missing' })
+      continue
+    }
+    entries.push({
+      name,
+      title: str(read.title) || name,
+      blurb: str(read.blurb) || '',
+      group: str(read.group) || '',
+      variant: str(read.variant) || '',
+      cover: str(read.cover) || '',
+      origin: read.origin,
+      appId: str(read.source && read.source.appId) || '',
+      webappName: str(read.source && read.source.webappName) || '',
+      runLabel: str(read.ui && read.ui.runLabel) || '',
+      doorCount: read.doors && typeof read.doors === 'object' ? Object.keys(read.doors).length : 0,
+    })
+  }
+
+  entries.sort((a, b) => order(a.title, b.title) || order(a.variant, b.variant) || order(a.name, b.name))
+  return { entries, skipped }
+}
+
+/** Plain code-unit order: one answer on every machine, unlike a locale-aware sort. */
+function order(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0
 }

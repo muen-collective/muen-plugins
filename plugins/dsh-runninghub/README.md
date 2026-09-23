@@ -3,9 +3,9 @@
 The Generate space for DeepSeek Harness: link your own RunningHub wallet, add a
 workflow by pasting its app link, and run it in the right panel. Epic 61.
 
-**This is S1 + S2 + S3: the plugin installs, the surface mounts, a RunningHub key can be linked, and a
-workflow can be added from its app link.** The categorized flyout and the run view are S4–S5 and are not
-faked here.
+**This is S1 + S2 + S3, and S4's card: the plugin installs, the surface mounts, a RunningHub key can be
+linked, a workflow can be added from its app link, and the start-page card lists what is installed and opens
+one.** The pane's one-field install form and the run view (S5) are not faked here.
 
 ## What it registers
 
@@ -15,6 +15,8 @@ faked here.
 | `sidebar.right.pane.tab` | the pane body, keyed by the same id |
 | `sidebar.right.pane.tab.title` | the tab chip's live text |
 | the type's `guide[]` | one entry, which puts the **Generate** card on the right panel's start page |
+| `sidebar.right.tab.guide.entry` | the card renderer, under the same id: the installed list and its flyout (S4) |
+| `/plugins/generate/adapters` | the host route the card reads that list from — a disk read, no key, no network |
 | `settings.section` | one settings page, `runninghub-wallet`, where the key is changed or unlinked |
 | the client locale registry | namespace `generate`, en + zh |
 | `ctx.tools` | `rh_workflow_graph` (read an app's doors) and `rh_adapter_validate` (check a written adapter) |
@@ -127,12 +129,44 @@ class in its stylesheet, Terminal's card is a black rect — so Generate carries
 or photo glyph in the set; a picture-specific mark would mean hand-authoring one the way Terminal
 (`TerminalGuideIcon`) and Files (`FolderSheetGlyph`) do.
 
-It uses the standard guide card. The categorized flyout (the app picker) is S4
-and registers a renderer at `sidebar.right.tab.guide.entry` under the same id.
+## The card (S4)
 
-`multiple` is absent on purpose: with it, the param-less guide card would open a
-new tab on every click. One page per pane is right until a tab carries a unit's
-params (S5, D17).
+The type's own `guide[]` entry is what puts a card on the start page beside
+"Workspace files", "New terminal" and "Browser". The card renderer registered at
+`sidebar.right.tab.guide.entry` under the same id is what makes that card list what
+is installed: the host reads `<profile>/runninghub/adapters/` and answers
+`/plugins/generate/adapters`, and the card draws one row per workflow.
+
+It draws three shapes, and all three are supported installs:
+
+| Installed | The card |
+|---|---|
+| none | the type's own label, and a flyout whose only row is **Add a workflow…** |
+| one | that workflow's title and blurb, no chevron — the card IS the app, and clicking it opens it |
+| several | the type's label, and a flyout of **capability → workflow → variant**, with Add a workflow… last |
+
+A level of the flyout is drawn only when it has something to hold: a group with one
+member and no variants becomes that row, not a parent with a single child; two
+adapters sharing a title are that workflow's variants. A community app is marked as
+someone else's work, because the API cannot say whose app it is and the adapter is
+where a person said so.
+
+An entry is listed only if it could be opened: the schema is this version,
+`provenance.dryRun` is `ok` (which is what "only after `rh_adapter_validate` passes"
+means in a file), and `origin` is set. A file that fails one of those is **reported**
+in the route's `skipped` list rather than dropped silently, because "I installed it
+and it is not there" has to have an answer.
+
+Selecting a workflow opens the `generate` kind with `params.unit` — the seam S5
+reads to know which adapter a tab is for. The run form does not exist yet, so the tab
+it opens is today's pane.
+
+`multiple` is absent on purpose: with it, the param-less card would open a new tab on
+every click. One page per pane is right until a tab carries a unit's params (S5, D17).
+
+`Add a workflow…` opens the pane, which is where the install sentence lives today.
+S4's one-field install form takes that destination over when it lands; until then the
+row is a signpost, not a second install path.
 
 ## The install (S3)
 
@@ -210,6 +244,7 @@ node verify/wallet.mjs           # the wallet routes, driven against fakes (+ li
 node verify/save-confirmation.mjs # a save that worked, and one that was refused
 node verify/adapter.mjs          # the install: doors read, adapters written and refused
 node verify/skill.mjs            # the skill's order, and that the plugin has no write path
+node verify/start.mjs            # the card: every install shape, and what may be listed
 node verify/mount.mjs --static   # registration only
 ```
 

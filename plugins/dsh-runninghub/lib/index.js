@@ -59,7 +59,7 @@ import { dirname } from 'node:path'
 
 import { parseAppRef, readAppDoors } from './doors.js'
 import { loadHouse } from './house.js'
-import { ADAPTER_SCHEMA, adapterFromDoors, validateAdapter } from './adapter.js'
+import { ADAPTER_SCHEMA, adapterFromDoors, listAdapters, validateAdapter } from './adapter.js'
 import { dataPaths, resolveDataRoot } from './paths.js'
 
 /** Matches the row id in cordis.patch.yml. */
@@ -67,6 +67,15 @@ export const name = 'runninghub'
 
 /** The one wallet path. Distinct (kind, path) per route, so this cannot collide. */
 const WALLET_PATH = '/plugins/generate/wallet'
+
+/**
+ * The installed-adapter list, read by the guide card.
+ *
+ * A second route rather than a query on the wallet route: the wallet is one
+ * account and the list is one directory, and a route that answered two unrelated
+ * questions would have to be told apart by its caller.
+ */
+const ADAPTERS_PATH = '/plugins/generate/adapters'
 
 /**
  * The credential reference. A `CredentialRef` is the environment-variable-name
@@ -559,6 +568,12 @@ function mountSkill(ctx) {
 export function apply(ctx, config = {}) {
   const base = str(config.base) || str(process.env.RH_BASE) || DEFAULT_BASE
 
+  // Resolved before the routes mount, because the adapters route answers from this
+  // directory and the tools below report the same resolution (§4: one root, said
+  // out loud once).
+  const root = resolveDataRoot()
+  const paths = dataPaths(root.root)
+
   const wallet = async (req, res) => {
     const method = (req.method || 'GET').toUpperCase()
     const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
@@ -654,9 +669,29 @@ export function apply(ctx, config = {}) {
     methodNotAllowed(res, 'GET, POST, DELETE')
   }
 
+  /**
+   * The installed list. A read of one directory, so it needs no key, no network
+   * and no wallet — the card draws on a fresh install, before anything is linked
+   * (§10: the card ships with no apps, and that empty state is correct).
+   */
+  const adapters = async (req, res) => {
+    if ((req.method || 'GET').toUpperCase() !== 'GET') {
+      methodNotAllowed(res, 'GET')
+      return
+    }
+    try {
+      send(res, 200, await listAdapters(paths.adapters))
+    } catch (error) {
+      // The directory exists but cannot be read: a permission or a filesystem
+      // problem, not an empty install, and the two must not look alike.
+      send(res, 500, { entries: [], skipped: [], error: 'unreadable', detail: String((error && error.message) || error) })
+    }
+  }
+
   const mount = (server) => {
     if (!server || typeof server.register !== 'function') return
     ctx.effect(() => server.register({ kind: 'exact', path: WALLET_PATH, handler: wallet }), 'runninghub: wallet')
+    ctx.effect(() => server.register({ kind: 'exact', path: ADAPTERS_PATH, handler: adapters }), 'runninghub: adapters')
   }
 
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined
@@ -672,8 +707,6 @@ export function apply(ctx, config = {}) {
   // S3: the install. Both registrations are optional in the same way the web server
   // is — a profile without the tools or skills service still gets the wallet, and a
   // missing registration is reported rather than thrown.
-  const root = resolveDataRoot()
-  const paths = dataPaths(root.root)
   const mountOptional = (name, register) => {
     if (register()) return
     if (typeof ctx.inject !== 'function') return
