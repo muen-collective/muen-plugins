@@ -1,0 +1,13 @@
+# @muen/dsh-generate-space — bundle patch layer (Epic 61).
+#
+# One row: mount this package into the profile tree. The host half is inert until
+# S2 (the wallet routes); the client half registers the `generate` right-panel tab
+# type, its body and its chip, and the guide entry that puts the "Generate" card
+# on the right panel's start page.
+#
+# Row id `generate-space` is also the profile directory name the surface's own
+# data lives under, so a rename moves it (Epic 61 D10/Q4 — the market name is
+# still open; `@muen/dsh-generate-space` is the working title).
+- insert:
+    - id: generate-space
+      name: '@muen/dsh-generate-space'
