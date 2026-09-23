@@ -449,15 +449,26 @@ rather than pretending.
 breakpoint we should 2 column parameters + output preview"*, then *"let's make layout 2 cards, parameters card
 and preview card, these are reusable components so when you build UI from design.md it will be consistent"*).
 `useRun` owns the state; `RunControl` renders the button and the gate at the foot of the parameters card,
-`RunOutput` renders the phase, the failure and the result in the card beside it. The two cards are a **wrapping
+`RunOutput` renders the phase, the failure and the link in the card beside it. The two cards are a **wrapping
 flex row**, so the breakpoint is the pane's own width — docked, split or fullscreen — and they stack in a narrow
 pane with no media query and no window measurement. Both are drawn by **one `Card` component** (`lib/client.js`):
 the raised layer, the border, the 12px radius and the 14px padding live there once, so the next panel in this
 plugin gets them by using the component rather than by copying a style. The preview card is drawn before a run
-rather than after one, and an empty one keeps a panel's height, so opening a surface and starting a run do not
-change the shape of the pane. A workflow whose run is not built yet gets its preview card too, with the sentence
-that says so inside it, rather than a lopsided pane that fills in later. Neither card carries a heading of its
-own (founder's call): the workflow's title and blurb head the parameters card as content.
+rather than after one, so opening a surface and starting a run do not change the shape of the pane. A workflow
+whose run is not built yet gets its preview card too, with the sentence that says so inside it, rather than a
+lopsided pane that fills in later. Neither card carries a heading of its own (founder's call): the workflow's
+title and blurb head the parameters card as content.
+
+**The aspect door shapes the preview canvas** (founder, 2026-09-23: *"the aspect controls the shape of preview
+card"*). The canvas inside the preview card takes its `aspect-ratio` from the workflow's own aspect door — the
+one `preview.aspectDoor` names, or failing that the door whose key or API field name is `aspect_ratio`, which is
+what both kinds of workflow call it. A value is read as a pair, not as a menu entry: `9:16`, `16:9`,
+`1:1 (Square)` and `2.35:1` all carry it in their first characters, and the label a provider hangs off it is
+ignored. So choosing 9:16 makes the canvas portrait **before** the run and the result lands in that same frame
+(`object-fit: contain`, so no aspect is ever cropped), capped at `60vh` because a portrait canvas in a narrow
+pane would otherwise be taller than the screen. A workflow with no aspect door gets a **square** canvas — the one
+shape that never misrepresents a workflow — rather than a guessed one. `RunOutput` no longer draws the image at
+all: it draws the phase, the failure and the open/again controls, and the canvas above it owns the picture.
 
 **A number door is a stepper** (founder, 2026-09-23, with RunningHub's own form as the reference: *"for number
 input use the correct primitive"*): a bordered group with a square decrement, the value centred in tabular
@@ -596,7 +607,7 @@ trigger translated away**. Those four mutations were not re-run against the acco
 linked pane" one targets a note that no longer exists there — so treat them as the record of the earlier
 suite, not as a score for this one.
 
-`verify/start.mjs` (**220/220**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/start.mjs` (**223/223**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
 the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
 **one accordion section per provider in registry order, all four whether linked or not**, each header holding
@@ -613,11 +624,15 @@ Opening a workflow is checked through the founder's 2026-09-23 fixes as well: th
 its label** and room under it, the surface is a **wrapping row of two cards** — parameters and preview, the first
 holding the doors and the run control, the second holding what the run says and makes — drawn empty before a run,
 given to a workflow whose run is not built yet as well, and carrying equal background, border, radius and padding
-because both come from the one `Card`; and a **number door is the stepper** — the increment moves by the app's own
+because both come from the one `Card`; the **preview canvas** takes the shape the workflow's own aspect door
+asks for (`1 / 1` on the fixture, `16 / 9` after the door is changed, and a square canvas for the catalogue entry
+that has no aspect door at all); and a **number door is the stepper** — the increment moves by the app's own
 `step`, and walking it down stops at the app's own floor with that button disabled. Mutation-tested the same day,
 the card kit included: **219/220** with the kit's radius and padding changed, with either column taken off the
-`Card`, or with the empty-preview marker dropped; **216/217** with the chevron removed, the margin under the back
-control zeroed, or the floor taken off the decrement; **215/217** with the columns no longer wrapping.
+`Card`, or with the empty-preview marker dropped; **222/223** with the canvas no longer driven by the aspect door,
+with the door no longer found, or with its value no longer parsed; **216/217** with the chevron removed, the
+margin under the back control zeroed, or the floor taken off the decrement; **215/217** with the columns no longer
+wrapping.
 
 `verify/adapter.mjs` (**96/96**) drives both tools through the definitions the plugin actually registers, with
 a stubbed RunningHub that answers **per app id** — a URL-blind stub would let an adapter naming one app pass
@@ -634,7 +649,7 @@ distinctly; an adapter with no `ui` block still passes; and no call creates the 
 seed label**, **84/86 when the derived values stop being compared** and **83/86 when the data root ignores
 `--profile`** — the checks fail on the defects they were written for.
 
-`verify/skill.mjs` (**58/58**) mounts the plugin against a recording skills registry and reads the text the
+`verify/skill.mjs` (**59/59**) mounts the plugin against a recording skills registry and reads the text the
 host would serve for **both** skills: each is the shipped file byte for byte, `add-rh-workflow`'s ask comes
 before its fetch and its confirmation before its write, `design-generate-screen`'s rules come before its steps
 and it carries the rules the pane cannot bend (no node id or field name drawn, nothing spends without the
@@ -647,7 +662,7 @@ removed**, **55/56 with the "no node id, no field name" rule removed**, **55/56 
 **55/56 with the four-door budget turned into "any number of doors"**, **55/56 with the opening design step
 renamed**, and **55/56 with the rules moved after the steps** — every one fails on the claim it breaks, and
 none of them takes a second check down with it. **57/58 with the `Card` rule removed**, the check the card kit
-added when the two cards landed.
+added when the two cards landed, and **58/59 with the aspect-canvas rule removed**.
 
 ## Not in this package, by rule
 

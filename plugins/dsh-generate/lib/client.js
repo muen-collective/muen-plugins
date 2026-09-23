@@ -1330,11 +1330,31 @@ window.__ModuleLoader__.load({
         gap: 12,
       },
       /**
-       * A preview card with nothing in it yet keeps a panel's height rather than collapsing
-       * to a bar: two cards that change shape as a run starts would make the pane jump.
+       * The preview card's canvas: the plate the result is drawn on, shaped by the
+       * workflow's own aspect door (founder, 2026-09-23: *"the aspect controls the shape of
+       * preview card"*). Its `aspectRatio` is written per render from that door's current
+       * value, so choosing 9:16 makes the canvas portrait before a run and keeps the
+       * result in the same frame after it. It is capped in height because a portrait
+       * canvas in a narrow pane would otherwise be taller than the screen.
        */
-      surfaceOutputEmpty: {
-        minHeight: 120,
+      previewFrame: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        maxHeight: '60vh',
+        boxSizing: 'border-box',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '1px solid var(--dsw-alias-border-l1)',
+        borderRadius: 8,
+        overflow: 'hidden',
+      },
+      /** The result inside the canvas: contained, so no aspect is ever cropped. */
+      previewImage: {
+        display: 'block',
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
       },
       /** A door's control. Same field as the key form, tighter under its own label. */
       input: {
@@ -1524,19 +1544,8 @@ window.__ModuleLoader__.load({
         borderColor: 'var(--dsw-alias-state-error-primary)',
         alignItems: 'flex-start',
       },
-      runFigure: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-      },
-      runImage: {
-        display: 'block',
-        width: '100%',
-        maxWidth: 460,
-        borderRadius: 10,
-        border: '.5px solid var(--dsw-alias-border-l1)',
-        background: 'var(--dsw-alias-bg-layer-1)',
-      },
+      // `runFigure` and `runImage` used to hold the result here. The result moved into the
+      // preview card's own canvas, which the aspect door shapes — see `previewFrame`.
       runLink: {
         display: 'inline-flex',
         alignItems: 'center',
@@ -2517,6 +2526,56 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * THE ASPECT DOOR, AND THE SHAPE IT GIVES THE PREVIEW (founder, 2026-09-23: *"the
+     * aspect controls the shape of preview card"*).
+     *
+     * Which door that is comes from the adapter, never from a guess about meaning: a
+     * `preview.aspectDoor` naming a door wins, and failing that the door whose key or
+     * API field name is `aspect_ratio` — which is what both kinds of workflow call it
+     * (Krea's catalogue and a RunningHub app's exposed inputs).
+     *
+     * A value is read as a shape, not as a menu entry: `9:16`, `1:1 (Square)` and
+     * `2.35:1` all carry the pair in their first characters, and the label a provider
+     * hangs off it is ignored. A value that carries no pair leaves the canvas square,
+     * which is the one shape that never misrepresents a workflow.
+     */
+    const SQUARE = { w: 1, h: 1, css: '1 / 1' }
+
+    /** `9:16`, `1:1 (Square)`, `1024x1024` → the pair, or null when there is none. */
+    function shapeFrom(value) {
+      const match = /^\s*(\d+(?:\.\d+)?)\s*[:x/]\s*(\d+(?:\.\d+)?)/.exec(String(value === undefined || value === null ? '' : value))
+      if (!match) return null
+      const w = Number(match[1])
+      const h = Number(match[2])
+      if (!(w > 0) || !(h > 0)) return null
+      return { w, h, css: match[1] + ' / ' + match[2] }
+    }
+
+    /** The aspect door's own key, or null when the adapter names none. */
+    function aspectDoorKey(adapter) {
+      if (!adapter || !adapter.doors) return null
+      const declared = adapter.preview && adapter.preview.aspectDoor
+      if (typeof declared === 'string' && adapter.doors[declared]) return declared
+      for (const key of Object.keys(adapter.doors)) {
+        const door = adapter.doors[key]
+        if (door.type === 'image' || door.type === 'list') continue
+        const tokens = [key, door.fieldName]
+          .filter((value) => typeof value === 'string')
+          .map((value) => value.replace(/[^a-z0-9]/gi, '').toLowerCase())
+        if (tokens.includes('aspectratio')) return key
+      }
+      return null
+    }
+
+    /** The shape the preview takes right now, from the door's current value. */
+    function previewShape(adapter, values) {
+      const key = aspectDoorKey(adapter)
+      if (key === null) return SQUARE
+      const value = values ? values[key] : undefined
+      return shapeFrom(value) || SQUARE
+    }
+
+    /**
      * A CARD, as a component rather than a style applied by hand.
      *
      * Every panel in a surface is this: the parameters and the preview today, whatever a
@@ -2602,6 +2661,10 @@ window.__ModuleLoader__.load({
       // change the shape of the pane around them.
       const hasOutput =
         run.phase === 'queued' || run.phase === 'running' || run.phase === 'failed' || (run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0)
+      // The canvas's shape, from the workflow's own aspect door (see `previewShape`): the
+      // same door that decides what the provider is asked for decides what the person sees.
+      const shape = previewShape(adapter, values)
+      const hasResult = run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0
 
       /** One row of a list door, at the values the row's own doors declare. */
       const addRow = (key, door) => () =>
@@ -2810,15 +2873,29 @@ window.__ModuleLoader__.load({
           // CARD 2 — the preview. It is drawn for every ready surface, runnable or not
           // (founder, 2026-09-23: *"2 cards, parameters card and preview card"*): a
           // workflow whose run is not built yet says so here rather than leaving the panes
-          // lopsided, and the pane never reflows as a run starts.
+          // lopsided, and the pane never reflows as a run starts. Its canvas takes the
+          // shape the workflow's own aspect door asks for (founder, 2026-09-23: *"the
+          // aspect controls the shape of preview card"*).
           h(
             Card,
             {
-              style: { ...S.surfaceOutput, ...(hasOutput ? {} : S.surfaceOutputEmpty) },
+              style: S.surfaceOutput,
               'data-generate-card': 'preview',
               'data-generate-run-output': adapter.name,
               ...(hasOutput ? {} : { 'data-generate-output-empty': 'yes' }),
             },
+            h(
+              'div',
+              {
+                style: { ...S.previewFrame, aspectRatio: shape.css },
+                'data-generate-preview-frame': adapter.name,
+                'data-generate-preview-shape': shape.w + ':' + shape.h,
+                ...(adapter.runnable === true && hasResult ? { 'data-generate-result': run.urls[0] } : {}),
+              },
+              adapter.runnable === true && hasResult
+                ? h('img', { style: S.previewImage, src: run.urls[0], alt: t('run.result.alt') })
+                : null,
+            ),
             adapter.runnable === true
               ? h(RunOutput, { key: adapter.name + '-out', t, adapter, run })
               : h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
@@ -3083,19 +3160,14 @@ window.__ModuleLoader__.load({
         run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0
           ? h(
               'div',
-              { style: S.runFigure, 'data-generate-result': run.urls[0] },
-              h('img', { style: S.runImage, src: run.urls[0], alt: t('run.result.alt') }),
+              { style: S.row },
               h(
-                'div',
-                { style: S.row },
-                h(
-                  'a',
-                  { style: S.runLink, href: run.urls[0], target: '_blank', rel: 'noreferrer', 'data-generate-result-url': run.urls[0] },
-                  t('run.result.open'),
-                  h(IconRightUpOutline16, { size: 12 }),
-                ),
-                h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: run.back }, t('run.again')),
+                'a',
+                { style: S.runLink, href: run.urls[0], target: '_blank', rel: 'noreferrer', 'data-generate-result-url': run.urls[0] },
+                t('run.result.open'),
+                h(IconRightUpOutline16, { size: 12 }),
               ),
+              h('button', { type: 'button', style: S.ghost, 'data-generate-run-again': 'yes', onClick: run.back }, t('run.again')),
             )
           : null,
       )

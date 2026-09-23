@@ -23,6 +23,10 @@ never invents a control, never invents a number, and never writes plugin code.
   preview card — and the card surface, radius, border and padding live in that one component.
   Use it, and never restate a panel's style: the next screen stays consistent with this one
   only if every panel is drawn by the same component.
+- **The preview canvas takes its shape from the workflow's own aspect door.** The door named
+  `aspect_ratio` — or whatever the adapter's `preview.aspectDoor` names — decides: `9:16` is a
+  portrait canvas, `16:9` landscape, `1:1` square. Never hard-code a shape, and never invent an
+  aspect door for a workflow that has none: that workflow gets a square canvas.
 - **Copy is the profile's language, and data.** Labels are authored words. The plugin's own
   sentences come from `ctx.locale` under namespace `generate`.
 - **The visual layer is the harness's own.** `--dsw-alias-*` tokens only: no EVA token name, no

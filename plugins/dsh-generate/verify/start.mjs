@@ -2043,6 +2043,32 @@ check(
       })(),
       'one card spends, the other one shows',
     )
+    // THE ASPECT DOOR SHAPES THE CANVAS (founder, 2026-09-23: *"the aspect controls the shape
+    // of preview card"*). The door that decides what the provider is asked for decides what
+    // the person sees — before the run as well as after it.
+    check(
+      'the preview canvas takes the shape the workflow\'s own aspect door asks for',
+      (() => {
+        const frame = byAttr(tree, 'data-generate-preview-frame', MODEL_UNIT.name)
+        return !!frame && frame.props['data-generate-preview-shape'] === '1:1' && frame.props.style.aspectRatio === '1 / 1'
+      })(),
+      JSON.stringify(byAttr(tree, 'data-generate-preview-frame', MODEL_UNIT.name) ? byAttr(tree, 'data-generate-preview-frame', MODEL_UNIT.name).props.style.aspectRatio : 'no canvas'),
+    )
+    const aspectDoor = byAttr(tree, 'data-generate-door', 'aspect_ratio')
+    if (aspectDoor) aspectDoor.props.onChange({ target: { value: '16:9' } })
+    const reshaped = await settle(paneSlot.component, props, 'pane-run')
+    check(
+      'choosing a different aspect reshapes the canvas, before anything runs',
+      (() => {
+        const frame = byAttr(reshaped, 'data-generate-preview-frame', MODEL_UNIT.name)
+        return !!frame && frame.props['data-generate-preview-shape'] === '16:9' && frame.props.style.aspectRatio === '16 / 9'
+      })(),
+      JSON.stringify(byAttr(reshaped, 'data-generate-preview-frame', MODEL_UNIT.name) ? byAttr(reshaped, 'data-generate-preview-frame', MODEL_UNIT.name).props['data-generate-preview-shape'] : 'no canvas'),
+    )
+    // Back to the fixture's own shape, so the checks after this block read what it authored.
+    const backToSquare = byAttr(reshaped, 'data-generate-door', 'aspect_ratio')
+    if (backToSquare) backToSquare.props.onChange({ target: { value: '1:1' } })
+    await settle(paneSlot.component, props, 'pane-run')
     check('nothing is posted until that control is pressed', stub.runs.length === 0, JSON.stringify(stub.runs))
 
     if (runButton) runButton.props.onClick()
@@ -2235,6 +2261,17 @@ check(
     tree = await settle(paneSlot.component, props, 'pane-arrays')
     const runButton = byAttr(tree, 'data-generate-run', ARRAYS_UNIT.name)
     check('a filled row is a value the run control can be pressed with', !!runButton, runButton ? 'the run control is there' : 'no run control')
+    check(
+      'a workflow with no aspect door gets a square canvas rather than a guessed shape',
+      (() => {
+        // This catalogue entry has no aspect field at all (its doors are the prompt, an
+        // image and three lists), so the canvas falls back to the one shape that never
+        // misrepresents a workflow.
+        const frame = byAttr(tree, 'data-generate-preview-frame', ARRAYS_UNIT.name)
+        return !!frame && frame.props['data-generate-preview-shape'] === '1:1' && frame.props.style.aspectRatio === '1 / 1'
+      })(),
+      JSON.stringify(byAttr(tree, 'data-generate-preview-frame', ARRAYS_UNIT.name) ? byAttr(tree, 'data-generate-preview-frame', ARRAYS_UNIT.name).props['data-generate-preview-shape'] : 'no canvas'),
+    )
     if (runButton) runButton.props.onClick()
     let gate = await settle(paneSlot.component, props, 'pane-arrays')
     const promptDoor = byAttr(gate, 'data-generate-door', 'prompt')

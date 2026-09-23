@@ -160,6 +160,7 @@ check('it carries the rule that nothing spends without the gate', /Nothing spend
 check('it makes the app the authority on every number', /The app or the API is the authority on numbers/.test(designShipped))
 check('it fixes the main screen at the house style\'s four doors', /Four doors is the main screen/.test(designShipped) && /`house\.mainDoors` is 4/.test(designShipped))
 check('it names the one Card every panel is drawn from, so the next screen matches this one', /A panel is a `Card`/.test(designShipped) && /never restate a panel's style/.test(designShipped))
+check('it makes the preview canvas follow the workflow\'s own aspect door', /The preview canvas takes its shape from the workflow's own aspect door/.test(designShipped) && /[Nn]ever hard-code a shape/.test(designShipped))
 check('its screens table carries the two cards, parameters and preview', designAt('the parameters card') >= 0 && designAt('the preview card') >= 0)
 check('it reads the surface before designing it: the route or the read tool', designAt('GET /plugins/generate/providers/<id>/workflow') >= 0 && designAt('rh_workflow_graph') >= 0)
 check('it maps all five controls the pane can draw', ['`image`', '`text`', '`number`', '`select`', '`list`'].every((control) => designShipped.includes(control)))
