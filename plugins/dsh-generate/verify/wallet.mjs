@@ -320,6 +320,7 @@ function mount(credentials, folders) {
   const previous = process.env.RH_DATA_DIR
   process.env.RH_DATA_DIR = dir
   const revealed = []
+  const revealedFiles = []
   let pickAnswer = { path: '/tmp/dialog-picked' }
   const folders = {
     canChoose: true,
@@ -329,6 +330,10 @@ function mount(credentials, folders) {
     },
     reveal: async (path) => {
       revealed.push(path)
+      return path
+    },
+    revealFile: async (path) => {
+      revealedFiles.push(path)
       return path
     },
   }
@@ -404,6 +409,37 @@ function mount(credentials, folders) {
       'the reveal opens the current root in the file browser',
       reveal.statusCode === 200 && json(reveal).ok === true && revealed[0] === '/tmp/dialog-picked',
       JSON.stringify({ status: reveal.statusCode, body: json(reveal), revealed }),
+    )
+    // OPEN IN FINDER for one saved file (founder, 2026-09-23: *"Open the image opens
+    // in browser, but its more useful to open in finder"*): `file` selects that exact
+    // file, a non-absolute file is refused before any helper runs, and a helper that
+    // cannot run is its own 500 — the same three rules the folder reveal follows.
+    const savedFile = '/tmp/dialog-picked/krea/job-9.png'
+    const revealOne = await call(library, 'POST', { action: 'reveal', file: savedFile })
+    check(
+      'a file with the reveal selects that exact file, not just its folder',
+      revealOne.statusCode === 200 && json(revealOne).ok === true && revealedFiles[0] === savedFile && revealed.length === 1,
+      JSON.stringify({ status: revealOne.statusCode, revealedFiles, folderReveals: revealed.length }),
+    )
+    const badFile = await call(library, 'POST', { action: 'reveal', file: 'relative/file.png' })
+    check(
+      'a file that names no folder this side can resolve is refused before any helper runs',
+      badFile.statusCode === 400 && json(badFile).error === 'bad-path' && revealedFiles.length === 1,
+      JSON.stringify({ status: badFile.statusCode, body: json(badFile), revealedFiles }),
+    )
+    const fileFails = mount(fakeCredentials({}), {
+      canChoose: true,
+      choose: async () => ({ cancelled: true }),
+      reveal: async () => {},
+      revealFile: async () => {
+        throw new Error('no finder here')
+      },
+    })
+    const failedFile = await call(fileFails.library, 'POST', { action: 'reveal', file: savedFile })
+    check(
+      'a file reveal that cannot run is reported as its own failure',
+      failedFile.statusCode === 500 && json(failedFile).error === 'reveal-failed',
+      JSON.stringify(json(failedFile)),
     )
     const reset = await call(library, 'POST', { path: null })
     check(

@@ -81,7 +81,7 @@ import { ADAPTER_SCHEMA, adapterFromDoors, validateAdapter } from './adapter.js'
 import { PROVIDERS, normalizeKey, providerById, runOptions, runninghub, uploadFile } from './providers.js'
 import { readHidden, withHidden, writeHidden } from './hidden.js'
 import { readChosenFolder, writeChosenFolder } from './library-path.js'
-import { CAN_CHOOSE, chooseFolder, revealFolder } from './folder-actions.js'
+import { CAN_CHOOSE, chooseFolder, revealFile, revealFolder } from './folder-actions.js'
 import { resolveDataRoot } from './paths.js'
 
 /** Matches the row id in cordis.patch.yml. */
@@ -549,7 +549,7 @@ export function apply(ctx, config = {}) {
    * the config so a verify run injects fakes — a test must never pop a real dialog on
    * the founder's screen — and `canChoose` is whether a dialog can run on this host.
    */
-  const folders = config.folders || { choose: chooseFolder, reveal: revealFolder, canChoose: CAN_CHOOSE }
+  const folders = config.folders || { choose: chooseFolder, reveal: revealFolder, revealFile, canChoose: CAN_CHOOSE }
 
   // Resolved before the routes mount, because the provider routes answer from these
   // directories and the tools below report the same resolution (§4: one root, said
@@ -1208,6 +1208,27 @@ export function apply(ctx, config = {}) {
       return
     }
     if (body.action === 'reveal') {
+      // With `file`, this is the finished run's own control: select that file in
+      // Finder (founder, 2026-09-23: *"Open the image opens in browser, but its more
+      // useful to open in finder"*). Without it, reveal the current root (the Save
+      // folder row's arrow). The file is validated as an absolute path but not
+      // contained to the root: the save folder may have been re-pointed since that
+      // file was written, and revealing a path does not write one.
+      const file = typeof body.file === 'string' ? body.file.trim() : null
+      if (file !== null) {
+        const absolute = file.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(file)
+        if (file === '' || file.length > 4096 || file.includes('\0') || !absolute) {
+          send(res, 400, { error: 'bad-path', detail: 'an absolute file path' })
+          return
+        }
+        try {
+          await folders.revealFile(file)
+          send(res, 200, { ok: true })
+        } catch (error) {
+          send(res, 500, { error: 'reveal-failed', detail: String((error && error.message) || error) })
+        }
+        return
+      }
       try {
         await folders.reveal((await libraryState()).root)
         send(res, 200, { ok: true })

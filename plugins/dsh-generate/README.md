@@ -519,7 +519,11 @@ ignored. So choosing 9:16 makes the canvas portrait **before** the run and the r
 (`object-fit: contain`, so no aspect is ever cropped), capped at `60vh` because a portrait canvas in a narrow
 pane would otherwise be taller than the screen. A workflow with no aspect door gets a **square** canvas — the one
 shape that never misrepresents a workflow — rather than a guessed one. `RunOutput` no longer draws the image at
-all: it draws the phase, the failure and the open link, and the canvas above it owns the picture. There is no
+all: it draws the phase, the failure and **Open in Finder** (founder, 2026-09-23: *"Open the image opens in browser,
+but its more useful to open in finder"*): when the host saved a local file, the control posts
+`{ action: 'reveal', file }` and Finder selects that exact file (`open -R`; `explorer /select,` on Windows); the
+browser link survives only when the save failed, because the URL is then all that exists. The canvas above it owns
+the picture. There is no
 "Run again" button (founder, 2026-09-23: *"run again button can be removed"*) — the parameters card never leaves
 the screen, so the Run button under the doors is the way to run again.
 

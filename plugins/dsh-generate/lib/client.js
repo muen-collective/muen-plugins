@@ -167,6 +167,8 @@ window.__ModuleLoader__.load({
       'run.phase.failed': 'Failed',
       'run.job': 'Run',
       'run.result.open': 'Open the image',
+      'run.result.finder': 'Open in Finder',
+      'run.result.finderFailed': 'That file could not be opened.',
       'run.result.alt': 'The generated image',
       'run.failed': 'That run failed.',
       // A run's own failures. `no-api-balance` is the same fact as the key row's note:
@@ -397,6 +399,8 @@ window.__ModuleLoader__.load({
       'run.phase.failed': '失败',
       'run.job': '运行',
       'run.result.open': '打开图片',
+      'run.result.finder': '在 Finder 中打开',
+      'run.result.finderFailed': '无法打开该文件。',
       'run.result.alt': '生成的图片',
       'run.failed': '这次运行失败了。',
       'error.noBalance': 'API 余额为空，请到服务商的 API 页面充值。',
@@ -3243,7 +3247,30 @@ window.__ModuleLoader__.load({
 
     /** The preview card's content: the phase, the failure, and the result. */
     function RunOutput({ t, adapter, run }) {
+      const [finderBusy, setFinderBusy] = React.useState(false)
+      const [finderFailed, setFinderFailed] = React.useState(false)
       if (!adapter) return null
+      // The local file is the primary handle on a finished run; the provider URL is
+      // only a fallback, so "has a file" is the branch the whole result row keys on.
+      const hasLocalFile = run.phase === 'done' && Array.isArray(run.saved) && run.saved.length > 0 && !!run.saved[0].file
+      // Select the saved file in Finder. Fire-and-report: the host answers whether
+      // the helper started, and a failure stays on this row rather than anywhere else.
+      const revealResult = async () => {
+        setFinderBusy(true)
+        setFinderFailed(false)
+        try {
+          const response = await fetch(LIBRARY_API, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify({ action: 'reveal', file: run.saved[0].file }),
+          })
+          if (!response.ok) setFinderFailed(true)
+        } catch {
+          setFinderFailed(true)
+        } finally {
+          setFinderBusy(false)
+        }
+      }
       return h(
         'div',
         { style: S.runOutput },
@@ -3286,7 +3313,33 @@ window.__ModuleLoader__.load({
               h('span', { style: S.savedPath }, run.saved[0].file),
             )
           : null,
-        run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0
+        // OPEN IN FINDER, not in the browser (founder, 2026-09-23: *"Open the image
+        // opens in browser, but its more useful to open in finder"*): when the host
+        // saved a local file, the control selects that file in Finder. The browser
+        // link survives only as the fallback for a run whose save failed — the URL
+        // is then the only thing that still exists.
+        run.phase === 'done' && hasLocalFile
+          ? h(
+              'div',
+              { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  style: { ...S.ghost, alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 4 },
+                  'data-generate-result-finder': run.saved[0].file,
+                  disabled: finderBusy,
+                  onClick: revealResult,
+                },
+                t('run.result.finder'),
+                h(IconRightUpOutline16, { size: 12 }),
+              ),
+              finderFailed
+                ? h('div', { style: S.fieldError, role: 'alert', 'data-generate-result-finder-failed': 'yes' }, t('run.result.finderFailed'))
+                : null,
+            )
+          : null,
+        run.phase === 'done' && !hasLocalFile && Array.isArray(run.urls) && run.urls.length > 0
           ? h(
               'div',
               { style: S.row },

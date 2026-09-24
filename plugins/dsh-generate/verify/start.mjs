@@ -2441,11 +2441,22 @@ check(
     if (poll) poll()
     const done = await settle(paneSlot.component, props, 'pane-run')
     check(
-      'the finished run is drawn: the image the provider returned, and a way to open it',
+      'the finished run is drawn: the image the provider returned, and Open in Finder over its saved file',
       (() => {
         const result = byAttr(done, 'data-generate-result', 'https://gen.krea.ai/out.png')
         const image = result ? nodesOf(result).find((node) => node.type === 'img') : null
-        return !!result && !!image && image.props.src === 'https://gen.krea.ai/out.png' && !!byAttr(done, 'data-generate-result-url', 'https://gen.krea.ai/out.png')
+        const finder = byAttr(done, 'data-generate-result-finder', '/tmp/generate/library/krea/krea-2-medium-turbo/20260923-job-1.png')
+        return (
+          !!result &&
+          !!image &&
+          image.props.src === 'https://gen.krea.ai/out.png' &&
+          !!finder &&
+          typeof finder.props.onClick === 'function' &&
+          // A saved file means NO browser link — Finder is the handle (founder,
+          // 2026-09-23: *"Open the image opens in browser, but its more useful to
+          // open in finder"*).
+          !byAttr(done, 'data-generate-result-url', 'https://gen.krea.ai/out.png')
+        )
       })(),
       JSON.stringify(nodesOf(done).filter((node) => node.props && node.props['data-generate-result']).map((node) => node.props['data-generate-result'])),
     )
@@ -2456,6 +2467,21 @@ check(
         return !!line && textIn(line).includes(EN['run.saved']) && textIn(line).includes('20260923-job-1.png')
       })(),
       JSON.stringify(nodesOf(done).filter((node) => node.props && node.props['data-generate-saved']).map((node) => textIn(node))),
+    )
+    // Pressing it posts the reveal WITH the file, to the library route.
+    const callsBeforeFinder = stub.calls.length
+    const finderButton = byAttr(done, 'data-generate-result-finder', '/tmp/generate/library/krea/krea-2-medium-turbo/20260923-job-1.png')
+    if (finderButton) finderButton.props.onClick()
+    await settle(paneSlot.component, props, 'pane-run')
+    check(
+      'Open in Finder posts the reveal with that exact file path',
+      (() => {
+        const posted = stub.calls.slice(callsBeforeFinder).find((call) => String(call.url).endsWith('/plugins/generate/library') && call.method === 'POST')
+        if (!posted) return false
+        const body = JSON.parse(posted.body)
+        return body.action === 'reveal' && body.file === '/tmp/generate/library/krea/krea-2-medium-turbo/20260923-job-1.png'
+      })(),
+      JSON.stringify(stub.calls.slice(callsBeforeFinder).map((call) => ({ url: call.url, body: call.body }))),
     )
     // No "Run again" button (founder, 2026-09-23: *"run again button can be removed"*):
     // the parameters card never left, so the form itself is the way back. Type into it

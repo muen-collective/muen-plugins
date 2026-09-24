@@ -17,6 +17,7 @@
  * @module @muen/dsh-generate/lib/folder-actions
  */
 import { execFile } from 'node:child_process'
+import { dirname } from 'node:path'
 
 /** Whether `chooseFolder` can run here: the dialog is macOS-only today. */
 export const CAN_CHOOSE = process.platform === 'darwin'
@@ -36,6 +37,26 @@ export function revealFolder(path) {
         : ['xdg-open', [path]]
   return new Promise((resolve, reject) => {
     execFile(command, args, { windowsHide: true }, (error) => (error ? reject(error) : resolve(path)))
+  })
+}
+
+/**
+ * Reveal one FILE, selected in its folder — the finished run's "Open in Finder"
+ * (founder, 2026-09-23: *"Open the image opens in browser, but its more useful to
+ * open in finder"*). macOS selects the file (`open -R`), Windows selects it too
+ * (`explorer /select,`), and the Linux portal opens the containing folder, which is
+ * the closest it comes. Resolves with the file's path.
+ */
+export function revealFile(path) {
+  const [command, args] =
+    process.platform === 'darwin'
+      ? ['open', ['-R', path]]
+      : process.platform === 'win32'
+        ? ['explorer', ['/select,' + path]]
+        : ['xdg-open', [dirname(path)]]
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { windowsHide: true }, (error) => (error ? reject(error) : resolve(path))
+    )
   })
 }
 
