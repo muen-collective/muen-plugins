@@ -312,8 +312,17 @@ window.__ModuleLoader__.load({
       hostIcons = null;
     }
 
-    function hostIcon(name, size) {
-      const component = hostIcons === null || hostIcons === undefined ? undefined : hostIcons[name];
+    /**
+     * One host glyph by its current name, falling back to the pre-0.1.7 name.
+     *
+     * The harness renamed its icon set in 0.1.7 (`IconWarningOutline16` became
+     * `IconWarningOutlineRegular`, size as a prop). Asking for the old name alone
+     * finds nothing on the new core and this banner would silently drop to its
+     * inlined fallback — visible as a glyph that no longer matches the app's.
+     */
+    function hostIcon(name, legacy, size) {
+      const entry = (key) => (hostIcons === null || hostIcons === undefined ? undefined : hostIcons[key]);
+      const component = entry(name) ?? entry(legacy);
       return typeof component === 'function' ? h(component, { size: size }) : null;
     }
 
@@ -350,13 +359,13 @@ window.__ModuleLoader__.load({
     /** The alert's leading glyph: the app's, else the inline triangle. */
     function WarningGlyph(props) {
       const size = props !== undefined && props.size !== undefined ? props.size : 16;
-      const native = hostIcon('IconWarningOutline16', size);
+      const native = hostIcon('IconWarningOutlineRegular', 'IconWarningOutline16', size);
       return native === null ? h(InlineTriangleAlert, { size: size }) : native;
     }
 
     /** The dismiss control's glyph: the app's, else a text multiplication sign. */
     function CloseGlyph() {
-      const native = hostIcon('IconCloseOutline16', 12);
+      const native = hostIcon('IconCloseOutlineRegular', 'IconCloseOutline16', 12);
       return native === null ? '\u00d7' : native;
     }
 
