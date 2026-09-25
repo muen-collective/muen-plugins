@@ -84,7 +84,7 @@ const INSTALLED = {
   provenance: { writtenBy: 'agent', at: '2026-09-23T00:00:00.000Z', checkedAgainst: 'apiCallDemo', dryRun: 'ok' },
 }
 
-const ASPECTS = ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:16']
+const ASPECTS = ['1:1 (Square)', '4:3 (Standard)', '3:2 (Photo)', '16:9 (Widescreen)', '2.35:1 (Cinematic)', '4:5 (Portrait)', '3:4 (Portrait Standard)', '2:3 (Portrait Photo)', '9:16 (Portrait Widescreen)']
 
 // ── the shipped catalogue: Krea's own schema ─────────────────────────────────
 
@@ -156,7 +156,7 @@ check(
 )
 check(
   "the aspect ratios are the API's own nine, in its order, starting where it starts",
-  JSON.stringify(doors.aspect_ratio?.options) === JSON.stringify(ASPECTS) && doors.aspect_ratio.default === '1:1',
+  JSON.stringify(doors.aspect_ratio?.options) === JSON.stringify(ASPECTS) && doors.aspect_ratio.default === '1:1 (Square)',
   JSON.stringify(doors.aspect_ratio && doors.aspect_ratio.options),
 )
 check(
@@ -233,6 +233,9 @@ check(
     return (
       entry.name === 'krea-2-medium-turbo' &&
       entry.title === 'Krea 2 Turbo' &&
+      // The tab's short name, authored on the model (founder, 2026-09-25: *"use different
+      // names … Krea Turbo / Krea Medium / Krea Large"*): the card keeps the title.
+      entry.tabLabel === 'Krea Turbo' &&
       entry.doorCount === 13 &&
       entry.runLabel === 'Generate' &&
       entry.blurb.length > 0

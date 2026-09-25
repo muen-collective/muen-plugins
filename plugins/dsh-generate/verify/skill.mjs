@@ -100,7 +100,7 @@ check('the skill is registered under the name the epic fixes', skill !== undefin
 check('it is both model-invocable and user-invocable', skill.invocation.modelInvocable === true && skill.invocation.userInvocable === true)
 check('it is a runtime skill from this plugin', skill.source === 'runtime' && skill.provider === 'runninghub', skill.source + '/' + skill.provider)
 check('the design skill is registered beside it', design !== undefined && design.name === 'design-generate-screen', design && design.name)
-check('exactly the two shipped skills are registered, and no more', registered.skills.length === 2, registered.skills.map((entry) => entry.name).join(', '))
+check('exactly the three shipped skills are registered, and no more', registered.skills.length === 3, registered.skills.map((entry) => entry.name).join(', '))
 check('it points at the file that ships in the package', skill.path === SKILL_FILE, skill.path)
 check('its description names RunningHub, so the catalog entry is findable', /runninghub/i.test(skill.description), skill.description)
 check('its whenToUse names the trigger the founder uses', /add workflow/i.test(skill.whenToUse || ''), skill.whenToUse)
@@ -169,14 +169,42 @@ check('it walks the four screens a workflow appears on', (() => {
   const screens = ['the start-page card', 'the pane home', 'the workflow surface', 'the run strip and result']
   return screens.every((screen) => designAt(screen) >= 0)
 })(), 'start@' + designAt('the start-page card') + ' run@' + designAt('the run strip and result'))
+// The tab's short name (founder, 2026-09-25: *"the workflow tab fontsize too big, maybe we need to
+// use different names in to make it easier to read"*): the install skill must offer one, and the
+// design skill must know the card keeps the title while the tab reads the short name.
+check('the install skill teaches the short tab name', /`tabLabel`/.test(shipped) && /card keeps the title/.test(shipped))
+check('the design skill knows the tab may read a short name the card does not', designAt('`ui.tabLabel`') >= 0 && /card keeps the title/.test(designShipped))
 check('it sends an uninstalled workflow back to the install skill rather than writing one', designAt('add-rh-workflow') >= 0 && /It does not install a workflow/.test(designShipped))
 check('it says the design skill writes no plugin code', /It does\s+not write plugin code/.test(designShipped))
 check('it names the restart the pane needs before an edit is visible', /restart/i.test(designShipped) && /link:/.test(designShipped))
 check('it never claims to run a workflow or spend coins', /never spends coins/.test(designShipped))
 
 // ── the plugin has no write path ────────────────────────────────────────────
+// State persist (per-workflow saved values) is the one write path: it writes a
+// small JSON file per workflow under `<provider>/state/`, and no adapter file.
+// All writeFile/mkdir calls live inside `providerState`, so we verify the writes
+// exist only there by checking the source around each hit.
 
-check('the host half writes no file: no writeFile or mkdir anywhere in it', !/writeFile|mkdir|appendFile|createWriteStream/.test(source), (source.match(/writeFile\w*|mkdir\w*|appendFile|createWriteStream/g) || []).join(', '))
+const sourceLines = source.split('\n')
+const writeHits = []
+for (let i = 0; i < sourceLines.length; i += 1) {
+  if (/writeFile|mkdir|appendFile|createWriteStream/.test(sourceLines[i])) {
+    writeHits.push({ line: i + 1, text: sourceLines[i].trim() })
+  }
+}
+// Walk backwards to find which function each hit belongs to.
+const findFunction = (lineIndex) => {
+  for (let j = lineIndex; j >= 0; j -= 1) {
+    // Match function declarations and async arrow function assignments — but NOT
+    // regular variable assignments like `const method = ...` or `const values = ...`.
+    const m = sourceLines[j].match(/^\s*(?:async\s+)?function\s+(\w+)|^\s*const\s+(\w+)\s*=\s*async\s*\(/)
+    if (m) return m[1] || m[2]
+  }
+  return '<unknown>'
+}
+const nonStateHits = writeHits.filter((hit) => findFunction(hit.line - 1) !== 'providerState')
+
+check('the host half writes only per-workflow state, no adapter files', nonStateHits.length === 0, writeHits.map((h) => h.line + ':' + h.text).join(' | '))
 check('it reads files, which is all it needs', /readFileSync/.test(source) && /readFile\b/.test(source))
 check('neither tool promises to write', registered.tools.every((tool) => !/writes? (the|a) (adapter|file)/i.test(tool.description)))
 check('the host half imports no LLM package, so a mechanical install needs no model', !/@deepseek-ai\/dsh-llm|dsh-llm/.test(source))
@@ -184,13 +212,13 @@ check('the tools are registered beside the skill', registered.tools.length === 2
 
 // ── the registrations are independent ───────────────────────────────────────
 
-check('a profile with no skills service still gets the tools', (() => {
+check('a profile with no tools service still gets the skills', (() => {
   const only = mount({ withSkills: false })
   return only.skills.length === 0 && only.tools.length === 2
 })(), JSON.stringify(mount({ withSkills: false }).tools.length))
-check('a profile with no tools service still gets both skills', (() => {
+check('a profile with no tools service still gets all three skills', (() => {
   const only = mount({ withTools: false })
-  return only.tools.length === 0 && only.skills.length === 2
+  return only.tools.length === 0 && only.skills.length === 3
 })(), JSON.stringify(mount({ withTools: false }).skills.length))
 check('a context with neither service does not throw', (() => {
   mount({ withTools: false, withSkills: false })

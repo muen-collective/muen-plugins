@@ -50,13 +50,36 @@ export const RH_RUN_PATH = '/task/openapi/ai-app/run'
 export const RH_STATUS_PATH = '/task/openapi/status'
 export const RH_OUTPUTS_PATH = '/task/openapi/outputs'
 export const RH_UPLOAD_PATH = '/task/openapi/upload'
+/**
+ * Cancel a task (read from RunningHub's own OpenAPI, "Cancel ComfyUI Task", 2026-09-23):
+ * `POST { apiKey, taskId }` → `code: 0` on acceptance, `code: 807
+ * APIKEY_TASK_NOT_FOUND` when the task is already gone. It is documented as
+ * fire-and-ask — the API accepts the request, it does not promise the task stopped —
+ * which is why the surface keeps polling until the status settles.
+ */
+export const RH_CANCEL_PATH = '/task/openapi/cancel'
+/**
+ * The account's queue (same docs day, "查询指定 APIKEY 下队列状态"): a GET with the
+ * key as a Bearer token answering `apiKeyType`, `concurrentLimit`, `runningCount`,
+ * `queuedCount`, `totalCurrentTasks` — the counts arrive as strings. Their spec marks
+ * this endpoint `developing` and lists the `.cn` server, so a caller must treat any
+ * failure as "no answer" rather than as an error to show.
+ */
+export const RH_QUEUE_PATH = '/openapi/v2/queue/status'
 
-/** RunningHub's own status words, folded into the four a strip draws. */
+/**
+ * RunningHub's own status words, folded into the states a strip draws. `CANCEL`ed is
+ * terminal like the rest — and it is read BEFORE the outputs call, because a cancelled
+ * task has no outputs and asking would turn the cancel into a 805 failure.
+ */
 const STATE_BY_STATUS = {
   QUEUED: 'queued',
   RUNNING: 'running',
   SUCCESS: 'done',
   FAILED: 'failed',
+  CANCEL: 'cancelled',
+  CANCELED: 'cancelled',
+  CANCELLED: 'cancelled',
 }
 
 const str = (value) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
@@ -214,13 +237,79 @@ export async function postRhRun({ base, body, key, timeoutMs = TIMEOUT_MS, fetch
 }
 
 /**
+ * ASK RunningHub to cancel a task. The docs are explicit that this is fire-and-ask:
+ * `code: 0` means the request was accepted, not that the GPU stopped — so the caller
+ * keeps polling and lets the status endpoint be the one that settles the run. `807`
+ * means the task is already gone (finished, or cancelled by an earlier ask), which is
+ * an answer rather than a failure and maps to `job-not-found` for the route.
+ *
+ * @returns {{ ok: true } | { error: string, detail?: string }}
+ */
+export async function cancelRhRun({ base, jobId, key, timeoutMs = TIMEOUT_MS, fetchImpl = fetch } = {}) {
+  const posted = await postJson(base + RH_CANCEL_PATH, { apiKey: key, taskId: jobId }, key, { timeoutMs, fetchImpl })
+  if (posted.error) return posted
+  const payload = posted.payload
+  if (payload.code === 0) return { ok: true }
+  const message = str(payload.msg) || 'code ' + payload.code
+  if (payload.code === 807) return { error: 'job-not-found', detail: message }
+  return { error: 'api-refused', detail: message }
+}
+
+/**
+ * READ the account's queue — how many tasks run, how many wait, the key's concurrency
+ * ceiling. A GET with the key as Bearer (their spec, not the task family's body-key),
+ * and every failure answers `error` rather than a number: this endpoint is marked
+ * `developing` in their own docs, and a band that shows nothing is the honest answer
+ * to an endpoint that does not answer.
+ *
+ * @returns {{ running: number, queued: number, limit: number, total: number }
+ *   | { error: string, detail?: string }}
+ */
+export async function readRhQueue({ base, key, timeoutMs = TIMEOUT_MS, fetchImpl = fetch } = {}) {
+  let response
+  try {
+    response = await fetchImpl(base + RH_QUEUE_PATH, {
+      method: 'GET',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch (error) {
+    const kind = error && error.name
+    return { error: kind === 'TimeoutError' || kind === 'AbortError' ? 'timeout' : 'unreachable' }
+  }
+  let payload = null
+  try {
+    payload = JSON.parse(await response.text())
+  } catch {
+    payload = null
+  }
+  if (!response.ok) {
+    if (response.status === 401) return { error: 'invalid-key' }
+    return { error: 'http-' + response.status }
+  }
+  if (payload === null || typeof payload.code !== 'number') return { error: 'unexpected-response' }
+  if (payload.code !== 0) return { error: 'api-refused', detail: str(payload.msg) || 'code ' + payload.code }
+  const data = (payload.data && typeof payload.data === 'object' ? payload.data : {}) || {}
+  const count = (value) => {
+    const num = Number(value)
+    return Number.isFinite(num) ? num : 0
+  }
+  return {
+    running: count(data.runningCount),
+    queued: count(data.queuedCount),
+    limit: count(data.concurrentLimit),
+    total: count(data.totalCurrentTasks),
+  }
+}
+
+/**
  * Read one task: its state first, its outputs when they exist.
  *
  * The status call is the cheap one and answers the four words; the outputs call is asked
  * only when there is something to read, because on a failure it is where the reason lives
  * (`code: 805`, `data.failedReason.exception_message`).
  *
- * @returns {{ state: 'queued' | 'running' | 'done' | 'failed', status: string, urls: string[], error: object | null }
+ * @returns {{ state: 'queued' | 'running' | 'done' | 'failed' | 'cancelled', status: string, urls: string[], error: object | null }
  *   | { error: string, detail?: string }}
  */
 export async function readRhRun({ base, jobId, key, timeoutMs = TIMEOUT_MS, fetchImpl = fetch } = {}) {
@@ -239,6 +328,9 @@ export async function readRhRun({ base, jobId, key, timeoutMs = TIMEOUT_MS, fetc
   const status = str(payload.data) || 'RUNNING'
   const state = STATE_BY_STATUS[status] || 'running'
   if (state === 'queued' || state === 'running') return { state, status, urls: [], error: null }
+  // CANCELLED IS TERMINAL AND HAS NO OUTPUTS: asking the outputs call would answer 805
+  // and turn a cancel into a failure. Done and failed fall through to it below.
+  if (state === 'cancelled') return { state: 'cancelled', status, urls: [], error: null }
 
   // Terminal: the outputs call carries both the files and, on a failure, the reason.
   const outputs = await postJson(base + RH_OUTPUTS_PATH, { apiKey: key, taskId: jobId }, key, { timeoutMs, fetchImpl })

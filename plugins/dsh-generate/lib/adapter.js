@@ -245,6 +245,7 @@ export function validateAdapter(adapter, { app }) {
     if (!ui || typeof ui !== 'object' || Array.isArray(ui)) add('ui', 'ui must be an object when present')
     else {
       if (ui.runLabel !== undefined && str(ui.runLabel) === null) add('ui', 'ui.runLabel must be a non-empty string')
+      if (ui.tabLabel !== undefined && str(ui.tabLabel) === null) add('ui', 'ui.tabLabel must be a non-empty string')
       if (ui.order !== undefined) {
         if (!Array.isArray(ui.order)) add('ui', 'ui.order must be an array of door keys')
         else for (const key of ui.order) if (!keys.has(key)) add('ui', `ui.order names "${key}", which no door declares`)
@@ -360,11 +361,17 @@ export async function listAdapters(dir, { readDirectory = readdir, readText = re
       appId: str(read.source && read.source.appId) || '',
       webappName: str(read.source && read.source.webappName) || '',
       runLabel: str(read.ui && read.ui.runLabel) || '',
+      // The short name a TAB wears, when the title is too long for one (founder, 2026-09-25:
+      // *"the workflow tab fontsize too big, maybe we need to use different names in to make it
+      // easier to read. Qwen Duo / Qwen Multi / H3 F/L / Krea Raw …"*). Authored, optional, and
+      // absent means "the title" — the client falls back.
+      tabLabel: str(read.ui && read.ui.tabLabel) || '',
+      order: typeof read.order === 'number' ? read.order : null,
       doorCount: read.doors && typeof read.doors === 'object' ? Object.keys(read.doors).length : 0,
     })
   }
 
-  entries.sort((a, b) => order(a.title, b.title) || order(a.variant, b.variant) || order(a.name, b.name))
+  entries.sort((a, b) => order(a.order ?? Infinity, b.order ?? Infinity) || order(a.title, b.title) || order(a.variant, b.variant) || order(a.name, b.name))
   return { entries, skipped }
 }
 

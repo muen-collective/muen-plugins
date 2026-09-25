@@ -81,7 +81,7 @@ const fakeFetch = async (url, init = {}) => {
 
 /** The `input` object from the snippet he pasted, verbatim. */
 const HIS_INPUT = {
-  aspect_ratio: '1:1',
+  aspect_ratio: '1:1 (Square)',
   resolution: '1K',
   creativity: 'low',
   intensity: 0,
@@ -112,7 +112,7 @@ check(
 check(
   'a required door with nothing in it is missing, not an error',
   (() => {
-    const { body, missing, refused } = buildRunPayload(turbo, { aspect_ratio: '1:1', resolution: '1K' })
+    const { body, missing, refused } = buildRunPayload(turbo, { aspect_ratio: '1:1 (Square)', resolution: '1K' })
     return missing.join(',') === 'prompt' && refused.length === 0 && body.prompt === undefined
   })(),
   JSON.stringify(buildRunPayload(turbo, {})),
@@ -120,7 +120,7 @@ check(
 check(
   'an untouched optional door is not sent: the API default is the API\'s',
   (() => {
-    const { body } = buildRunPayload(turbo, { prompt: 'a house', aspect_ratio: '1:1', resolution: '1K' })
+    const { body } = buildRunPayload(turbo, { prompt: 'a house', aspect_ratio: '1:1 (Square)', resolution: '1K' })
     return !('seed' in body) && !('strength' in body) && !('intensity' in body) && body.prompt === 'a house'
   })(),
   JSON.stringify(buildRunPayload(turbo, { prompt: 'a house' }).body),
@@ -180,7 +180,7 @@ check(
   (() => {
     const { body, missing, refused } = buildRunPayload(turbo, {
       prompt: 'a house',
-      aspect_ratio: '1:1',
+      aspect_ratio: '1:1 (Square)',
       resolution: '1K',
       styles: [{ id: 'lora-1', strength: 1.5 }],
       image_style_references: [{ url: 'https://example.com/ref.png', strength: 0.25 }],
@@ -195,30 +195,30 @@ check(
       typeof body.styles[0].strength === 'number'
     )
   })(),
-  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ id: 'lora-1', strength: 1.5 }] }).body),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', styles: [{ id: 'lora-1', strength: 1.5 }] }).body),
 )
 check(
   'a row with a required field still empty is missing under its own place in the list',
   (() => {
-    const { body, missing } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ strength: 1 }], moodboards: [{ id: 'not-a-uuid' }] })
+    const { body, missing } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', styles: [{ strength: 1 }], moodboards: [{ id: 'not-a-uuid' }] })
     return missing.join(',') === 'styles[0].id' && body.styles !== undefined && body.styles[0].id === undefined
   })(),
-  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ strength: 1 }] })),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', styles: [{ strength: 1 }] })),
 )
 check(
   'an empty row the add control created is not a row: nothing is sent for it',
   (() => {
-    const { body, missing, refused } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{}, { id: 'lora-1', strength: 1 }], moodboards: [{}] })
+    const { body, missing, refused } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', styles: [{}, { id: 'lora-1', strength: 1 }], moodboards: [{}] })
     return missing.length === 0 && refused.length === 0 && body.styles.length === 1 && body.moodboards === undefined
   })(),
-  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{}, { id: 'lora-1', strength: 1 }] }).body),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', styles: [{}, { id: 'lora-1', strength: 1 }] }).body),
 )
 check(
   "a list past the API's own maxItems is refused whole, before anything is sent",
   (() => {
     const rows = Array.from({ length: 11 }, (_, index) => ({ url: 'https://example.com/' + index + '.png' }))
-    const { body, refused } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: rows })
-    const ten = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: rows.slice(0, 10) })
+    const { body, refused } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', image_style_references: rows })
+    const ten = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', image_style_references: rows.slice(0, 10) })
     return (
       refused.length === 1 &&
       refused[0].key === 'image_style_references' &&
@@ -228,13 +228,13 @@ check(
       ten.body.image_style_references.length === 10
     )
   })(),
-  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: Array.from({ length: 11 }, () => ({ url: 'https://e/x.png' })) }).refused),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', image_style_references: Array.from({ length: 11 }, () => ({ url: 'https://e/x.png' })) }).refused),
 )
 check(
   "a row's own bounds are the API's: a style strength past 2 is refused by its place",
   (() => {
-    const { refused, body } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ id: 'a', strength: 3 }] })
-    const row = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ id: 'a', strength: 2 }] })
+    const { refused, body } = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', styles: [{ id: 'a', strength: 3 }] })
+    const row = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', styles: [{ id: 'a', strength: 2 }] })
     return (
       refused.length === 1 &&
       refused[0].key === 'styles[0].strength' &&
@@ -243,20 +243,20 @@ check(
       row.refused.length === 0
     )
   })(),
-  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', styles: [{ id: 'a', strength: 3 }] }).refused),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', styles: [{ id: 'a', strength: 3 }] }).refused),
 )
 check(
   'an image inside a row is an image door too: a reference with no URL is missing, one with a URL is sent',
   (() => {
-    const without = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: [{ strength: 0.5 }] })
-    const with_ = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: [{ url: 'https://example.com/a.png' }] })
+    const without = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', image_style_references: [{ strength: 0.5 }] })
+    const with_ = buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', image_style_references: [{ url: 'https://example.com/a.png' }] })
     return (
       without.missing.join(',') === 'image_style_references[0].url' &&
       with_.missing.length === 0 &&
       with_.body.image_style_references[0].url === 'https://example.com/a.png'
     )
   })(),
-  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', image_style_references: [{ strength: 0.5 }] }).missing),
+  JSON.stringify(buildRunPayload(turbo, { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', image_style_references: [{ strength: 0.5 }] }).missing),
 )
 
 // ── the two calls Krea answers ───────────────────────────────────────────────
@@ -271,7 +271,7 @@ check(
       last.url === BASE + '/generate/image/krea/krea-2/medium-turbo' &&
       last.method === 'POST' &&
       last.headers.Authorization === 'Bearer ' + SECRET &&
-      JSON.parse(last.body).aspect_ratio === '1:1'
+      JSON.parse(last.body).aspect_ratio === '1:1 (Square)'
     )
   })(),
   JSON.stringify({ url: calls[calls.length - 1]?.url, method: calls[calls.length - 1]?.method }),
@@ -351,7 +351,7 @@ check(
 const dataRoot = mkdtempSync(join(tmpdir(), 'krea-run-'))
 process.env.RH_DATA_DIR = dataRoot
 const providerRoot = dataPaths(dataRoot, 'krea').root
-const values = { prompt: 'a cinematic glass cabin', aspect_ratio: '16:9', resolution: '1K' }
+const values = { prompt: 'a cinematic glass cabin', aspect_ratio: '16:9 (Widescreen)', resolution: '1K' }
 
 const preview = await krea.previewRun({ root: providerRoot, name: 'krea-2-medium-turbo', values })
 check(
@@ -359,7 +359,7 @@ check(
   preview.model === 'image/krea/krea-2/medium-turbo' &&
     preview.endpoint === '/generate/image/krea/krea-2/medium-turbo' &&
     preview.body.prompt === 'a cinematic glass cabin' &&
-    preview.body.aspect_ratio === '16:9',
+    preview.body.aspect_ratio === '16:9 (Widescreen)',
   JSON.stringify(preview),
 )
 check(
@@ -371,7 +371,7 @@ check(
 // NOTHING IS POSTED FOR AN INCOMPLETE PAYLOAD: the refusals happen before the fetch, which
 // is the difference between a gate and a dialog that merely looks like one.
 calls.length = 0
-const incomplete = await krea.startRun({ root: providerRoot, name: 'krea-2-medium-turbo', values: { aspect_ratio: '1:1' }, key: SECRET, fetchImpl: fakeFetch })
+const incomplete = await krea.startRun({ root: providerRoot, name: 'krea-2-medium-turbo', values: { aspect_ratio: '1:1 (Square)' }, key: SECRET, fetchImpl: fakeFetch })
 check(
   'a run with a required door still empty never reaches the network',
   incomplete.error === 'payload-incomplete' && calls.length === 0,
@@ -381,7 +381,7 @@ calls.length = 0
 const refused = await krea.startRun({
   root: providerRoot,
   name: 'krea-2-medium-turbo',
-  values: { prompt: 'x', aspect_ratio: '1:1', resolution: '1K', aspect_ratio: '7:3', resolution: '1K' },
+  values: { prompt: 'x', aspect_ratio: '1:1 (Square)', resolution: '1K', aspect_ratio: '7:3', resolution: '1K' },
   key: SECRET,
   fetchImpl: fakeFetch,
 })

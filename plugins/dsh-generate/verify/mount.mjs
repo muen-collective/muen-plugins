@@ -472,18 +472,35 @@ async function live(url) {
         }
       }, CARD_SELECTOR)
 
+    // The guide is what the column shows when no tab is open, but 0.1.7's shell
+    // leaves a fresh panel as an EMPTY pane (`dock.emptyPane`) instead of seeding a
+    // default page — so on that generation the card is only reachable once a tab
+    // exists. Open one through the panel's own "New tab" control when the card is
+    // not on screen yet, and fall back to the pre-0.1.7 header control.
+    const openPanel = () => page.evaluate(() => {
+      const panel = () => document.querySelector('[data-sidebar-right-panel]')
+      const label = (control) => (control.getAttribute('aria-label') || control.title || control.textContent || '').trim()
+      if (panel() !== null) {
+        const addTab = Array.from(document.querySelectorAll('[data-sidebar-right-panel] button'))
+          .find((control) => label(control) === 'New tab')
+        if (addTab !== undefined) {
+          addTab.click()
+          return true
+        }
+      }
+      const controls = Array.from(document.querySelectorAll('button, [role="button"]'))
+      const wanted = controls.find((control) => {
+        const text = label(control).toLowerCase()
+        return /(right|panel|sidebar)/.test(text) && !/collapse/.test(text)
+      })
+      if (wanted === undefined) return false
+      wanted.click()
+      return true
+    })
+
     let hit = await findCard()
     if (hit === null) {
-      const opened = await page.evaluate(() => {
-        const controls = Array.from(document.querySelectorAll('button, [role="button"]'))
-        const wanted = controls.find((control) => {
-          const label = (control.getAttribute('aria-label') || control.title || control.textContent || '').toLowerCase()
-          return /(right|panel|sidebar)/.test(label) && !/collapse/.test(label)
-        })
-        if (!wanted) return false
-        wanted.click()
-        return true
-      })
+      const opened = await openPanel()
       if (opened) {
         await new Promise((resolve) => setTimeout(resolve, 1200))
         hit = await findCard()

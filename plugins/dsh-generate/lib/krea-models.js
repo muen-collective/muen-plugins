@@ -101,8 +101,8 @@ export const SHIPPED_KREA_MODELS = [
       aspect_ratio: {
         type: 'select',
         label: 'Aspect ratio',
-        options: ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:16'],
-        default: '1:1',
+        options: ['1:1 (Square)', '4:3 (Standard)', '3:2 (Photo)', '16:9 (Widescreen)', '2.35:1 (Cinematic)', '4:5 (Portrait)', '3:4 (Portrait Standard)', '2:3 (Portrait Photo)', '9:16 (Portrait Widescreen)'],
+        default: '1:1 (Square)',
         required: true,
       },
       resolution: {
@@ -260,6 +260,8 @@ export const SHIPPED_KREA_MODELS = [
     },
     ui: {
       runLabel: 'Generate',
+      // The tab's short name (founder, 2026-09-25).
+      tabLabel: 'Krea Turbo',
       order: [
         'prompt',
         'aspect_ratio',
@@ -303,8 +305,8 @@ export const SHIPPED_KREA_MODELS = [
       aspect_ratio: {
         type: 'select',
         label: 'Aspect ratio',
-        options: ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:16'],
-        default: '1:1',
+        options: ['1:1 (Square)', '4:3 (Standard)', '3:2 (Photo)', '16:9 (Widescreen)', '2.35:1 (Cinematic)', '4:5 (Portrait)', '3:4 (Portrait Standard)', '2:3 (Portrait Photo)', '9:16 (Portrait Widescreen)'],
+        default: '1:1 (Square)',
         required: true,
       },
       resolution: {
@@ -463,6 +465,8 @@ export const SHIPPED_KREA_MODELS = [
     },
     ui: {
       runLabel: 'Generate',
+      // The tab's short name (founder, 2026-09-25).
+      tabLabel: 'Krea Medium',
       order: [
         'prompt',
         'aspect_ratio',
@@ -506,8 +510,8 @@ export const SHIPPED_KREA_MODELS = [
       aspect_ratio: {
         type: 'select',
         label: 'Aspect ratio',
-        options: ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '3:4', '2:3', '9:16'],
-        default: '1:1',
+        options: ['1:1 (Square)', '4:3 (Standard)', '3:2 (Photo)', '16:9 (Widescreen)', '2.35:1 (Cinematic)', '4:5 (Portrait)', '3:4 (Portrait Standard)', '2:3 (Portrait Photo)', '9:16 (Portrait Widescreen)'],
+        default: '1:1 (Square)',
         required: true,
       },
       resolution: {
@@ -666,6 +670,8 @@ export const SHIPPED_KREA_MODELS = [
     },
     ui: {
       runLabel: 'Generate',
+      // The tab's short name (founder, 2026-09-25).
+      tabLabel: 'Krea Large',
       order: [
         'prompt',
         'aspect_ratio',
@@ -868,6 +874,9 @@ export function modelEntry(model) {
     appId: '',
     webappName: '',
     runLabel: str(model.ui && model.ui.runLabel) || '',
+    // The short name the TAB wears (founder, 2026-09-25: *"use different names … Krea Turbo /
+    // Krea Medium / Krea Large"*). The card keeps "Krea 2 Turbo"; a tab is narrower.
+    tabLabel: str(model.ui && model.ui.tabLabel) || '',
     doorCount: Object.keys(model.doors).length,
   }
 }

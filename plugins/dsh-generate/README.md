@@ -6,8 +6,8 @@ surface inside the one Generate pane. Epic 61.
 
 **This is S1 + S2 + S3 plus the provider registry and the pane as a hub: the plugin installs, the surface
 mounts, each provider's key can be linked on the one Generate settings page, a workflow can be added from its
-app link, and the pane opens on a meter per linked provider under a stacked accordion of provider sections,
-each holding its workflows as start-page cards — a card opening that workflow's surface inside the same pane.**
+app link, and the pane opens on a minimal dashboard — one block per provider, a caption line and a facts line
+over that provider's workflows as start-page cards — a card opening that workflow's surface inside the same pane.**
 The pane's one-field install form, the payload gate
 and the run are not faked here.
 
@@ -225,7 +225,7 @@ names it, twice, because a person who meets the field here would otherwise never
 managed: *"You can change or remove this key later in Settings → Generate. The Settings menu is at the bottom of
   the left sidebar."* on the
 first-run card, and the same directions again once linked, where they sit in their own block under the
-accordion rather than at the top of the pane. Both notes are led
+dashboard rather than at the top of the pane. Both notes are led
 by `IconInfoOutline14` from the harness's icon set, so they read as notes rather than as one more control.
 
 Directions rather than a button, because a client plugin cannot open the Settings surface: the client service
@@ -241,11 +241,15 @@ app gets added. On a fresh install it is the note:
 
 > To add a workflow, ask the agent in chat: “add this RunningHub workflow &lt;app link&gt;”.
 
-On a linked pane it is the **glyph in that provider's section header, immediately left of refresh**
+On a linked pane it is the **glyph on that provider's facts line, immediately left of refresh**
 (founder, 2026-09-23: *"move + workflow button as an icon button next to refresh. also add tooltip on hover for
-both"*): the glyph reveals that provider's own `addPrompt` with Copy beside it, and a closed section opens when
-it is clicked, because what it reveals is the body's. Both header glyphs — add and refresh — wear the harness's
-own `Tooltip` on hover, not a native `title`, and carry the same words as their `aria-label`.
+both"*): the glyph opens that provider's own `addPrompt` with Copy beside it as a **popover** anchored under it
+(founder, 2026-09-25: *"click add button launch popover w snippet"*) — placed by the primitives'
+`useAnchoredPosition`, dismissed by `useDismissOnOutsidePointer` or Escape, drawn on the opaque layer-2 card with
+the l3 border and the menu's elevation (the menu's own translucent fill needs a `backdrop-filter` this bundle does
+not have: *"fix popover; it should have solid bg (its transparent now)"*). Both facts-line glyphs — add
+and refresh — wear the harness's own `Tooltip` on hover, not a native `title`, and carry the same words as their
+`aria-label`.
 
 Neither control does the work: a third-party client plugin cannot put text into the conversation composer, and
 a slash command cannot start a turn (both measured 2026-09-22). So the pane hands over the words and the agent's
@@ -354,23 +358,26 @@ own label (**Generate** — founder, 2026-09-23: *"Generate with Runninghub shou
 Generate"*; one plugin holds several providers, so the card names none of them), and the
 pane holds everything else.
 
-**The home screen is a stacked accordion** (founder, 2026-09-23: *"I want to try stacked
-accordion to each provider inside an accordion … the workflow card is same design as dsh
-start page card; icon + label + 2nd row (no thumbnails)"*):
+**The home screen is a minimal dashboard** (founder, 2026-09-25: *"it should be minimal like
+start surface and make like dashboard"*). It was a stacked accordion until then (founder,
+2026-09-23: *"I want to try stacked accordion to each provider inside an accordion … the
+workflow card is same design as dsh start page card; icon + label + 2nd row (no
+thumbnails)"*), and what went is the section card, its hairlines and its fold — the facts
+stayed, drawn on the page's own background:
 
 | Screen | What it is |
 |---|---|
-| home | the wallet strip, then **one accordion section per provider — every one in the registry, in registry order, minus the ones switched off in Settings → Generate** — each header holding **two rows** (the provider's status light and name, then its wallet balance) with the shared count line (`Workflows · 3 installed`, the same word on every provider; founder 2026-09-23) in the right cluster immediately left of two glyph controls, **add a workflow** and **refresh**, both with a hover tooltip; the open section holds that provider's workflows as cards; under the sections, where the key is managed |
-| a workflow card | the harness's own start-page card: **glyph + title + one line**, no thumbnail. The second row is whose app it is (when that is a fact), then the blurb; a workflow with no description falls back to the provider's name. The provider is not on the card — the section header names it, and `data-generate-provider` carries the fact in the DOM |
-| the add glyph | the add path for every section, empty or not, in the header beside refresh. One click reveals **that provider's own install prompt** (`addPrompt`) with Copy beside it — the sentence the agent's skill answers to — and opens the section if it was closed |
-| an open section with nothing in it | one quiet line saying so and naming the glyph that fixes it (`pane.section.empty`). It is replaced by the prompt when the glyph is clicked |
-| a workflow | its surface, in the same pane: **doors as controls** in `ui.order` with the primary door first, the app's tooltip under each, `advanced` doors behind one disclosure, the app's own bounds/options/defaults on every control, a **number door drawn as the stepper** (minus · value · plus, stopping at the app's own bounds), and **two wrapping columns** — parameters and the run control on the left, the run's own state and its result on the right — each headed by a **← All workflows** control with room under it |
-| the host did not answer | that, said plainly — not a false "nothing installed". A section whose list failed says so inside its own body, and when no provider answered the pane draws the failure block instead of the accordion |
+| the header | **the DSH strip's own pattern, one row lower**: a tab per open workflow and a bare plus, directly under the DSH strip's separator and **sticky** like it (the row used to scroll away with the grid, so the plus vanished the moment a person looked down the card list). Founder, 2026-09-25: *"same navigation but below the dsh navigation. same pattern but below the separator"*, then *"the dsh pattern does not have all workflows, it uses add button to create new tab and uses start screen to add the tab"*. There is **no "All workflows" tab** — the start screen is not a tab; the plus shows it, exactly as DSH's own `addTab` opens the `guide` tab, and a card on that grid is what opens a workflow's tab. A tab is **named by its workflow's title**, never by the adapter's file name (two Qwen apps truncate to the same `qwen-2-1-image-e…`) and carries a `×`, because every tab on this row is an open workflow — and that `×` is **hidden until its tab is selected, hovered or focused**, the DSH strip's own rule (*"the pattern in dsh is when the tab is unselected there is no close icon"*, 2026-09-25: `_tabClose_11olo_411` is `opacity:0;pointer-events:none` at rest and revealed by `:hover`, `:focus-within` or the active tab; the plugin carries it as `.dsh-generate-tabClose` in its one injected sheet, and hides rather than removes the glyph so a tab never changes width when it is selected). A workflow whose title is too long for a tab authors a short one — `ui.tabLabel` (*"the workflow tab fontsize too big, maybe we need to use different names in to make it easier to read. Qwen Duo / Qwen Multi / H3 F/L / Krea Raw / Krea Turbo / Krea Medium / Krea Large"*): the **card keeps the title** and the narrow tab reads the short name, falling back to the title when none is authored. Tabs are the harness `Button`'s own `sm` capsule geometry at its own type (**12px on an 18px line**, not the pane's 14px) and **as wide as their label** — no cap, no ellipsis (`"can we make width of tab to show entire label?"`); the row scrolls when the names do not fit. The **open one draws the primitive's `outline` border** (`.5px solid --dsw-alias-border-l3`), the others keep the same border transparent so switching moves no pixel. **With nothing open there is no row at all** (founder, the same day, on the start screen with a lone plus on an otherwise empty strip: *"we don't need add icon here"*): the start screen is not a tab and needs nothing beside it, so the pane goes straight from the separator to the grid, and the plus lives only where it means something — getting back to that start screen from a workflow. The control **says what it is** — the plus glyph then the word **Add** (`tabs.addLabel`) — so it never reads as the DSH strip's own bare plus above it (*"lets change + to +add to keep disinction"*), and it wears the **same state a tab does**: the primitive's `outline` border while the start screen is the view, a plain ghost while a workflow is (*"when I click + there should be border if we follow pattern"*), so which view is showing reads the same on both controls. The row **draws no separator of its own** (*"remove separator"*): it wore a `.5px solid var(--dsw-alias-border-l2)` hairline above itself for a few hours (*"add separator below the panel tabs"*, then *"move separator above the generate tabs (between files & qwen"*), which stacked a second line on the one the header carrying the DSH strip already draws, so the boundary read as one thick rule; that app line stays, and the tabs take the **strip's own 10px of breath above and below them** (*"add gap spacing same as between top of viewport and top edge of panel tab (generate)"*, clarified as *"i meant same spacing top and bottom"*) |
+| home | a centred column at the guide's own 380px, centred on the page as well as across it, on the page's own background — no card, no separator, nothing to fold — drawing **one block per provider, every one in the registry, in registry order, minus the ones switched off in Settings → Generate**: a caption line with the status light and the provider's name (plus the glyph out to its account page), then a facts line with the wallet balance (**11px, in the muted caption ink**, and no count line: founder 2026-09-25: *"make coins usd key saved small muted font color / fontsize sm"*, then *"remove workflows 3 installed"*) and two glyph controls, **add a workflow** and **refresh**, both with a hover tooltip; under them, that provider's workflows as cards; under the blocks, where the key is managed |
+| a workflow card | the harness's own start-page card: **glyph + title + one line**, no thumbnail. The second row is whose app it is (when that is a fact), then the blurb; a workflow with no description falls back to the provider's name. The provider is not on the card — the caption line names it, and `data-generate-provider` carries the fact in the DOM |
+| the add glyph | the add path for every block, empty or not, on the facts line beside refresh. One click opens **that provider's own install prompt** (`addPrompt`) with Copy beside it, as a **popover** anchored under the glyph, placed by the primitives' `useAnchoredPosition` and dismissed by `useDismissOnOutsidePointer` or Escape (founder, 2026-09-25: *"click add button launch popover w snippet"*). Its surface is the **opaque** layer-2 card with the l3 border and the menu's elevation — not `--dsw-specific-menu`, which is ~50% alpha and needs the `backdrop-filter` the app's own menus carry (founder, the same day: *"fix popover; it should have solid bg (its transparent now)"*). It used to open inline at the foot of the block, which pushed every card under it down |
+| a block with nothing in it | one quiet line saying so and naming the glyph that fixes it (`pane.section.empty`). It stays on screen while the popover is open, because the popover is not part of the body |
+| a workflow | its surface, in the same pane, UNDER the header's tab row: **doors as controls** in `ui.order` with the primary door first, the app's tooltip under each, `advanced` doors behind one disclosure, the app's own bounds/options/defaults on every control, a **number door drawn as the stepper** (minus · value · plus, stopping at the app's own bounds), and **two wrapping columns** — parameters and the run control on the left, the run's own state and its result on the right. No way-out button of its own: the header's **All workflows** tab is the way back |
+| the host did not answer | that, said plainly — not a false "nothing installed". A block whose list failed says so inside its own body, and when no provider answered the pane draws the failure block instead of the dashboard |
 
-One section is open at a time, and the first provider that actually has workflows opens
-by itself: landing on four closed rows would hide the thing the pane exists for.
-Providers are drawn whether or not they are linked, because a section is where its add
-card lives — an install that showed only the providers that already work could never be
+Every block is open, because nothing folds any more (founder, 2026-09-25).
+Providers are drawn whether or not they are linked, because a block is where its add
+control lives — an install that showed only the providers that already work could never be
 filled.
 
 ### Hiding a provider, and why the switch is live
@@ -666,10 +673,14 @@ storing its answer, a cancel leaving the state alone, a non-absolute answer refu
 opening the current root and following a reset to the default, a `501` from a host with no dialog, and a
 failed reveal reported as its own error. Its fixtures use the seam's real `source` values (`file`, `env`); they said
 `store`/`environment` until 2026-09-22, strings the seam never emits, which is how the strip came to call a
-pasted key "from your environment" while every check stayed green. `verify/save-confirmation.mjs` (**65/65**) renders the shipped components with React stood in for by a shim
+pasted key "from your environment" while every check stayed green — and the two sentences that bug produced
+(`stored on this machine`, `from your environment`) are gone from the page as of 2026-09-25 (*"remove stored on
+this machine"*), since a person cannot act on where the seam found the value; only `settings.readOnly` stays,
+because it changes what they can do. `verify/save-confirmation.mjs` (**65/65**) renders the shipped components with React stood in for by a shim
 with working hooks and a stubbed `fetch`, presses Save and Remove key, and reads what the surface does next: a
 confirmation dialog naming the key, the wallet read and where the balance went, nothing at all for a refused
-key, a dialog that closes on dismiss or on the next keystroke, the strip's note for each real `source` value,
+key, a dialog that closes on dismiss or on the next keystroke, no provenance sentence for either real `source`
+value and the read-only sentence for the one that cannot be changed from the page,
 the fresh-install and linked panes both naming Settings → Generate as the place the key is managed (with the
 info glyph, and the linked note in its own block below the sections rather than beside the strip), **the fresh
 pane telling the user how to add a workflow, under the key directions, with the trigger phrase intact in `zh`
@@ -698,25 +709,35 @@ segment sanitiser removed, 77/79 with the save given nothing to fetch). It also 
 refuses an undeclared option and an out-of-list value, the workflow route serves `runnable` from the registry,
 and an adapter's `source` never reaches the page.
 
-`verify/start.mjs` (**243/243**) is the pane's own suite: it renders the shipped `lib/client.js` against the
+`verify/start.mjs` (**277/277**) is the pane's own suite: it renders the shipped `lib/client.js` against the
 four-provider stub and reads the whole home screen back. It holds the surface's registrations (the pane seat,
-the chip, the harness's own guide card, ONE settings page), the settings page's Models shape, and the pane:
-**one accordion section per provider in registry order, all four whether linked or not**, each header holding
-**two rows** — the name and the balance, with the count line in the right cluster left of the add glyph — every
-section counting its entries with the same word (`Workflows · N installed`, Krea included), the section with
-workflows opening by itself, one section open at a time,
-a card carrying its workflow's title and its one-line second row with **no thumbnail**, the add glyph in the
-header beside refresh revealing that provider's own prompt only when clicked (and wearing a tooltip on hover,
-as refresh does), an empty open section saying so and naming that glyph, a failed list saying so instead of
-wearing the empty state and offering no add control at all, and a workflow's doors rendered as the app's own
-controls. The **Save folder row** is checked in the Capture One shape: the Desktop default drawn from the
+the chip, the harness's own guide card, ONE settings page), the tab title's own sparkle (founder, 2026-09-25:
+*"add sparkles icon to generate tab at top to match other dsh tabs"* — the guide tab's glyph-then-label shape,
+drawn in the tertiary chrome ink), the settings page's Models shape, the **header** (the row above the content, a
+no row at all until a workflow is open, then a tab per open workflow with the plus beside it, each tab as wide as its name and never ellipsised, and no "All workflows" tab, the open tab bordered and the others
+not, a tab named by its workflow's title and never by the file name, a workflow that authors a short `ui.tabLabel`
+reading it on the tab while its card keeps the title, a card on the start screen opening a tab, the plus
+returning to the start screen with the tab still on the row, and closing the open tab landing back there),
+and the pane:
+**one block per provider in registry order, all four whether linked or not**, each with a caption line holding
+the status light and the name and a facts line holding the balance and the add and refresh glyphs — no card, no
+separator and no fold anywhere on the home, no count line, and no provenance sentence either (the balance reads
+at 11px in the caption ink, with no weight of its own; *"remove stored on this machine"*) — every block open on
+the first paint with no click needed to reach a card,
+a card carrying its workflow's title and its one-line second row with **no thumbnail**, the add glyph on the
+facts line beside refresh opening that provider's own prompt as an opaque popover only when clicked (laid out of
+the page flow, placed by the app's anchored hook, closed by an outside pointerdown and by Escape, and wearing a
+tooltip on hover, as refresh does), an empty block saying so and naming that glyph, a failed list saying so
+instead of wearing the empty state and offering no add control at all, and a workflow's doors rendered as the
+app's own controls. The **Save folder row** is checked in the Capture One shape: the Desktop default drawn from the
 host's own answer, the path as a button that posts `{ action: 'choose' }` and takes the dialog's answer as the
 root, the reveal arrow beside it, the Space left line carrying the host's number, `Use Desktop` putting the
 default back, and the typed input still working as the other way to choose. A finished or failed run is
 checked for **no Run again button** — with the Run control present under the doors, which is the way back. It
 also drives the host half for real over temp directories: what may be listed, and what `readAdapter` refuses.
-Opening a workflow is checked through the founder's 2026-09-23 fixes as well: the way out is a **back arrow with
-its label** and room under it, the surface is a **wrapping row of two cards** — parameters and preview, the first
+Opening a workflow is checked through the founder's 2026-09-23 fixes as well (the surface carries **no way-out
+button of its own** any more — the header's plus leads to the start screen, founder 2026-09-25): the surface is a
+**wrapping row of two cards** — parameters and preview, the first
 holding the doors and the run control, the second holding what the run says and makes — drawn empty before a run,
 given to a workflow whose run is not built yet as well, and carrying equal background, border, radius and padding
 because both come from the one `Card`; the **preview canvas** takes the shape the workflow's own aspect door

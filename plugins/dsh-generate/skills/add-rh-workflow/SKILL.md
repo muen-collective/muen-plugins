@@ -112,7 +112,11 @@ same name with a new `appId` moves nothing in the UI). Start from the object
   gave them
 - `doors` — the app's `nodeId`, `fieldName`, and every derived value, byte for byte;
   your `label`, `advanced`, `primary` and ordering on top
-- `ui` — `runLabel`, `expect`, `presets`, `order`, `defaults`
+- `ui` — `runLabel`, `expect`, `presets`, `order`, `defaults`, `tabLabel`
+  - `tabLabel` is the short name the workflow's **tab** wears when its title is too long for one
+    ("Qwen Duo" for "Qwen 2.1 Image Edit 2 Images"). The card keeps the title; a workflow that
+    authors none reads its title in the tab too. Offer one when the title runs past about 20
+    characters, because a tab truncates where a 380px card does not.
   - `defaults` is the one authored number on a door: where the surface OPENS, keyed by door key
     (`"defaults": { "duration": 15 }`). The app's own `default` stays on the door and stays compared by
     the validator; use `defaults` when the app's declared default is a placeholder nobody would start

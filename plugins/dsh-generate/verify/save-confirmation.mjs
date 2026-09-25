@@ -152,6 +152,13 @@ const PRIMITIVES = {
     REACT.createElement('button', { type: 'button', role: 'switch', 'aria-checked': props.checked, label: props.label, 'data-stub': 'switch', onClick: () => props.onChange(!props.checked) }, props.children),
   /** The atoms the add control is built from, stood in for the same way. */
   Button: (props) => REACT.createElement('button', { type: 'button', ...props }, props.icon, props.children),
+  /**
+   * The add control's popover, from the app's own two rules. This half renders the pane to
+   * read its copy and the popover is shut in every case here, so the stubs answer the same
+   * shapes the real hooks do without pretending to measure anything.
+   */
+  useAnchoredPosition: (options) => (options.open === true ? { left: 0, top: 0 } : null),
+  useDismissOnOutsidePointer: () => {},
   CodeBlock: (props) =>
     REACT.createElement(
       'div',
@@ -295,7 +302,13 @@ async function loadClient() {
   const source = await readFile(join(ROOT, 'lib/client.js'), 'utf8')
   let captured = null
   const sandbox = {
-    window: { __ModuleLoader__: { load: (registration) => { captured = registration } } },
+    // The pane's popover closes on Escape. This VM has no real window, so the listeners the
+    // pane binds there are accepted and dropped — nothing in this half presses a key.
+    window: {
+      __ModuleLoader__: { load: (registration) => { captured = registration } },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    },
     console,
     // The components fetch from inside the sandbox's realm, so the stub has to be
     // reachable from there — resolved at call time, since each case swaps it.
@@ -795,11 +808,17 @@ if (pane && settings) {
     }
   }
 
-  // 8. the strip says where the key really came from, in the seam's own vocabulary
+  // 8. the facts line prints NO provenance (founder, 2026-09-25: *"remove stored on this
+  // machine"*)
   //
-  // The strip is the PANE's (the settings page shows a credential dot and a sentence
-  // per row instead), so these cases render the pane, which is where a person meets
-  // the note.
+  // The line used to name where the seam got the value — "stored on this machine",
+  // "from your environment" — which is vocabulary for a person who cannot act on it. What
+  // stays is the one source fact that changes what they can do: an inherited key cannot be
+  // changed from this page, and `settings.readOnly` says so. The seam's own source is still
+  // on the node (`data-generate-source`), because the DOM is where that fact belongs.
+  //
+  // The facts line is the PANE's (the settings page shows a credential dot and a sentence
+  // per row instead), so these cases render the pane, which is where a person meets the note.
   {
     const noteOf = (tree) => {
       const note = nodesOf(tree).find((node) => node.props && 'data-generate-source' in node.props)
@@ -809,20 +828,20 @@ if (pane && settings) {
       {
         source: 'file',
         writable: true,
-        want: EN['wallet.fromStore'],
-        label: 'a key the harness stored reads as stored on this machine',
+        want: '',
+        label: 'a key the harness stored says nothing about where it is stored',
       },
       {
         source: 'user-env',
         writable: true,
-        want: EN['wallet.fromEnvironment'],
-        label: 'a key from a .env fallback reads as from the environment',
+        want: '',
+        label: 'a key from a .env fallback says nothing about the environment either',
       },
       {
         source: 'env',
         writable: false,
         want: EN['settings.readOnly'],
-        label: 'an inherited key reads as one this page cannot change',
+        label: 'an inherited key says the one thing that matters: this page cannot change it',
       },
     ]
     for (const item of sources) {
@@ -911,7 +930,7 @@ if (pane && settings) {
       'the linked pane still has a way to add, in the subheader of the section it belongs to',
       (() => {
         const button = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
-        const band = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-section-sub'] === PROVIDER)
+        const band = nodesOf(linked.tree).find((node) => node.props && node.props['data-generate-section-facts'] === PROVIDER)
         return !!button && !!band && nodesOf(band).includes(button)
       })(),
       'the control moved into the subheader',

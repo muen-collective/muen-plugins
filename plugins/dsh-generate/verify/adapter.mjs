@@ -550,6 +550,13 @@ badOrder.ui.order = ['prompt', 'ghost']
 const badOrderResult = await validate.execute({ adapter: badOrder }, {})
 check('ui.order may only name declared doors', badOrderResult.problems.some((problem) => problem.code === 'ui'), JSON.stringify(badOrderResult.problems))
 
+// The tab's short name is authored like the run label, so it is checked like one (founder,
+// 2026-09-25: *"maybe we need to use different names in to make it easier to read"*).
+const badTabLabel = JSON.parse(JSON.stringify(good))
+badTabLabel.ui.tabLabel = '   '
+const badTabLabelResult = await validate.execute({ adapter: badTabLabel }, {})
+check('a blank tab label is refused: the tab would draw an empty capsule', badTabLabelResult.problems.some((problem) => problem.code === 'ui'), JSON.stringify(badTabLabelResult.problems))
+
 // ui.defaults: the one authored number on a door, so the one that could contradict the
 // app's bounds. The app-derived `default` stays compared, untouched. The doors are found
 // rather than named, so this keeps testing the rule if the fixture's app changes.

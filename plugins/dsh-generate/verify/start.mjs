@@ -247,6 +247,20 @@ const PRIMITIVES = {
       },
       props.children,
     ),
+  /**
+   * THE ADD CONTROL'S POPOVER, from the app's own two rules (founder, 2026-09-25: *"click
+   * add button launch popover w snippet"*). The real `useAnchoredPosition` measures the
+   * trigger and clamps the panel inside the viewport; the stub answers the pair the real one
+   * would return after measuring a panel and a trigger, so a check can read that the popover
+   * is PLACED rather than laid out in the page flow. The real
+   * `useDismissOnOutsidePointer` binds a document listener on the trigger's root; the stub
+   * keeps all four arguments so a check can close the popover exactly the way an outside
+   * pointerdown does.
+   */
+  useAnchoredPosition: (options) => (options.open === true ? { left: 120, top: 240 } : null),
+  useDismissOnOutsidePointer: (root, open, setOpen, portal) => {
+    dismissals.push({ root, open, setOpen, portal })
+  },
 }
 
 // ── the walker ───────────────────────────────────────────────────────────────
@@ -346,17 +360,53 @@ const linesOf = (tree, out = []) => {
 /** Every interval the client half registered, newest last. */
 const timers = []
 
+/**
+ * The blob URLs the image door asked for, and the ones it let go. The browser makes a real
+ * object URL out of a picked file; this VM has no Blob and no URL, so the stub records the
+ * two calls instead — which is what makes "a picked file previews as a thumbnail, and a
+ * failed upload takes the preview back down" observable here.
+ */
+const blobUrls = []
+const revokedBlobUrls = []
+let blobSeq = 0
+/** Every `useDismissOnOutsidePointer` call, so a check can close a popover the way a click does. */
+const dismissals = []
+/** Every `keydown` listener the pane bound, so a check can press a key instead of a window. */
+const keydowns = []
+
 async function loadClient() {
   const source = await readFile(join(ROOT, 'lib/client.js'), 'utf8')
   let captured = null
   const sandbox = {
-    window: { __ModuleLoader__: { load: (registration) => { captured = registration } } },
+    // The pane's popover closes on Escape, the way the app's own floating surfaces do. The
+    // browser has a window with listeners; this VM has none, so the sandbox records them.
+    window: {
+      __ModuleLoader__: { load: (registration) => { captured = registration } },
+      addEventListener: (type, fn) => {
+        if (type === 'keydown') keydowns.push(fn)
+      },
+      removeEventListener: () => {},
+    },
     console,
     // The one sheet this bundle injects: `apply()` appends a <style> when a DOM is
     // present. The host defines the stub before this loader runs (see the registrations
     // block), and the sandbox keeps its own reference to it.
     document: globalThis.document,
     fetch: (url, init) => globalThis.fetch(url, init),
+    // The image door previews a picked file through a blob URL. The browser has
+    // `URL.createObjectURL`; this VM does not, so the stub answers a marked string and
+    // records both the make and the revoke.
+    URL: {
+      createObjectURL: (file) => {
+        blobSeq += 1
+        const url = 'blob:generate/' + blobSeq
+        blobUrls.push({ url, file })
+        return url
+      },
+      revokeObjectURL: (url) => {
+        revokedBlobUrls.push(url)
+      },
+    },
     // The run strip polls on an interval. The sandbox records the callbacks instead of
     // running them, so a check drives exactly one poll (`timers.at(-1)()`) rather than
     // waiting two real seconds for one.
@@ -520,6 +570,12 @@ const MODEL = {
 
 /** What the stubbed asset route answers: the URL an uploaded file becomes. */
 const UPLOADED_URL = 'https://assets.krea.ai/uploaded.png'
+/**
+ * What RunningHub's upload answers: a `fileName`, not a URL — *"the unique path for file
+ * loading … must be accurately passed to the corresponding node"*. Nothing a browser can
+ * open, which is exactly why the preview may not be drawn from it.
+ */
+const OPAQUE_HANDLE = 'api/7a8b80db932c05c6b54459f8bee3'
 
 /**
  * THE ARRAY DOORS, as the catalogue ships them (founder, 2026-09-23: *"we are missing a lot
@@ -643,12 +699,22 @@ function stubHost({
    * the split control", and a runnable surface is what draws one.
    */
   runOption = null,
+  /**
+   * What the upload route answers as the door's value. Krea answers a real URL; RunningHub
+   * answers an opaque `fileName` (`api/7a8b80db…`) that is a node input and nothing a browser
+   * can open — which is the case the thumbnail rule exists for, so a case can ask for it.
+   */
+  assetUrl = UPLOADED_URL,
 } = {}) {
   const calls = []
   // The runs this stub was asked to start, and how many times a job was polled: the two
   // facts the gate and the strip checks read.
   const runs = []
   const assets = []
+  // The upload's answer, swappable mid-case: one surface has to see what a provider that
+  // answers an opaque handle (RunningHub) puts on its image doors, the next what a provider
+  // that answers a URL (Krea) does.
+  let assetAnswer = assetUrl
   let polls = 0
   // The folder the Save-folder row posted, if any: the library answer mirrors the host's
   // own precedence (a chosen folder, else the Desktop default).
@@ -662,6 +728,10 @@ function stubHost({
     calls,
     runs,
     assets,
+    /** What the next upload answers: a URL for Krea, an opaque fileName for RunningHub. */
+    set assetUrl(next) {
+      assetAnswer = next
+    },
     get polls() {
       return polls
     },
@@ -677,7 +747,7 @@ function stubHost({
           name: (init && init.headers && init.headers['x-file-name']) || null,
           type: (init && init.headers && init.headers['content-type']) || null,
         })
-        return ok({ url: UPLOADED_URL })
+        return ok({ url: assetAnswer })
       }
       // The payload preview, built here the way the host builds it (verify/run.mjs still
       // drives this route, though the surface stopped calling it when the confirmation
@@ -855,6 +925,26 @@ check(
     /\.dsh-generate-spin/.test(String(injectedStyles[0].textContent)),
   JSON.stringify(injectedStyles.map((element) => String(element.textContent))),
 )
+check(
+  'the sheet hides a tab\'s close until that tab is selected, hovered or focused',
+  (() => {
+    // The app's own pattern (founder, 2026-09-25: *"the pattern in dsh is when the tab is
+    // unselected there is no close icon"*): DSH's `_tabClose_11olo_411` is
+    // `opacity:0;pointer-events:none`, revealed by `:hover`, `:focus-within` or the active tab.
+    const css = injectedStyles.length === 1 ? String(injectedStyles[0].textContent) : ''
+    return (
+      /\.dsh-generate-tabClose\s*\{[^}]*opacity:\s*0[^}]*\}/.test(css) &&
+      /\.dsh-generate-tabClose\s*\{[^}]*pointer-events:\s*none[^}]*\}/.test(css) &&
+      /\[data-generate-tab-pill\]:hover \.dsh-generate-tabClose/.test(css) &&
+      /\[data-generate-tab-pill\]:focus-within \.dsh-generate-tabClose/.test(css) &&
+      /\[data-generate-tab-pill\]\[data-generate-tab-selected="yes"\] \.dsh-generate-tabClose\s*\{[^}]*opacity:\s*1/.test(css) &&
+      // …and it hides rather than removes, so the glyph keeps its box and selecting a tab
+      // moves no pixel.
+      !/\.dsh-generate-tabClose\s*\{[^}]*(display:\s*none|visibility:\s*hidden)/.test(css)
+    )
+  })(),
+  injectedStyles.length === 1 ? String(injectedStyles[0].textContent) : 'no sheet',
+)
 
 const copy = seen.locales.find((entry) => entry.ns === 'generate')
 const EN = copy ? copy.table.en : {}
@@ -868,6 +958,23 @@ const guideCardSlots = seen.slots.filter((slot) => slot.options.name === 'sideba
 
 check('the pane body registers under our id', !!paneSlot && paneSlot.options.key === PKG_NAME, paneSlot && String(paneSlot.options.key))
 check('the chip registers beside it', !!titleSlot && titleSlot.options.key === PKG_NAME, titleSlot && String(titleSlot.options.key))
+// THE TAB TITLE WEARS THE SPARKLE (founder, 2026-09-25: *"add sparkles icon to generate tab at
+// top to match other dsh tabs"*). The guide tab draws its compass first, in the tertiary ink,
+// then its label; a Generate tab draws the same shape with the sparkle the start-page card
+// wears, so the tab reads as one of the app's own rather than as a bare word.
+{
+  const chip = await settle(titleSlot.component, { t }, 'chip')
+  const icon = byAttr(chip, 'data-generate-title-icon', 'yes')
+  const sparkle = icon ? nodesOf(icon).find((node) => node.props && node.props['data-stub'] === 'sparkle') : null
+  check(
+    'the tab title draws the sparkle beside its label, in chrome ink',
+    !!icon &&
+      !!sparkle &&
+      textIn(chip).trim() === 'Generate' &&
+      icon.props.style.color === 'var(--dsw-alias-label-tertiary)',
+    chip ? JSON.stringify({ text: textIn(chip), sparkle: !!sparkle }) : 'no chip',
+  )
+}
 check(
   "the guide card is the harness's own standard card, titled with the surface's own label",
   !!type && type.guide.length === 1 && type.guide[0].title() === 'Generate',
@@ -1222,7 +1329,7 @@ check(
   'a card carries the provider it runs on, and its section header names it',
   (() => {
     const card = byAttr(home.tree, 'data-generate-unit', KREA.name)
-    const head = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
+    const head = byAttr(home.tree, 'data-generate-section-head', PROVIDER)
     return !!card && card.props['data-generate-provider'] === PROVIDER && !!head && textIn(head).includes('RunningHub')
   })(),
   byAttr(home.tree, 'data-generate-unit', KREA.name) ? textIn(byAttr(home.tree, 'data-generate-unit', KREA.name)) : 'no card',
@@ -1261,23 +1368,46 @@ check(
   JSON.stringify(seen.types.map((definition) => ({ kind: definition.kind, multiple: definition.multiple }))),
 )
 
-// ── the home screen's accordion: one section per provider, all of them ──────
+// ── the home screen's dashboard: one block per provider, all of them ────────
 //
-// THE SHAPE THE FOUNDER ASKED FOR (2026-09-23): "I want to try stacked accordion to
-// each provider inside an accordion", with one section per provider — all four, not
-// only the linked ones, because a section is where that provider's add card lives. One
-// section is open at a time. The card inside a section is the harness's own start-page
-// card: icon, label, one line under it, no thumbnail.
+// THE SHAPE THE FOUNDER ASKED FOR (2026-09-23 for the blocks, 2026-09-25 for the look):
+// one block per provider — all four, not only the linked ones, because a block is where
+// that provider's add control lives — with the provider's name on a caption line and its
+// facts on a line under it. It was a stacked accordion with every section boxed; the
+// boxes, the separators and the fold are what went (founder, 2026-09-25: *"it should be
+// minimal like start surface and make like dashboard"*). The card inside a block is the
+// harness's own start-page card: icon, label, one line under it, no thumbnail.
 
 const sectionIds = (tree) =>
   nodesOf(tree)
-    .filter((node) => node.props && node.props['data-generate-section-toggle'])
-    .map((node) => node.props['data-generate-section-toggle'])
+    .filter((node) => node.props && node.props['data-generate-section-head'])
+    .map((node) => node.props['data-generate-section-head'])
 
 check(
-  'the home screen is a stacked accordion, one section per provider, in registry order',
+  'the home screen is one block per provider, in registry order',
   sectionIds(home.tree).join(',') === 'runninghub,krea,comfycloud,magnific',
   JSON.stringify(sectionIds(home.tree)),
+)
+// THE COLUMN IS THE START SURFACE'S (founder, 2026-09-25: *"it should be minimal like start
+// surface"*, then *"vertical center on page"*). The guide draws one centred column of 380px
+// entries; the home draws one centred column of 380px blocks, so a wide Generate tab and the
+// narrow right column read the same rather than the blocks stretching to whatever width the
+// pane happens to have — and the column is centred on the page vertically as well.
+check(
+  "the home is the guide's own centred column: 380px blocks, centred across and down",
+  (() => {
+    const box = (byAttr(home.tree, 'data-generate-sections') || { props: {} }).props.style || {}
+    return (
+      box.display === 'flex' &&
+      box.flexDirection === 'column' &&
+      box.alignItems === 'center' &&
+      // `margin: auto` centres vertically without the clipping `justify-content: center`
+      // causes once the column is taller than the pane.
+      box.margin === 'auto 0' &&
+      box.flex === 'none'
+    )
+  })(),
+  JSON.stringify((byAttr(home.tree, 'data-generate-sections') || { props: {} }).props.style),
 )
 
 // Hiding a provider is a display preference, not a link (founder, 2026-09-23: *"I want a
@@ -1358,30 +1488,33 @@ check(
   )
 }
 check(
-  'a section header names its provider, and the subheader under it says what the section holds',
+  "a block's caption names its provider, and the facts line under it says what the block holds",
   (() => {
-    const head = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
-    const band = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
+    const head = byAttr(home.tree, 'data-generate-section-head', PROVIDER)
+    const facts = byAttr(home.tree, 'data-generate-section-facts', PROVIDER)
     const headText = head ? textIn(head) : ''
-    const bandText = band ? textIn(band) : ''
+    const factsText = facts ? textIn(facts) : ''
     return (
       headText.includes('RunningHub') &&
       !headText.includes(EN['settings.kind.workflow']) &&
-      bandText.includes(EN['settings.kind.workflow']) &&
-      bandText.includes('2')
+      // THE COUNT LINE IS GONE (founder, 2026-09-25: *"remove workflows 3 installed"*):
+      // the facts line holds the wallet and the two glyph controls, and the cards under it
+      // are what says how many there are.
+      !factsText.includes('installed') &&
+      factsText.includes('8,600')
     )
   })(),
   (() => {
-    const head = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
-    const band = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
-    return 'header: ' + (head ? textIn(head) : 'none') + ' / subheader: ' + (band ? textIn(band) : 'none')
+    const head = byAttr(home.tree, 'data-generate-section-head', PROVIDER)
+    const facts = byAttr(home.tree, 'data-generate-section-facts', PROVIDER)
+    return 'caption: ' + (head ? textIn(head) : 'none') + ' / facts: ' + (facts ? textIn(facts) : 'none')
   })(),
 )
 check(
-  'the section that has workflows opens by itself; the empty ones stay shut',
+  'all provider sections are visible in the flat grid (no accordion)',
   !!byAttr(home.tree, 'data-generate-section-body', PROVIDER) &&
-    !byAttr(home.tree, 'data-generate-section-body', 'krea') &&
-    !byAttr(home.tree, 'data-generate-section-body', 'comfycloud'),
+    !!byAttr(home.tree, 'data-generate-section-body', 'krea') &&
+    !!byAttr(home.tree, 'data-generate-section-body', 'comfycloud'),
   JSON.stringify(sectionIds(home.tree)),
 )
 check(
@@ -1405,7 +1538,7 @@ check(
 // reads under the name it belongs to instead of in a strip above the accordion.
 {
   const lightOf = (tree, id) => {
-    const head = byAttr(tree, 'data-generate-section-toggle', id)
+    const head = byAttr(tree, 'data-generate-section-head', id)
     return head ? byAttr(head, 'data-generate-section-state') : null
   }
   const lightState = (tree, id) => (lightOf(tree, id) ? lightOf(tree, id).props['data-generate-section-state'] : null)
@@ -1443,8 +1576,8 @@ check(
     JSON.stringify(heads.map((id) => [id, lightState(home.tree, id)])),
   )
 
-  const header = byAttr(home.tree, 'data-generate-section-toggle', PROVIDER)
-  const sub = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
+  const header = byAttr(home.tree, 'data-generate-section-head', PROVIDER)
+  const sub = byAttr(home.tree, 'data-generate-section-facts', PROVIDER)
   const balanceRow = byAttr(home.tree, 'data-generate-provider-strip', PROVIDER)
   const balanceRows = nodesOf(home.tree).filter((node) => node.props && node.props['data-generate-provider-strip'])
   check(
@@ -1463,25 +1596,22 @@ check(
       // (founder, 2026-09-23: *"when the accordion is closed don't show the subheader"*).
       return (
         openIds.every((id) => {
-          const band = byAttr(home.tree, 'data-generate-section-sub', id)
+          const band = byAttr(home.tree, 'data-generate-section-facts', id)
           const row = byAttr(home.tree, 'data-generate-provider-strip', id)
           return !!band && !!row && nodesOf(band).includes(row)
         }) &&
-        heads.every((id) => openIds.includes(id) || !byAttr(home.tree, 'data-generate-section-sub', id))
+        heads.every((id) => openIds.includes(id) || !byAttr(home.tree, 'data-generate-section-facts', id))
       )
     })(),
     JSON.stringify(balanceRows.map((node) => node.props['data-generate-provider-strip'])),
   )
-  // THE SUBHEADER (founder, 2026-09-23: *"the accordion header for generate is too
-  // cluttered. remove the wallet balance, workflows counter, add/refresh icons.
-  // make a subheader with separator top/bottom and move these elements into it"*, and
-  // on seeing it: *"when the accordion is closed don't show the subheader"*). The
-  // claims are structural, checked against the tree and the band's own style: the band
-  // sits between the header and the body inside the same card, it carries a hairline
-  // above and below, the header keeps none of what moved — and it is behind the toggle:
-  // a shut section draws no band at all.
+  // THE FACTS LINE (founder, 2026-09-25: *"it should be minimal like start surface and
+  // make like dashboard"*). It stands where the subheader band stood, and its claims are
+  // the opposite of that band's: it still sits between the caption and the body inside the
+  // block, and it now draws NO separator — the hairline above and below, and the card
+  // around them, are exactly what the redesign took away.
   check(
-    'the subheader sits between the header and the body, with a separator above and below',
+    'the facts line sits between the caption and the body, and draws no separator',
     (() => {
       if (!header || !sub) return false
       const wrap = byAttr(home.tree, 'data-generate-section-wrap', PROVIDER)
@@ -1496,13 +1626,11 @@ check(
         headAt !== -1 &&
         subAt > headAt &&
         (bodyAt === -1 || subAt < bodyAt) &&
-        typeof style.borderTop === 'string' &&
-        style.borderTop.startsWith('1px solid') &&
-        typeof style.borderBottom === 'string' &&
-        style.borderBottom.startsWith('1px solid')
+        style.borderTop === undefined &&
+        style.borderBottom === undefined
       )
     })(),
-    sub ? JSON.stringify(sub.props.style) : 'no subheader',
+    sub ? JSON.stringify(sub.props.style) : 'no facts line',
   )
   check(
     'the header keeps none of what moved: no balance, no count line, no add, no refresh',
@@ -1512,7 +1640,6 @@ check(
         (node) =>
           node.props &&
           (node.props['data-generate-provider-strip'] !== undefined ||
-            node.props['data-generate-section-meta'] !== undefined ||
             node.props['data-generate-add-button'] !== undefined ||
             node.props['data-generate-refresh'] !== undefined),
       )
@@ -1520,33 +1647,52 @@ check(
     header ? textIn(header) : 'no header',
   )
   check(
-    'a shut section shows no subheader at all: the band is behind the toggle (founder, 2026-09-23: *"when the accordion is closed don\'t show the subheader"*)',
+    'all sections show their subheader bands in the flat grid',
     (() => {
-      const shutBand = byAttr(home.tree, 'data-generate-section-sub', 'krea')
-      const openBand = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
+      const kreaBand = byAttr(home.tree, 'data-generate-section-facts', 'krea')
+      const openBand = byAttr(home.tree, 'data-generate-section-facts', PROVIDER)
       return (
-        !shutBand &&
-        !byAttr(home.tree, 'data-generate-provider-strip', 'krea') &&
-        !byAttr(home.tree, 'data-generate-section-body', 'krea') &&
-        !!openBand &&
-        !!byAttr(openBand, 'data-generate-provider-strip') &&
-        !!byAttr(home.tree, 'data-generate-section-body', PROVIDER)
+        !!kreaBand &&
+        !!openBand
       )
     })(),
-    'krea is shut and runninghub is open on the home screen',
+    'all sections visible in flat grid',
   )
   const parentOf = (root, node) => nodesOf(root).find((candidate) => candidate.children.includes(node)) || null
+  // THE COUNT LINE IS GONE (founder, 2026-09-25: *"remove workflows 3 installed"*). The
+  // check that pinned `Workflows · N installed` as the facts line's right cluster went with
+  // it; what is left on that line is the balance and the two glyphs, and the check below
+  // reads their order.
   check(
-    'the count line is the subheader\'s right cluster, immediately left of the add glyph',
+    'the facts line is the balance, then the add and refresh glyphs, and nothing between them',
     (() => {
       if (!sub) return false
       const flat = nodesOf(sub)
-      const metaAt = flat.findIndex((node) => node.props && node.props['data-generate-section-meta'] === PROVIDER)
       const addAt = flat.findIndex((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
+      const refreshAt = flat.findIndex((node) => node.props && node.props['data-generate-refresh'] === PROVIDER)
       const textAt = balanceRow ? flat.indexOf(balanceRow) : -1
-      return metaAt !== -1 && addAt !== -1 && textAt !== -1 && textAt < metaAt && metaAt < addAt
+      return (
+        textAt !== -1 &&
+        addAt !== -1 &&
+        refreshAt !== -1 &&
+        textAt < addAt &&
+        addAt < refreshAt
+      )
     })(),
-    sub ? textIn(sub) : 'no subheader',
+    sub ? textIn(sub) : 'no facts line',
+  )
+  // SMALL AND MUTED (founder, 2026-09-25: *"make coins usd key saved small muted font color /
+  // fontsize sm"*). The balance is the quietest line on the block now: 11px in the caption
+  // ink, and neither the number nor its note carries a weight of its own.
+  check(
+    'the balance reads small and muted: 11px, the caption ink, and no weight of its own',
+    (() => {
+      if (!balanceRow) return false
+      const style = balanceRow.props.style || {}
+      const weighted = nodesOf(balanceRow).some((node) => node.props && node.props.style && node.props.style.fontWeight)
+      return style.fontSize === 11 && style.color === 'var(--dsw-alias-label-caption)' && !weighted
+    })(),
+    balanceRow ? JSON.stringify(balanceRow.props.style) : 'no balance',
   )
   check(
     'the header\'s text column is the name row, and nothing else',
@@ -1554,10 +1700,9 @@ check(
       if (!header) return false
       const column = header.children.find((child) => child && typeof child !== 'string' && textIn(child).includes('RunningHub'))
       if (!column || column.children.length !== 1) return false
-      // The count line and the add glyph are not in the header at all any more.
-      return !nodesOf(header).some(
-        (node) => node.props && (node.props['data-generate-section-meta'] || node.props['data-generate-add-button']),
-      )
+      // The add glyph is not in the header: it lives on the facts line, and the count line
+      // that used to sit beside it is gone (founder, 2026-09-25).
+      return !nodesOf(header).some((node) => node.props && node.props['data-generate-add-button'])
     })(),
     (() => {
       const column = header
@@ -1579,46 +1724,24 @@ check(
     })(),
     header ? textIn(header) : 'no header',
   )
-  // EVERY SECTION COUNTS ALIKE, read by opening each in turn — one at a time is also how
-  // the accordion works, and a shut section draws no band to read (founder, 2026-09-23:
-  // *"when the accordion is closed don't show the subheader"*). The fixture goes back to
-  // runninghub-open afterwards.
-  const metaLines = []
-  // The card-view check earlier drove THIS instance to a unit surface; the first
-  // re-settle shows it, so walk back to the accordion before opening sections one by
-  // one (the fixture's own state — the home.tree snapshot alone cannot answer here).
-  let openTree = (await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })).tree
-  if (byAttr(openTree, 'data-generate-back', 'yes')) {
-    byAttr(openTree, 'data-generate-back', 'yes').props.onClick()
-    openTree = (await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })).tree
-  }
-  for (const id of heads) {
-    if (!byAttr(openTree, 'data-generate-section-body', id)) {
-      const toggle = byAttr(openTree, 'data-generate-section-toggle', id)
-      if (!toggle) {
-        metaLines.push(null)
-        continue
-      }
-      toggle.props.onClick()
-      openTree = (await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })).tree
-    }
-    const meta = byAttr(openTree, 'data-generate-section-meta', id)
-    metaLines.push(meta ? textIn(meta) : null)
-  }
-  check(
-    'every section counts its entries with the same word, whatever the provider is',
-    metaLines.every((line) => line !== null && line.startsWith(EN['pane.section.family'] + ' · ')) &&
-      metaLines[0] === 'Workflows · 2 installed' &&
-      // The family TAG ("Image") is the Settings row's; a Krea band says the shared
-      // family word and never the kind tag (founder, 2026-09-23: *"use same naming on
-      // Krea accordion (and all accordions)"*).
-      !/image/i.test(metaLines[heads.indexOf('krea')] || ''),
-    JSON.stringify(heads.map((id, at) => [id, metaLines[at]])),
-  )
+  // THE COUNT LINE IS GONE (founder, 2026-09-25: *"remove workflows 3 installed"*), so the
+  // loop that opened each section in turn to read `Workflows · N installed` went with it.
+  // `pane.section.family`, `pane.section.count` and `pane.section.none` left both
+  // dictionaries at the same time, which is why the copy coverage list below no longer names
+  // them: the cards under a block are what says how many entries it has.
+  //
+  // The walk-back the loop used to do stays, because the checks AFTER it still read the home
+  // instance: a card-click check earlier drove this tree to a unit surface, and the fixture's
+  // own state (not the `home.tree` snapshot) is what a re-settle renders.
   {
-    const runninghub = byAttr(openTree, 'data-generate-section-toggle', PROVIDER)
-    if (runninghub) runninghub.props.onClick()
-    await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })
+    const walked = await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })
+    // The fixture is on a unit when the pane says so; the way back is the header's first tab
+    // (the surface's own back button went with the header, founder 2026-09-25).
+    const mode = byAttr(walked.tree, 'data-generate-pane')
+    if (mode && mode.props['data-generate-pane'] === 'unit') {
+      byAttr(walked.tree, 'data-generate-tab-add', 'yes').props.onClick()
+      await pane({ units: [KREA, QWEN] }, { key: 'pane-home' })
+    }
   }
   // THE ACCOUNT ARROW'S HOVER (founder, 2026-09-23: *"add onhover on the website link
   // arrow to theme primary token color"*): state-swapped like the cards, because an
@@ -1659,16 +1782,30 @@ check(
     })(),
     'the glyph travels with the name it belongs to, not below it',
   )
+  // NOTHING FOLDS (founder, 2026-09-25): the caption line is a label now, not a control,
+  // so there is no toggle for the account link to stop and no key for a keyboard to press.
   check(
-    'a click on the way out does not fold the section it sits in',
+    'the caption line is a label, not a toggle: no role, no key handling, no click',
+    (() => {
+      if (!header) return false
+      return (
+        header.props.role === undefined &&
+        header.props.tabIndex === undefined &&
+        typeof header.props.onClick !== 'function' &&
+        typeof header.props.onKeyDown !== 'function'
+      )
+    })(),
+    header
+      ? JSON.stringify({ role: header.props.role, tabIndex: header.props.tabIndex, click: typeof header.props.onClick })
+      : 'no caption line',
+  )
+  check(
+    'the account glyph is a plain link: nothing above it folds, so nothing needs stopping',
     (() => {
       const link = byAttr(home.tree, 'data-generate-account', PROVIDER)
-      if (!link || typeof link.props.onClick !== 'function') return false
-      let stopped = false
-      link.props.onClick({ stopPropagation: () => { stopped = true } })
-      return stopped
+      return !!link && link.props.onClick === undefined
     })(),
-    'the header is the toggle, and the link inside it is not',
+    'the stopPropagation the toggle needed is gone with the toggle',
   )
   check(
     'the glyph is labelled, because an icon alone names nothing',
@@ -1678,20 +1815,11 @@ check(
     })(),
     byAttr(home.tree, 'data-generate-account', PROVIDER) ? JSON.stringify(byAttr(home.tree, 'data-generate-account', PROVIDER).props.title) : 'no glyph',
   )
-  check(
-    'the header is the toggle, keyboard included, since it is a role and not a button',
-    (() => {
-      if (!header || header.props.role !== 'button' || header.props.tabIndex !== 0) return false
-      if (typeof header.props.onKeyDown !== 'function') return false
-      let prevented = 0
-      header.props.onKeyDown({ key: 'Enter', preventDefault: () => { prevented += 1 } })
-      header.props.onKeyDown({ key: 'a', preventDefault: () => { prevented += 1 } })
-      // Enter folds the section and is stopped from doing anything else; a letter is
-      // not the toggle's key and gets no such treatment.
-      return prevented === 1
-    })(),
-    header ? JSON.stringify({ role: header.props.role, tabIndex: header.props.tabIndex }) : 'no header',
-  )
+  // The commentary the two checks above replaced: the header WAS the toggle, a role rather
+  // than a button so the account anchor could live inside it, and Enter folded the section
+  // while a letter did not. The whole fold is gone (founder, 2026-09-25), so its keyboard
+  // contract is not a thing the page owes any more — and the two checks above say so from
+  // the other side: nothing on the caption line is a control.
 
   // The model marks (founder, 2026-09-23: *"can you use logo for Krea WF"*, then the
   // Qwen mark from Wikimedia Commons). A one-colour mark is a MASK painted in the
@@ -1767,7 +1895,7 @@ check(
   )
 
   const refresh = byAttr(home.tree, 'data-generate-refresh', PROVIDER)
-  const refreshBand = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
+  const refreshBand = byAttr(home.tree, 'data-generate-section-facts', PROVIDER)
   check(
     'the refresh control lives in the subheader, right of the balance, and the pane keeps no foot row for it',
     (() => {
@@ -1800,7 +1928,7 @@ check(
   check(
     'the add glyph sits beside the refresh it was moved next to, on its left',
     (() => {
-      const band = byAttr(home.tree, 'data-generate-section-sub', PROVIDER)
+      const band = byAttr(home.tree, 'data-generate-section-facts', PROVIDER)
       if (!band) return false
       const flat = nodesOf(band)
       const addAt = flat.findIndex((node) => node.props && node.props['data-generate-add-button'] === PROVIDER)
@@ -1808,39 +1936,42 @@ check(
       return addAt !== -1 && refreshAt !== -1 && addAt < refreshAt
     })(),
     JSON.stringify(
-      nodesOf(byAttr(home.tree, 'data-generate-section-sub', PROVIDER) || { children: [] })
+      nodesOf(byAttr(home.tree, 'data-generate-section-facts', PROVIDER) || { children: [] })
         .filter((node) => node.props && (node.props['data-generate-add-button'] || node.props['data-generate-refresh']))
         .map((node) => node.props['data-generate-add-button'] || node.props['data-generate-refresh']),
     ),
   )
 
-  // ONE SECTION IS ONE CARD (founder, 2026-09-23): the card is the section, so opening
-  // one grows that card instead of stacking a second one under the header.
+  // NOTHING DRAWS A CARD (founder, 2026-09-25: *"it should be minimal like start surface
+  // and make like dashboard"*). The block is a column at the guide's own width on the
+  // page's own background — no border, no fill, no radius — so the only lines on the home
+  // are the entries' own.
   check(
-    'the section is the card: the border and radius are the section\'s, and the header keeps none of its own',
+    'no block draws a card: the section has no border, no fill and no radius',
     (() => {
       const wrap = byAttr(home.tree, 'data-generate-section-wrap', PROVIDER)
-      if (!wrap || !header) return false
+      if (!wrap) return false
       const box = wrap.props.style
-      const head = header.props.style
-      return box.borderRadius === 12 &&
-        box.background === 'var(--dsw-alias-bg-layer-1)' &&
-        /^\.5px solid /.test(box.border) &&
-        head.border === 'none' &&
-        head.background === 'transparent'
+      return (
+        box.border === undefined &&
+        box.background === undefined &&
+        box.borderRadius === undefined &&
+        box.width === 380 &&
+        box.maxWidth === '100%'
+      )
     })(),
     byAttr(home.tree, 'data-generate-section-wrap', PROVIDER)
       ? JSON.stringify(byAttr(home.tree, 'data-generate-section-wrap', PROVIDER).props.style)
       : 'no section',
   )
   check(
-    'the open body is held inside that same card, under the header',
+    'the facts line and the entries are held inside that same block, under the caption',
     (() => {
       const wrap = byAttr(home.tree, 'data-generate-section-wrap', PROVIDER)
       const body = byAttr(home.tree, 'data-generate-section-body', PROVIDER)
       return !!wrap && !!body && nodesOf(wrap).includes(header) && nodesOf(wrap).includes(body)
     })(),
-    'a body outside the card would be the second card the change removed',
+    'a body outside the block would be the second card the change removed',
   )
 
   // The workflow card is the harness's start-page card at the size that card actually
@@ -1860,45 +1991,57 @@ check(
   )
 }
 
-// Opening a section is what makes its cards reachable, and the accordion holds one
-// open at a time: opening Krea's must close RunningHub's.
+// NOTHING FOLDS (founder, 2026-09-25: *"it should be minimal like start surface and make
+// like dashboard"*). Every block is open on the first paint, so no click is what makes a
+// card reachable, and no caption line is a control at all — the accordion, its chevron
+// and its one-open-at-a-time rule are gone.
 {
   const real = globalThis.fetch
   globalThis.fetch = stubHost({ units: [KREA, QWEN] }).fetch
   try {
-    const before = await settle(paneSlot.component, { t }, 'pane-accordion')
-    const toggle = byAttr(before, 'data-generate-section-toggle', 'krea')
+    const flat = await settle(paneSlot.component, { t }, 'pane-flat')
+    const all = ['runninghub', 'krea', 'comfycloud', 'magnific']
     check(
-      'a closed section is still a control that opens it',
-      !!toggle && typeof toggle.props.onClick === 'function',
-      toggle ? 'control present' : 'no toggle on the Krea section',
+      'every block is open on the first paint, with no click to make a card reachable',
+      sectionIds(flat).join(',') === all.join(',') &&
+        all.every((id) => !!byAttr(flat, 'data-generate-section-body', id)),
+      JSON.stringify(sectionIds(flat)),
     )
-    if (toggle) toggle.props.onClick()
-    const after = await settle(paneSlot.component, { t }, 'pane-accordion')
     check(
-      'opening a section closes the open one: one section at a time',
-      !!byAttr(after, 'data-generate-section-body', 'krea') && !byAttr(after, 'data-generate-section-body', PROVIDER),
-      JSON.stringify(sectionIds(after)),
+      'no caption line is a toggle: nothing on the home folds',
+      all.every((id) => {
+        const head = byAttr(flat, 'data-generate-section-head', id)
+        return (
+          !!head &&
+          // Two children and no more: the status light and the name. The chevron the
+          // fold needed was the third, and it is gone with the fold.
+          head.children.length === 2 &&
+          head.props.role === undefined &&
+          typeof head.props.onClick !== 'function' &&
+          typeof head.props.onKeyDown !== 'function'
+        )
+      }),
+      'the caption line is a label: the fold, its chevron and its keyboard contract are gone',
     )
-    // The image provider's section, read where it can be read now: only its own open
-    // band says what it holds, and the shared count line is the claim.
-    const kreaHead = byAttr(after, 'data-generate-section-toggle', 'krea')
-    const kreaBand = byAttr(after, 'data-generate-section-sub', 'krea')
+    // The image provider's block, read the same way every other one is: its caption names
+    // it, and the facts line under it carries that block's own state.
+    const kreaHead = byAttr(flat, 'data-generate-section-head', 'krea')
+    const kreaFacts = byAttr(flat, 'data-generate-section-facts', 'krea')
     const kreaHeadText = kreaHead ? textIn(kreaHead) : ''
-    const kreaBandText = kreaBand ? textIn(kreaBand) : ''
+    const kreaFactsText = kreaFacts ? textIn(kreaFacts) : ''
     check(
-      'an image provider\'s section draws like every other one: the name above, the shared count line below',
+      "an image provider's block draws like every other one: the caption names it, the facts line carries its state",
       kreaHeadText.includes('Krea') &&
         !kreaHeadText.includes(EN['settings.kind.image']) &&
-        kreaBandText.includes(EN['pane.section.family']) &&
-        kreaBandText.includes(EN['pane.section.none']) &&
-        !kreaBandText.includes(EN['settings.kind.image']),
-      'header: ' + kreaHeadText + ' / subheader: ' + kreaBandText,
+        kreaFactsText.includes(EN['wallet.notLinked']) &&
+        !kreaFactsText.includes(EN['settings.kind.image']) &&
+        !kreaFactsText.includes('installed'),
+      'caption: ' + kreaHeadText + ' / facts: ' + kreaFactsText,
     )
     check(
       'an unlinked provider says its state in words rather than drawing an empty wallet',
-      textIn(byAttr(after, 'data-generate-provider-strip', 'krea') || { children: [] }).includes(EN['wallet.notLinked']),
-      textIn(byAttr(after, 'data-generate-provider-strip', 'krea') || { children: [] }),
+      textIn(byAttr(flat, 'data-generate-provider-strip', 'krea') || { children: [] }).includes(EN['wallet.notLinked']),
+      textIn(byAttr(flat, 'data-generate-provider-strip', 'krea') || { children: [] }),
     )
   } finally {
     globalThis.fetch = real
@@ -1918,7 +2061,7 @@ check(
   try {
     const first = await settle(paneSlot.component, { t }, 'pane-add-card')
     const button = byAttr(first, 'data-generate-add-button', PROVIDER)
-    const band = byAttr(first, 'data-generate-section-sub', PROVIDER)
+    const band = byAttr(first, 'data-generate-section-facts', PROVIDER)
     check(
       'a provider with nothing installed carries the add control in its subheader, as a glyph',
       !!button && !!band && nodesOf(band).includes(button),
@@ -1987,9 +2130,335 @@ check(
       })(),
       JSON.stringify([button && button.props['aria-expanded'], byAttr(after, 'data-generate-add-button', PROVIDER)?.props['aria-expanded']]),
     )
+    // THE POPOVER (founder, 2026-09-25: *"click add button launch popover w snippet"*). The
+    // snippet used to open inline at the foot of the block, which pushed every card under it
+    // down and re-flowed the page. The claims are structural: what the glyph opens is a
+    // dialog, it is placed out of the page flow by the app's own anchored hook, and it lives
+    // outside the block's body so opening it cannot move a single card.
+    // The stub records one call per render, so the OPEN one belongs to the block whose glyph
+    // was clicked; the other three blocks are still shut and report `open: false`.
+    const livePopover = () => dismissals.filter((entry) => entry.open === true).at(-1)
+    const popover = byAttr(after, 'data-generate-add-popover', PROVIDER)
+    check(
+      'the add glyph opens a popover: a dialog, out of the page flow, holding the snippet',
+      (() => {
+        if (!popover) return false
+        const style = popover.props.style || {}
+        const body = byAttr(after, 'data-generate-section-body', PROVIDER)
+        const inBody = body ? nodesOf(body).some((node) => node.props && node.props['data-generate-add-popover']) : true
+        return (
+          popover.props.role === 'dialog' &&
+          style.position === 'fixed' &&
+          typeof style.left === 'number' &&
+          typeof style.top === 'number' &&
+          !!byAttr(popover, 'data-generate-add-prompt', PROVIDER) &&
+          // The cards' container is untouched by the click: the prompt is not one of them.
+          !inBody
+        )
+      })(),
+      popover ? JSON.stringify(popover.props.style) : 'no popover',
+    )
+    check(
+      "the popover is placed and dismissed by the app's own two hooks, not a second system",
+      (() => {
+        const last = livePopover()
+        return (
+          !!last &&
+          last.open === true &&
+          typeof last.setOpen === 'function' &&
+          // The root is the block that holds the glyph, so a click on either side of the
+          // panel counts as inside.
+          !!last.root &&
+          typeof last.root === 'object'
+        )
+      })(),
+      JSON.stringify({ open: livePopover()?.open, setter: typeof livePopover()?.setOpen }),
+    )
+    if (livePopover()) livePopover().setOpen(false)
+    const dismissed = await settle(paneSlot.component, { t }, 'pane-add-card')
+    check(
+      'a pointerdown outside the block closes it',
+      !byAttr(dismissed, 'data-generate-add-popover', PROVIDER),
+      'the outside-click rule the primitive hands back is what closed it',
+    )
+    // And Escape, the way every other floating surface in the app closes.
+    const reopen = byAttr(dismissed, 'data-generate-add-button', PROVIDER)
+    if (reopen) reopen.props.onClick({ stopPropagation: () => {} })
+    const again = await settle(paneSlot.component, { t }, 'pane-add-card')
+    check('the glyph opens it again after a dismissal', !!byAttr(again, 'data-generate-add-popover', PROVIDER))
+    if (keydowns.at(-1)) keydowns.at(-1)({ key: 'Escape' })
+    const escaped = await settle(paneSlot.component, { t }, 'pane-add-card')
+    check(
+      'Escape closes it, and the pane keeps no other way out',
+      !byAttr(escaped, 'data-generate-add-popover', PROVIDER),
+      'no close button in the card: the key and the outside click are the two ways',
+    )
   } finally {
     globalThis.fetch = real
   }
+}
+
+// ── the header: the strip's own pattern, one row lower ──────────────────────
+//
+// THE SHAPE THE FOUNDER ASKED FOR (2026-09-25): *"the separator is below the dsh tabs. then
+// below that are the generate workflows headers … styling for tab is: selected=border;
+// unselected=no border. then add button like dsh pattern"*, corrected the same day to *"the dsh
+// pattern does not have all workflows, it uses add button to create new tab and uses start
+// screen to add the tab"* and *"same navigation but below the dsh navigation. same pattern but
+// below the separator"*.
+//
+// So the row is the strip's own pattern one level down: a tab per OPEN WORKFLOW and a plus,
+// exactly as the strip above carries a tab per open page and a plus. There is no "All workflows"
+// tab, because DSH has none either — the start screen is not a tab, it is what the plus shows.
+// DSH's own `addTab` opens the `guide` tab (`openTab(GUIDE_KIND, …)` in the sidebar's actions),
+// and the guide's cards are what make a tab; here the plus shows the workflow grid, and a card
+// on it opens that workflow's tab. The separator above the row is the DSH strip's own, so the
+// row draws none of its own.
+{
+  const tabsOf = (tree) =>
+    nodesOf(tree)
+      .filter((node) => node.props && node.props['data-generate-tab'])
+      .map((node) => node.props['data-generate-tab'])
+  const pillOf = (tree, key) =>
+    nodesOf(tree).find((node) => node.props && node.props['data-generate-tab-pill'] === key) || null
+  const borderOf = (tree, key) => (pillOf(tree, key) ? pillOf(tree, key).props.style.border : 'no pill')
+
+  const bare = await pane({ units: [KREA, QWEN] }, { key: 'pane-header' })
+  check(
+    'with nothing open there is no row at all: the start screen needs no plus beside it',
+    !byAttr(bare.tree, 'data-generate-header', 'yes') &&
+      !byAttr(bare.tree, 'data-generate-tab-add', 'yes') &&
+      tabsOf(bare.tree).length === 0 &&
+      // …and the start screen itself is what is drawn, straight under the separator.
+      !!byAttr(bare.tree, 'data-generate-sections'),
+    JSON.stringify(tabsOf(bare.tree)),
+  )
+
+  // A card on the start screen is what makes a tab, the way DSH's guide entries do.
+  const kreaCard = byAttr(bare.tree, 'data-generate-unit', KREA.name)
+  if (kreaCard) kreaCard.props.onClick()
+  const one = await pane({ units: [KREA, QWEN] }, { key: 'pane-header' })
+  check(
+    'a card on the start screen opens its workflow as a tab, named by the workflow',
+    (() => {
+      const tab = byAttr(one.tree, 'data-generate-tab', KREA.name)
+      return (
+        tabsOf(one.tree).join(',') === KREA.name &&
+        !!tab &&
+        textIn(tab).trim() === KREA.title &&
+        pillOf(one.tree, KREA.name) !== null &&
+        pillOf(one.tree, KREA.name).props['data-generate-tab-selected'] === 'yes' &&
+        borderOf(one.tree, KREA.name) === '.5px solid var(--dsw-alias-border-l3)' &&
+        !!byAttr(one.tree, 'data-generate-tab-close', KREA.name)
+      )
+    })(),
+    JSON.stringify(tabsOf(one.tree)),
+  )
+  check(
+    'a tab is as wide as its label: no cap on the pill and no ellipsis on the name',
+    (() => {
+      const pill = pillOf(one.tree, KREA.name)
+      const label = byAttr(one.tree, 'data-generate-tab', KREA.name)
+      if (!pill || !label) return false
+      return (
+        pill.props.style.maxWidth === undefined &&
+        label.props.style.overflow === undefined &&
+        label.props.style.textOverflow === undefined &&
+        // One line, never wrapped: the row scrolls instead.
+        label.props.style.whiteSpace === 'nowrap'
+      )
+    })(),
+    'the pill used to cap at 200px and ellipsise, which is what turned two Qwen apps into one name',
+  )
+  check(
+    'the row is the first thing under the separator: the header comes before the content',
+    (() => {
+      const header = byAttr(one.tree, 'data-generate-header', 'yes')
+      const order = nodesOf(one.tree)
+      return !!header && order.indexOf(header) < order.indexOf(byAttr(one.tree, 'data-generate-surface'))
+    })(),
+    'the separator above it is the DSH strip\'s, so the pane draws none of its own',
+  )
+  check(
+    'the row takes the DSH strip\'s own breath: 10px above its tabs and 10px below them',
+    (() => {
+      const header = byAttr(one.tree, 'data-generate-header', 'yes')
+      // The strip's own rule is `padding:10px 6px 0 …`, so a DSH pill sits 10px under the top
+      // of the viewport; these tabs sit 10px under the hairline, and the same 10px separates
+      // them from what follows — one number, both sides (founder: *"i meant same spacing top
+      // and bottom"*).
+      return !!header && header.props.style.padding === '10px 8px'
+    })(),
+    'the strip shares its top padding with no other row, so this one copies the number',
+  )
+
+  check(
+    'the row draws no hairline of its own: the separator above it is the DSH strip\'s',
+    (() => {
+      const header = byAttr(one.tree, 'data-generate-header', 'yes')
+      if (!header) return false
+      // The DSH strip's own header already draws `.5px solid var(--dsw-alias-border-l2)`; a
+      // second line here stacked on it and the boundary read as one thick rule (founder,
+      // 2026-09-25: *"remove separator"*).
+      return (
+        header.props.style.borderTop === undefined &&
+        header.props.style.borderBottom === undefined
+      )
+    })(),
+    'the row drew a hairline above itself for a few hours, doubling the DSH strip\'s own line',
+  )
+
+  check(
+    'the add button carries the plus and says what it is, so it is not the DSH strip\'s bare plus',
+    (() => {
+      const add = byAttr(one.tree, 'data-generate-tab-add', 'yes')
+      if (!add) return false
+      const button = byAttr(add, 'data-stub', 'button')
+      const plus = nodesOf(add).find((node) => node.props && node.props['data-stub'] === 'plus')
+      return (
+        !!button &&
+        !!plus &&
+        textIn(add).trim() === EN['tabs.addLabel'] &&
+        button.props['aria-label'] === EN['tabs.add'] &&
+        button.props.title === EN['tabs.add']
+      )
+    })(),
+    byAttr(one.tree, 'data-generate-tab-add', 'yes') ? JSON.stringify(byAttr(one.tree, 'data-generate-tab-add', 'yes').props) : 'no add button',
+  )
+
+  // The plus shows the start screen again; the tab keeps its place on the row.
+  if (byAttr(one.tree, 'data-generate-tab-add', 'yes')) byAttr(one.tree, 'data-generate-tab-add', 'yes').props.onClick()
+  const back = await pane({ units: [KREA, QWEN] }, { key: 'pane-header' })
+  check(
+    'the plus shows the start screen again, and the open tab keeps its place on the row',
+    (() => {
+      const mode = byAttr(back.tree, 'data-generate-pane')
+      return (
+        !!mode &&
+        mode.props['data-generate-pane'] === 'home' &&
+        !!byAttr(back.tree, 'data-generate-sections') &&
+        tabsOf(back.tree).join(',') === KREA.name &&
+        pillOf(back.tree, KREA.name) !== null &&
+        pillOf(back.tree, KREA.name).props['data-generate-tab-selected'] === 'no' &&
+        // Same width, transparent: switching between the start screen and a tab moves no pixel.
+        borderOf(back.tree, KREA.name) === '.5px solid transparent'
+      )
+    })(),
+    JSON.stringify(tabsOf(back.tree)),
+  )
+  // The plus wears the selected state too (founder, 2026-09-25: *"when I click + there should be
+  // border if we follow pattern"*): the primitive's `outline` while the start screen is showing,
+  // a plain ghost while a workflow is, so "which view am I on" reads the same on both controls.
+  check(
+    'the plus carries the border while the start screen is what the pane shows',
+    (() => {
+      const onStart = byAttr(back.tree, 'data-generate-tab-add', 'yes')
+      const onWorkflow = byAttr(one.tree, 'data-generate-tab-add', 'yes')
+      const variant = (span) => {
+        const button = span ? byAttr(span, 'data-stub', 'button') : null
+        return button ? button.props.variant : 'no button'
+      }
+      return variant(onStart) === 'outline' && variant(onWorkflow) === 'ghost'
+    })(),
+    'outline@start vs ghost@workflow',
+  )
+
+  const qwenCard = byAttr(back.tree, 'data-generate-unit', QWEN.name)
+  if (qwenCard) qwenCard.props.onClick()
+  const two = await pane({ units: [KREA, QWEN] }, { key: 'pane-header' })
+  check(
+    'two tabs, one border: the open workflow wears it and the other does not',
+    (() => {
+      const kreaPill = pillOf(two.tree, KREA.name)
+      const qwenPill = pillOf(two.tree, QWEN.name)
+      return (
+        tabsOf(two.tree).join(',') === KREA.name + ',' + QWEN.name &&
+        !!kreaPill &&
+        !!qwenPill &&
+        qwenPill.props['data-generate-tab-selected'] === 'yes' &&
+        borderOf(two.tree, QWEN.name) === '.5px solid var(--dsw-alias-border-l3)' &&
+        kreaPill.props['data-generate-tab-selected'] === 'no' &&
+        borderOf(two.tree, KREA.name) === '.5px solid transparent'
+      )
+    })(),
+    JSON.stringify(tabsOf(two.tree)),
+  )
+  check(
+    'an unselected tab\'s close is hidden by the sheet, not drawn beside its name',
+    (() => {
+      // founder, 2026-09-25: *"the pattern in dsh is when the tab is unselected there is no
+      // close icon"*. Every tab still owns a close — that is how a tab is closed — but its
+      // visibility belongs to the sheet's `.dsh-generate-tabClose` rule, keyed to the pill's own
+      // selected/hover/focus state, so nothing about it is decided inline, and the unselected
+      // pill is where the rule reads "no".
+      const closeOf = (tree, key) => byAttr(tree, 'data-generate-tab-close', key)
+      const bare = (node) =>
+        !!node &&
+        node.props.className === 'dsh-generate-tabClose' &&
+        !node.props.style.opacity &&
+        !node.props.style.visibility &&
+        node.props.style.display !== 'none'
+      return (
+        bare(closeOf(two.tree, KREA.name)) &&
+        bare(closeOf(two.tree, QWEN.name)) &&
+        pillOf(two.tree, KREA.name).props['data-generate-tab-selected'] === 'no' &&
+        pillOf(two.tree, QWEN.name).props['data-generate-tab-selected'] === 'yes'
+      )
+    })(),
+    JSON.stringify(byAttr(two.tree, 'data-generate-tab-close', KREA.name).props),
+  )
+  check(
+    'the file name is nowhere on the row: a tab reads its workflow\'s own title',
+    (() => {
+      const row = byAttr(two.tree, 'data-generate-header', 'yes')
+      const text = row ? textIn(row) : ''
+      return !text.includes(KREA.name) && !text.includes(QWEN.name) && text.includes(KREA.title) && text.includes(QWEN.title)
+    })(),
+    textIn(byAttr(two.tree, 'data-generate-header', 'yes')).slice(0, 160),
+  )
+
+  if (byAttr(two.tree, 'data-generate-tab-close', QWEN.name)) byAttr(two.tree, 'data-generate-tab-close', QWEN.name).props.onClick()
+  const closed = await pane({ units: [KREA, QWEN] }, { key: 'pane-header' })
+  check(
+    'closing the open tab takes it off the row and lands back on the start screen',
+    (() => {
+      const mode = byAttr(closed.tree, 'data-generate-pane')
+      return (
+        tabsOf(closed.tree).join(',') === KREA.name &&
+        !!mode &&
+        mode.props['data-generate-pane'] === 'home' &&
+        !!byAttr(closed.tree, 'data-generate-sections') &&
+        !!byAttr(closed.tree, 'data-generate-tab-add', 'yes')
+      )
+    })(),
+    JSON.stringify(tabsOf(closed.tree)),
+  )
+
+  // A NARROW TAB MAY READ A SHORTER NAME (founder, 2026-09-25: *"the workflow tab fontsize too
+  // big, maybe we need to use different names in to make it easier to read. Qwen Duo / Qwen
+  // Multi / H3 F/L / Krea Raw / Krea Turbo / Krea Medium / Krea Large"*). The short name is
+  // authored on the adapter (`ui.tabLabel`); the 380px card keeps the workflow's own title, and
+  // a workflow that authors none reads its title on both (which the two tabs above prove).
+  const short = { ...KREA, name: 'long-titled-app', title: 'A Very Long Workflow Title', tabLabel: 'Short' }
+  const named = await pane({ units: [short] }, { key: 'pane-header-named' })
+  const namedCard = byAttr(named.tree, 'data-generate-unit', short.name)
+  if (namedCard) namedCard.props.onClick()
+  const withShort = await pane({ units: [short] }, { key: 'pane-header-named' })
+  check(
+    'a card keeps the workflow title, and the tab may read the shorter name it authors',
+    (() => {
+      const card = byAttr(named.tree, 'data-generate-unit', short.name)
+      const tab = byAttr(withShort.tree, 'data-generate-tab', short.name)
+      return (
+        !!card &&
+        textIn(card).includes(short.title) &&
+        !!tab &&
+        textIn(tab).trim() === short.tabLabel &&
+        !textIn(byAttr(withShort.tree, 'data-generate-header', 'yes')).includes(short.title)
+      )
+    })(),
+    'the narrow tab reads the short name; the card keeps the title',
+  )
 }
 
 // ── a workflow's surface, inside the pane ───────────────────────────────────
@@ -2006,7 +2475,10 @@ check(
   opened.calls.some((call) => String(call.url).startsWith(providerUrl('workflow') + '?name=' + KREA.name)),
   JSON.stringify(opened.calls.map((call) => call.url)),
 )
-check('the surface has a way back to the list', !!byAttr(opened.tree, 'data-generate-back', 'yes'))
+check(
+  'the surface has a way back to the start screen: the header\'s plus',
+  !!byAttr(opened.tree, 'data-generate-tab-add', 'yes') && !byAttr(opened.tree, 'data-generate-back', 'yes'),
+)
 
 const rowsRendered = (tree) =>
   nodesOf(tree)
@@ -2052,36 +2524,19 @@ check(
   JSON.stringify(byAttr(opened.tree, 'data-generate-door', 'scaleBy') && byAttr(opened.tree, 'data-generate-door', 'scaleBy').props),
 )
 
-// ── the three fixes the founder asked for on opening a workflow ──────────────
+// ── two of the fixes the founder asked for on opening a workflow ─────────────
 //
-// "the All workflows button should have back arrow … Increase gap space below.
-//  Design for responsive, past mobile breakpoint we should 2 column parameters +
-//  output preview. … for number input use the correct primitive" (2026-09-23).
+// "Increase gap space below. Design for responsive, past mobile breakpoint we should 2
+//  column parameters + output preview. … for number input use the correct primitive"
+// (2026-09-23). The back arrow that request produced is GONE (founder, 2026-09-25): the
+// pane's header carries the same control as its first tab, so the surface repeats nothing.
 
 {
   const props = { t, useTabInfo: () => ({ tab: { navigation: { params: { unit: KREA.name, provider: PROVIDER }, revision: 1 } } }) }
-  const back = byAttr(opened.tree, 'data-generate-back', 'yes')
   check(
-    'the way out of a surface is a back arrow and its label',
-    (() => {
-      if (!back) return false
-      const glyph = nodesOf(back).find((node) => node.props && node.props['data-stub'] === 'chevron-left')
-      return !!glyph && textIn(back).includes(EN['surface.back'])
-    })(),
-    back ? JSON.stringify(nodesOf(back).filter((node) => node.props && node.props['data-stub']).map((node) => node.props['data-stub'])) : 'no back control',
-  )
-  check(
-    'the back control has room under it before the workflow\'s own title',
-    (() => {
-      const head = byAttr(opened.tree, 'data-generate-back', 'yes')
-      const row = head ? nodesOf(opened.tree).find((node) => node.children.includes(head)) : null
-      return !!row && typeof row.props.style.marginBottom === 'number' && row.props.style.marginBottom >= 14
-    })(),
-    (() => {
-      const head = byAttr(opened.tree, 'data-generate-back', 'yes')
-      const row = head ? nodesOf(opened.tree).find((node) => node.children.includes(head)) : null
-      return row ? String(row.props.style.marginBottom) : 'no head row'
-    })(),
+    "a surface carries no way-out button of its own: the header's plus leads to the start screen",
+    !byAttr(opened.tree, 'data-generate-back', 'yes') && !!byAttr(opened.tree, 'data-generate-tab-add', 'yes'),
+    JSON.stringify(nodesOf(opened.tree).filter((node) => node.props && node.props['data-stub'] === 'chevron-left').length) + ' left chevron(s) on the surface',
   )
   check(
     'parameters and output are two columns that wrap, so a wide pane puts them side by side',
@@ -2262,7 +2717,14 @@ check(
 )
 check(
   'one failed read does not take the wallet strip with it',
-  !!byAttr(failed.tree, 'data-generate-source'),
+  (() => {
+    const strip = byAttr(failed.tree, 'data-generate-provider-strip', PROVIDER)
+    const note = byAttr(failed.tree, 'data-generate-source')
+    // The balance is the strip's own fact and the provenance note is gone from the page
+    // (founder, 2026-09-25: *"remove stored on this machine"*) — but the source itself is
+    // still on the DOM node, which is where that seam belongs.
+    return !!strip && textIn(strip).includes('8,600') && !!note
+  })(),
   '',
 )
 
@@ -2428,12 +2890,12 @@ check(
       'the spin span is the strip\'s first child and carries the animated class',
     )
     check(
-      'the control is disabled while the run is on its way, so one press is one run',
+      'the control is always enabled so the user can queue concurrent runs',
       (() => {
         const live = byAttr(started, 'data-generate-run', MODEL_UNIT.name)
-        return !!live && live.props.disabled === true
+        return !!live && live.props.disabled === false
       })(),
-      'disabled at queued',
+      'enabled at queued',
     )
 
     // One poll by hand, which is what the interval would have done two seconds later.
@@ -2563,7 +3025,7 @@ check(
   const real = globalThis.fetch
   globalThis.fetch = stubWithUpload.fetch
   try {
-    const tree = await settle(paneSlot.component, props, 'pane-rh-run')
+    let tree = await settle(paneSlot.component, props, 'pane-rh-run')
     check(
       'a RunningHub workflow now draws the run control, because its provider can run',
       !!byAttr(tree, 'data-generate-run', 'outfit-swap') && !byAttr(tree, 'data-generate-run-pending', 'yes'),
@@ -2578,6 +3040,31 @@ check(
       "its image doors draw the pick control the provider's upload earns",
       !!byAttr(tree, 'data-generate-upload', 'person') && !!byAttr(tree, 'data-generate-upload', 'garment'),
       JSON.stringify({ person: !!byAttr(tree, 'data-generate-upload', 'person'), garment: !!byAttr(tree, 'data-generate-upload', 'garment') }),
+    )
+    // TWO REFERENCE IMAGES ON ONE ROW (founder, 2026-09-24: *"2 ref images on same row"*). This
+    // is the outfit-swap shape: the person and the garment are what a person compares, so the
+    // two consecutive image doors share a row rather than stacking down the card.
+    check(
+      'two reference images sit on one row, in the order the adapter lists them',
+      !!byAttr(tree, 'data-generate-image-group', 'person+garment'),
+      JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-image-group']).map((node) => node.props['data-generate-image-group'])),
+    )
+    // A HANDLE WITH NO PICKED BYTES. A surface that remounts while its door already holds one has
+    // no blob to draw, and RunningHub's `api/…` handle is not addressable — so the door says a
+    // picture is set and draws the neutral mark. Never an `<img>` with a src no browser can open.
+    const personField = byAttr(tree, 'data-generate-door', 'person')
+    if (personField) personField.props.onChange({ target: { value: OPAQUE_HANDLE } })
+    tree = await settle(paneSlot.component, props, 'pane-rh-run')
+    check(
+      'a handle with no picked bytes draws the neutral mark, never a broken image',
+      !byAttr(tree, 'data-generate-thumb', 'person') &&
+        !!byAttr(tree, 'data-generate-thumb-missing', 'person') &&
+        !byAttr(tree, 'data-generate-door', 'person'),
+      JSON.stringify({
+        thumb: !!byAttr(tree, 'data-generate-thumb', 'person'),
+        missing: !!byAttr(tree, 'data-generate-thumb-missing', 'person'),
+        field: !!byAttr(tree, 'data-generate-door', 'person'),
+      }),
     )
   } finally {
     globalThis.fetch = real
@@ -2626,10 +3113,20 @@ check(
     const opened = await settle(paneSlot.component, props, 'pane-split')
     const ultra = nodesOf(opened).find((node) => node.props && node.props['data-menu-item'] === 'ultra')
     check('the segment opens the list of modes', !!ultra, ultra ? 'the rows are there' : 'no rows')
+    // THE PANE HAS MORE THAN ONE MENU NOW: the header's add button opens one too (founder,
+    // 2026-09-25), and it comes first in the tree. A mode list is the one with rows, so the
+    // checks below pick the menu by its rows rather than by being the first on the page.
+    const menuWithRows = (tree) =>
+      nodesOf(tree).find(
+        (node) =>
+          node.props &&
+          node.props['data-stub'] === 'menu' &&
+          nodesOf(node).some((child) => child.props && child.props['data-menu-item']),
+      )
     check(
       'the modes come from the provider: each row names the mode and the machine it buys',
       (() => {
-        const menu = nodesOf(opened).find((node) => node.props && node.props['data-stub'] === 'menu')
+        const menu = menuWithRows(opened)
         if (!menu) return false
         const rows = nodesOf(menu).filter((node) => node.props && node.props['data-menu-item'])
         return rows.length === 3 && textIn(menu).includes('Ultra') && textIn(menu).includes('84GB VRAM') && textIn(menu).includes('48GB VRAM')
@@ -2642,12 +3139,13 @@ check(
       'choosing a mode says so on the segment, and closes the list',
       (() => {
         const segment = byAttr(chosen, 'data-generate-mode')
-        const menu = nodesOf(chosen).find((node) => node.props && node.props['data-stub'] === 'menu')
+        // Every menu on the page must be shut, the header's add list and the mode list alike.
+        const menus = nodesOf(chosen).filter((node) => node.props && node.props['data-stub'] === 'menu')
         return (
           !!segment &&
           segment.props['data-generate-mode'] === 'ultra' &&
           textIn(byAttr(chosen, 'data-generate-mode-toggle', 'yes')).includes('Ultra') &&
-          (!menu || menu.props['data-menu-open'] === 'no')
+          menus.every((menu) => menu.props['data-menu-open'] === 'no')
         )
       })(),
       JSON.stringify(byAttr(chosen, 'data-generate-mode') ? byAttr(chosen, 'data-generate-mode').props['data-generate-mode'] : 'no segment'),
@@ -2824,21 +3322,179 @@ check(
       !!upload && (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value === '',
       JSON.stringify({ upload: !!upload, value: (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value }),
     )
+    const blobsBefore = blobUrls.length
     if (upload) upload.props.onChange({ target: { files: [{ name: 'photo.png', type: 'image/png' }], value: 'C:\\fakepath\\photo.png' } })
     tree = await settle(paneSlot.component, props, 'pane-arrays')
     check(
-      'the picked file is uploaded through the host, and the door carries the URL it answered',
-      stub.assets.length === 1 &&
-        stub.assets[0].url === PROVIDERS_API + '/krea/asset' &&
-        stub.assets[0].name === 'photo.png' &&
-        (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value === UPLOADED_URL,
-      JSON.stringify({ assets: stub.assets, value: (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value }),
+      'the picked file is uploaded through the host',
+      stub.assets.length === 1 && stub.assets[0].url === PROVIDERS_API + '/krea/asset' && stub.assets[0].name === 'photo.png',
+      JSON.stringify(stub.assets),
     )
+    // THE FIX OF 2026-09-24. Once a picture is set the door draws the picture, not the value
+    // it carries: RunningHub's upload answers an opaque `api/…` fileName, and printing that in
+    // an editable field was the founder's complaint (*"why is api/editable?"*).
     check(
-      'and what the door carries is a URL the payload builder accepts, not a file path',
-      !String((byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value).includes('fakepath'),
-      String((byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value),
+      'a filled image door draws the thumbnail and takes the raw value off the screen',
+      !!byAttr(tree, 'data-generate-thumb', 'image_url') &&
+        !byAttr(tree, 'data-generate-door', 'image_url') &&
+        !!byAttr(tree, 'data-generate-image-clear', 'image_url'),
+      JSON.stringify({
+        thumb: !!byAttr(tree, 'data-generate-thumb', 'image_url'),
+        field: !!byAttr(tree, 'data-generate-door', 'image_url'),
+        clear: !!byAttr(tree, 'data-generate-image-clear', 'image_url'),
+      }),
     )
+    // The thumbnail is the file in hand, made into a blob URL — never the provider's answer,
+    // which for RunningHub is a node input a browser cannot open (the founder's *"I don't see
+    // thumbnails"*, caused by drawing that handle as `src`).
+    check(
+      'the thumbnail previews the picked bytes as a blob, not the provider handle',
+      blobUrls.length === blobsBefore + 1 &&
+        String((byAttr(tree, 'data-generate-thumb', 'image_url') || { props: {} }).props.src || '').startsWith('blob:generate/') &&
+        (blobUrls.at(-1).file || {}).name === 'photo.png',
+      JSON.stringify({ made: blobUrls.length - blobsBefore, src: (byAttr(tree, 'data-generate-thumb', 'image_url') || { props: {} }).props.src }),
+    )
+    // A BIG PICTURE, IN THE PICTURE'S OWN SHAPE, WITH ITS CONTROLS UNDERNEATH (founder,
+    // 2026-09-24: *"make the thumbnails bigger and match the aspect of ref image, the replace
+    // and remove buttons should be below"*). The frame is the door's own block, so the shape is
+    // a number on the frame rather than a size on the `<img>`.
+    const frame = byAttr(tree, 'data-generate-thumb-frame', 'image_url')
+    check(
+      'the thumbnail is a big frame, not a 56px square',
+      !!frame && frame.props.style.maxWidth === 240 && frame.props.style.width === '100%',
+      JSON.stringify(frame ? { maxWidth: frame.props.style.maxWidth, width: frame.props.style.width } : 'no frame'),
+    )
+    // Before the bytes have loaded there is no honest ratio, so the frame waits square.
+    check(
+      'the frame waits square until the picture loads',
+      !!frame && frame.props.style.aspectRatio === '1 / 1',
+      JSON.stringify(frame ? frame.props.style.aspectRatio : 'no frame'),
+    )
+    // The image reports its own dimensions; a portrait must read as a portrait.
+    const thumbImg = byAttr(tree, 'data-generate-thumb', 'image_url')
+    check(
+      'the picture reports its own dimensions to the frame',
+      !!thumbImg && typeof thumbImg.props.onLoad === 'function',
+      JSON.stringify({ onLoad: typeof (thumbImg || { props: {} }).props.onLoad }),
+    )
+    if (thumbImg && thumbImg.props.onLoad) thumbImg.props.onLoad({ target: { naturalWidth: 900, naturalHeight: 1200 } })
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+    check(
+      "a portrait reference reads as a portrait: the frame wears the image's own ratio",
+      String((byAttr(tree, 'data-generate-thumb-frame', 'image_url') || { props: { style: {} } }).props.style.aspectRatio) === String(900 / 1200),
+      JSON.stringify((byAttr(tree, 'data-generate-thumb-frame', 'image_url') || { props: { style: {} } }).props.style.aspectRatio),
+    )
+    // ORDER: the picture first, then Replace and Remove under it — the actions are the frame's
+    // LATER sibling inside the door, not a column beside it.
+    {
+      const door = byAttr(tree, 'data-generate-image', 'image_url')
+      const kids = door ? (Array.isArray(door.children) ? door.children : [door.children]) : []
+      const has = (node, attr) => nodesOf(node).some((child) => child.props && child.props[attr] !== undefined)
+      const frameAt = kids.findIndex((kid) => has(kid, 'data-generate-thumb-frame'))
+      const actionsAt = kids.findIndex((kid) => has(kid, 'data-generate-image-clear'))
+      const doorStyle = (door || { props: { style: {} } }).props.style
+      check(
+        'Replace and Remove sit under the picture, and the door is a column',
+        doorStyle.flexDirection === 'column' && frameAt !== -1 && actionsAt > frameAt,
+        JSON.stringify({ flexDirection: doorStyle.flexDirection, frameAt, actionsAt }),
+      )
+    }
+    // REMOVE puts the control back the way it started, and lets the blob go.
+    const clear = byAttr(tree, 'data-generate-image-clear', 'image_url')
+    if (clear) clear.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+    check(
+      'removing the picture restores the empty pick state, drops the blob and clears the value',
+      !byAttr(tree, 'data-generate-thumb', 'image_url') &&
+        !!byAttr(tree, 'data-generate-door', 'image_url') &&
+        (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value === '' &&
+        revokedBlobUrls.includes(blobUrls.at(-1).url),
+      JSON.stringify({
+        thumb: !!byAttr(tree, 'data-generate-thumb', 'image_url'),
+        value: (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value,
+        revoked: revokedBlobUrls,
+      }),
+    )
+    // AN EMPTY DOOR IS ONE DASHED CARD, STACKED, AND A DROP ZONE (founder, 2026-09-24:
+    // *"choose an image and paste an image url should be stacked inside a card with dashed
+    // border, it is also a drop zone for drag and drop image"*). The picker and the URL field
+    // are one act made two ways, so they share a card; the card is the drop target, and a
+    // dropped file must travel the same upload a picked one does.
+    {
+      const card = byAttr(tree, 'data-generate-image', 'image_url')
+      const cardStyle = (card || { props: { style: {} } }).props.style
+      check(
+        'an empty image door is one dashed card holding both ways in, stacked',
+        !!card &&
+          cardStyle.flexDirection === 'column' &&
+          /dashed/.test(String(cardStyle.border)) &&
+          !!byAttr(tree, 'data-generate-door', 'image_url') &&
+          !!byAttr(tree, 'data-generate-upload', 'image_url'),
+        JSON.stringify({ flexDirection: cardStyle.flexDirection, border: cardStyle.border }),
+      )
+      check(
+        'and it is a drop zone: the card takes the drag events and says so',
+        !!card &&
+          card.props['data-generate-drop'] === 'yes' &&
+          typeof card.props.onDrop === 'function' &&
+          typeof card.props.onDragOver === 'function' &&
+          typeof card.props.onDragLeave === 'function',
+        JSON.stringify({ drop: (card || { props: {} }).props['data-generate-drop'], onDrop: typeof (card || { props: {} }).props.onDrop }),
+      )
+      // A FILE OVER THE CARD LIGHTS IT, and says what letting go does.
+      if (card && card.props.onDragOver) card.props.onDragOver({ preventDefault: () => {} })
+      tree = await settle(paneSlot.component, props, 'pane-arrays')
+      const over = byAttr(tree, 'data-generate-image', 'image_url')
+      const overStyle = (over || { props: { style: {} } }).props.style
+      check(
+        'a file over the card lights the border and changes the sentence',
+        !!over &&
+          over.props['data-generate-drag-over'] === 'yes' &&
+          overStyle.borderColor === 'var(--dsw-alias-brand-primary)' &&
+          textIn(over).includes('Drop the image'),
+        JSON.stringify({ over: (over || { props: {} }).props['data-generate-drag-over'], border: overStyle.borderColor }),
+      )
+      // THE DROP ITSELF: the browser's own event, the same route as the picker.
+      const blobsBeforeDrop = blobUrls.length
+      const assetsBeforeDrop = stub.assets.length
+      if (over && over.props.onDrop) over.props.onDrop({ preventDefault: () => {}, dataTransfer: { files: [{ name: 'dropped.png', type: 'image/png' }] } })
+      tree = await settle(paneSlot.component, props, 'pane-arrays')
+      check(
+        'a dropped file uploads through the host and previews, exactly as a picked one does',
+        stub.assets.length === assetsBeforeDrop + 1 &&
+          stub.assets.at(-1).name === 'dropped.png' &&
+          blobUrls.length === blobsBeforeDrop + 1 &&
+          !!byAttr(tree, 'data-generate-thumb', 'image_url') &&
+          !byAttr(tree, 'data-generate-image', 'image_url').props['data-generate-drag-over'],
+        JSON.stringify({ assets: stub.assets.map((row) => row.name), made: blobUrls.length - blobsBeforeDrop, thumb: !!byAttr(tree, 'data-generate-thumb', 'image_url') }),
+      )
+      // Back to empty for the checks that follow.
+      const clearAgain = byAttr(tree, 'data-generate-image-clear', 'image_url')
+      if (clearAgain) clearAgain.props.onClick()
+      tree = await settle(paneSlot.component, props, 'pane-arrays')
+    }
+    // AN OPAQUE HANDLE IS NOT A PICTURE — the founder's own bug, in his words: *"I don't see
+    // thumbnails"*. RunningHub's upload answers `api/7a8b80db…`, a node input the browser cannot
+    // open; drawing that as `src` is what put a broken image where the preview belongs. With the
+    // asset route answering exactly that handle, the door must still preview the picked bytes —
+    // a blob — and the handle must reach neither an image nor the screen.
+    const opaquePick = byAttr(tree, 'data-generate-upload', 'image_url')
+    stub.assetUrl = OPAQUE_HANDLE
+    const blobsBeforeOpaque = blobUrls.length
+    if (opaquePick) opaquePick.props.onChange({ target: { files: [{ name: 'handle.png', type: 'image/png' }], value: 'C:\\fakepath\\handle.png' } })
+    tree = await settle(paneSlot.component, props, 'pane-arrays')
+    const opaqueThumb = byAttr(tree, 'data-generate-thumb', 'image_url')
+    const opaqueSrc = String((opaqueThumb || { props: {} }).props.src || '')
+    check(
+      'an opaque provider handle is never drawn as an image: the door previews the picked bytes instead',
+      blobUrls.length === blobsBeforeOpaque + 1 &&
+        !!opaqueThumb &&
+        opaqueSrc.startsWith('blob:generate/') &&
+        !opaqueSrc.includes(OPAQUE_HANDLE) &&
+        !byAttr(tree, 'data-generate-door', 'image_url'),
+      JSON.stringify({ src: opaqueSrc, thumb: !!opaqueThumb, field: !!byAttr(tree, 'data-generate-door', 'image_url') }),
+    )
+    stub.assetUrl = UPLOADED_URL
   } finally {
     globalThis.fetch = real
   }
@@ -2860,7 +3516,11 @@ check(
 for (const key of [
   'guide.title',
   'guide.description',
-  'surface.back',
+  'tabs.add',
+  // The word on the add control itself (founder, 2026-09-25: *"lets change + to +add to keep
+  // disinction"*): a key missing here would put a raw id on the button.
+  'tabs.addLabel',
+  'tabs.close',
   'surface.loading',
   'surface.failed',
   'surface.advanced',
@@ -2876,12 +3536,11 @@ for (const key of [
   'surface.image.failed',
   'surface.list.add',
   'surface.list.remove',
-  // The accordion and its add control (founder, 2026-09-23). `pane.section.none` is the
-  // count on an empty section's header, `pane.section.empty` is the body's own sentence,
-  // and `pane.add.button` is the header glyph's tooltip and accessible name — so a
-  // missing key would put a raw id on the pane's most-used control.
-  'pane.section.none',
-  'pane.section.count',
+  // The dashboard and its add control (founder, 2026-09-25). `pane.section.empty` is the
+  // block's own sentence and `pane.add.button` is the facts-line glyph's tooltip and
+  // accessible name — so a missing key would put a raw id on the pane's most-used control.
+  // `pane.section.family` / `.count` / `.none` were the count line's; they left both
+  // dictionaries when the founder removed that line (*"remove workflows 3 installed"*).
   'pane.section.empty',
   'pane.add.button',
   // The section header's light (founder, 2026-09-23): each state's sentence is the

@@ -73,7 +73,7 @@
 import { listAdapters, readAdapter } from './adapter.js'
 import { modelEntry, modelSurface, readKreaModels } from './krea-models.js'
 import { buildRunPayload, getRun, postRun } from './krea-run.js'
-import { buildRhPayload, readRhRun, postRhRun, RH_RUN_PATH, RH_UPLOAD_PATH } from './runninghub-run.js'
+import { buildRhPayload, cancelRhRun, readRhQueue, readRhRun, postRhRun, RH_RUN_PATH, RH_UPLOAD_PATH } from './runninghub-run.js'
 import { readRunRecord, writeRunRecord } from './run-record.js'
 import { saveAssets } from './library.js'
 import { dataPaths } from './paths.js'
@@ -525,12 +525,34 @@ export const runninghub = {
   },
 
   /**
+   * ASK to cancel a task (founder, 2026-09-23: the cancel button inside the preview).
+   * Presence of this method IS the provider's `canCancel` capability — the route 501s
+   * without it and the workflow answer tells the surface to draw the button — and its
+   * answer is fire-and-ask: `ok` means the request landed, not that the GPU stopped,
+   * which is why the pane keeps polling until the status settles (lib/runninghub-run.js).
+   */
+  async cancelRun({ jobId, key, timeoutMs, fetchImpl }) {
+    return cancelRhRun({ base: this.base, jobId, key, timeoutMs, fetchImpl })
+  },
+
+  /**
+   * READ the account's queue (founder, 2026-09-23: the band under the preview card).
+   * The same capability-by-method-presence rule as cancel: `queueStatus` exists → the
+   * surface draws the band. Any failure stays host-side as an `error` answer and the
+   * band simply does not draw — their spec marks the endpoint `developing`, and a
+   * component that shows nothing is the honest answer to an endpoint that says nothing.
+   */
+  async queueStatus({ key, timeoutMs, fetchImpl }) {
+    return readRhQueue({ base: this.base, key, timeoutMs, fetchImpl })
+  },
+
+  /**
    * Read one task, and write its outcome into the same record on a terminal state.
    */
   async readRun({ root, jobId, key, libraryRoot, timeoutMs, fetchImpl }) {
     const read = await readRhRun({ base: this.base, jobId, key, timeoutMs, fetchImpl })
     if (read.error) return read
-    if (read.state === 'done' || read.state === 'failed') {
+    if (read.state === 'done' || read.state === 'failed' || read.state === 'cancelled') {
       const record = await readRunRecord(root, jobId)
       // Saving is the same rule as Krea's: the terminal read is when the bytes exist, and a
       // failed save is recorded rather than allowed to fail the run.

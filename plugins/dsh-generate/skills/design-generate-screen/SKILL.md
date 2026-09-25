@@ -98,6 +98,10 @@ Then the workflow's own words:
 
 - **`title`** — the harness's name for the app. It may name the engine.
 - **`blurb`** — one line on the card, under whose app it is.
+- **`ui.tabLabel`** — the short name the workflow's TAB wears when the title is too long for one:
+  "Qwen Duo" for "Qwen 2.1 Image Edit 2 Images". A card is 380px wide and a tab is not, so the
+  card keeps the title and the tab reads this. Author one when the title runs past about 20
+  characters; without it the tab reads the title and truncates.
 - **`ui.runLabel`** — what the button says. "Swap the outfit", not "Generate", when the
   workflow does something specific.
 - **`ui.expect`** — the wait, only if the user told you or you measured it. Never a guess.
@@ -116,18 +120,20 @@ The value must still fit the door — an option the app offers, or inside the ap
 
 ## 7. Walk the screens
 
-Four surfaces carry a workflow. Only the third is per-workflow; the rest are chrome, and the
-rules are here so a design does not fight them.
+The header is chrome over every screen, and four surfaces carry a workflow. Only the workflow
+surface is per-workflow; the rest are chrome, and the rules are here so a design does not fight
+them.
 
 | Screen | What it shows | What it never shows |
 |---|---|---|
 | the start-page card | the surface's own label (**Generate**) and one line | a workflow list, a thumbnail, stats |
-| the pane home | one accordion section per provider, in registry order, minus the hidden ones: each header carries the provider's name and its chevron, the open section's band below it carries the wallet balance, `family · count` and the add and refresh glyphs, and the open section holds its workflows as cards | a workflow's doors |
-| the workflow surface | two cards that wrap: the parameters card (the workflow's title and blurb, the doors as controls in `ui.order` primary first, the app's tooltip under each, advanced doors behind one disclosure, the app's own bounds and options on every control, the run control at its foot) and the preview card (the run's state and its result) — plus a way back | a node id, a field name, an engine metadata row (the `title` may name the engine; nothing else renders model metadata), a panel that is not a `Card`, a card heading of its own |
+| the header | **the DSH strip's own pattern, one row lower**, and **drawn only while a workflow is open** — with nothing open the pane goes straight from the separator to the grid, because the start screen needs no plus beside it. When it is drawn: a tab per open workflow, each **as wide as its name** (never capped, never ellipsised — the row scrolls), and an add control that reads plus-then-**Add** (never a bare plus: the DSH strip's own add sits directly above it) and wears the same selected border a tab does while the start screen is the view. The row draws **no separator of its own** — the header carrying the DSH strip already draws the hairline above it, and a second one stacked on that reads as one thick rule — and it takes the DSH strip's own 10px above and below the tabs. There is **no "All workflows" tab** — the start screen is not a tab; the plus shows it (as DSH's own add button opens the guide), and a card on that grid is what opens a workflow's tab. A tab is named by its workflow's **title**, never by the adapter's file name, and carries a `×` that shows **only while that tab is selected, hovered or focused** — the DSH strip's own rule, so an unselected tab is its name and no glyph. The open tab draws a border and the others draw none — do not add a fill, an underline or an icon to a tab, do not draw a tab's close on an unselected tab (it waits for the selection, the hover or the focus), do not add a tab for the start screen, and do not give a surface a back button of its own: the plus IS the way back | a tab for the start screen, a second way back inside a surface, a tab named after a file |
+| the pane home | one block per provider, in registry order, minus the hidden ones, drawn on the page's own background with no card, no separator and nothing to fold, centred on the page as a 380px column: a caption line carries the status light and the provider's name, the facts line under it carries the wallet balance (11px, in the muted caption ink, and no count line beside it) and the add and refresh glyphs, and the block holds its workflows as the guide's own entry cards. The add glyph opens the install snippet as a **popover** anchored under it, so opening one never moves a card | a workflow's doors |
+| the workflow surface | two cards that wrap: the parameters card (the workflow's title and blurb, the doors as controls in `ui.order` primary first, the app's tooltip under each, advanced doors behind one disclosure, the app's own bounds and options on every control, the run control at its foot) and the preview card (the run's state and its result) | a node id, a field name, an engine metadata row (the `title` may name the engine; nothing else renders model metadata), a panel that is not a `Card`, a card heading of its own, a way-out button (the header owns it) |
 | the run strip and result | `queued`/`running` with the spinning loading glyph, the elapsed time, the job id; a failure shows the provider's message verbatim beside the job id (the form never left the screen, so the run control is the way to try again — there is no Run again button); a finished run draws the result with a link to it | a progress bar with no number behind it, a Run again button |
 
-The empty and failure states are part of the design, not an afterthought: a section that
-answered nothing says so inside its own body, a workflow that cannot run says which door is
+The empty and failure states are part of the design, not an afterthought: a provider whose
+list answered nothing says so inside its own block, a workflow that cannot run says which door is
 missing rather than opening a broken form, and a provider that refused a key says why on its
 Settings row.
 

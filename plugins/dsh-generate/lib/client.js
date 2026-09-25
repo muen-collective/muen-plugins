@@ -67,33 +67,20 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const React = require('react')
     // The harness's own icon set and its dialog, not hand-rolled glyphs or a
-    // hand-rolled overlay. `external` in package.json is what lets a third-party
-    // bundle require them, the same way the Browser tab takes `IconGlobeOutline14`
-    // from here and the workspace dialogs take `Modal`.
+    // The primitives module arrives through factory(require); `external` in
+    // package.json is what lets a third-party bundle require it.
+    //
+    // ICON NAMES ARE NOT STABLE ACROSS HARNESS GENERATIONS. 0.1.6 shipped
+    // `IconSparkle16` (glyph and size in one name); 0.1.7-rc.1 replaced the set with
+    // `IconSparkleRegular`, with the size a prop instead. Destructuring only the
+    // current name yields `undefined` on the other core, and React then throws #130
+    // ("Element type is invalid") the moment a card or pane renders — which is
+    // exactly what emptied the right panel's Start page. Each icon is resolved by
+    // its current name with the legacy one as fallback, so one bundle serves either.
+    const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
+    /** Resolve one icon by its current name, falling back to the pre-0.1.7 name. */
+    const icon = (current, legacy) => primitives[current] ?? primitives[legacy]
     const {
-      IconSparkle16,
-      IconWarningOutline16,
-      IconRightUpOutline16,
-      IconRefreshOutline16,
-      // The run strip's spinner: the harness's own loading glyph — the one the
-      // connection indicator spins (founder, 2026-09-23: *"add spinner to left of
-      // Running … square shaped DSH spinner"*). Its class and keyframes are the one
-      // sheet this bundle injects; see `apply`.
-      IconLoadingOutline16,
-      IconCheckOutline16,
-      IconInfoOutline14,
-      // The pane's own glyphs: a chevron per accordion header, a flow glyph on a
-      // workflow card, and the plus on the header's add control. The image provider's
-      // own glyph is gone with the header icon it used to fill: the header draws the
-      // section's status light instead (founder, 2026-09-23).
-      IconChevronDownOutline14,
-      IconChevronRightOutline14,
-      // The surface's way out wears a left chevron (founder, 2026-09-23: *"the All
-      // workflows button should have back arrow"*). The set carries no minus glyph, so
-      // the number stepper's decrement draws U+2212 as text — see `S.stepperButton`.
-      IconChevronLeftOutline14,
-      IconBranchOutline16,
-      IconPlusOutline16,
       // The add control and the snippet it reveals are the harness's own atoms, not
       // copies: `Button` draws the capsule and `CodeBlock` draws the prompt, the same
       // pair a start-page control and an agent's code answer are made of. `Switch` is
@@ -109,7 +96,42 @@ window.__ModuleLoader__.load({
       // names the split-button case — an anchor that wraps several controls — and which
       // hands the keyboard back to the trigger that opened it.
       Menu,
-    } = require('@deepseek-ai/dsh-client-ui-primitives')
+      // The add control's popover is anchored and dismissed by the app's own machinery, not
+      // by a second one written here: `useAnchoredPosition` is what the app's menus and job
+      // lists place themselves with (it clamps to the viewport and follows a scroll), and
+      // `useDismissOnOutsidePointer` is the outside-click rule every trigger-owned surface
+      // in the app obeys.
+      useAnchoredPosition,
+      useDismissOnOutsidePointer,
+    } = primitives
+
+    /** The card's and the panel's own glyphs, resolved for both cores. */
+    const IconSparkle16 = icon('IconSparkleRegular', 'IconSparkle16')
+    const IconWarningOutline16 = icon('IconWarningOutlineRegular', 'IconWarningOutline16')
+    const IconRightUpOutline16 = icon('IconRightUpOutlineRegular', 'IconRightUpOutline16')
+    const IconRefreshOutline16 = icon('IconRefreshOutlineRegular', 'IconRefreshOutline16')
+    // The run strip's spinner: the harness's own loading glyph — the one the
+    // connection indicator spins (founder, 2026-09-23: *"add spinner to left of
+    // Running … square shaped DSH spinner"*). Its class and keyframes are the one
+    // sheet this bundle injects; see `apply`.
+    const IconLoadingOutline16 = icon('IconLoadingOutlineRegular', 'IconLoadingOutline16')
+    const IconCheckOutline16 = icon('IconCheckOutlineRegular', 'IconCheckOutline16')
+    const IconInfoOutline14 = icon('IconInfoOutlineRegular', 'IconInfoOutline14')
+    // The pane's own glyphs: a flow glyph on a workflow card, the plus on the block's add
+    // control and on the header's add-tab button, and the DOWN chevron on the workflow
+    // surface's advanced disclosure. The image provider's own glyph is gone with the header
+    // icon it used to fill: the caption line draws the provider's status light instead
+    // (founder, 2026-09-23).
+    //
+    // The two way-out chevrons are gone. The right one went with the accordion's fold
+    // (founder, 2026-09-25), and the left one went when the pane grew a header: the surface
+    // no longer carries its own ← All workflows button, because the header's first tab IS
+    // that control (founder, the same day). The icon set carries no minus glyph, so the
+    // number stepper's decrement draws U+2212 as text — see `S.stepperButton`.
+    const IconChevronDownOutline14 = icon('IconChevronDownOutlineRegular', 'IconChevronDownOutline14')
+    const IconBranchOutline16 = icon('IconBranchOutlineRegular', 'IconBranchOutline16')
+    const IconPlusOutline16 = icon('IconPlusOutlineRegular', 'IconPlusOutline16')
+
     const h = React.createElement
 
     /** The implementation id: the key this type's body and title register under. */
@@ -137,7 +159,21 @@ window.__ModuleLoader__.load({
       // The pane is the HUB (founder, 2026-09-22): the start-page card is a plain
       // door, and every workflow surface lives inside this one pane. So the pane's
       // first screen is its card grid, and a card opens that workflow's surface.
-      'surface.back': 'All workflows',
+      //
+      // NO TAB STANDS FOR THAT SCREEN (founder, 2026-09-25: *"the dsh pattern does not have
+      // all workflows, it uses add button to create new tab and uses start screen to add the
+      // tab"*). The grid is the start screen, and the header's plus is how a person goes back
+      // to it — so there is no "All workflows" tab, exactly as DSH has no "guide" tab beside
+      // its plus.
+      // Tab bar: each open workflow surface is a tab; these label the controls.
+      'tabs.close': 'Close',
+      // The header's add button: a bare plus, the DSH pattern, leading to that start screen.
+      'tabs.add': 'Add a workflow tab',
+      // The word on the button itself (founder, 2026-09-25: *"lets change + to +add to
+      // keep disinction"*). The DSH strip's own add is a bare plus; this one says what
+      // it does, so the two never read as the same control.
+      'tabs.addLabel': 'Add',
+      'tabs.running': 'Running',
       // The number stepper's two glyph buttons. Both are icon-only, so each carries its
       // own label for a screen reader and its own hover tooltip.
       'surface.step.down': 'Decrease',
@@ -159,7 +195,7 @@ window.__ModuleLoader__.load({
       // nothing here names a workflow or a provider. ONE CLICK SPENDS — there is no
       // confirmation dialog any more (founder, 2026-09-23) — and this is the short
       // while between the press and the host's answer.
-      'run.action': 'Run',
+      'run.action': 'Generate',
       'run.starting': 'Starting…',
       'run.phase.queued': 'Queued',
       'run.phase.running': 'Running',
@@ -181,10 +217,20 @@ window.__ModuleLoader__.load({
       'error.payloadRefused': 'A value cannot be sent as it stands.',
       'error.jobGone': 'That run is no longer on the provider.',
       'card.community': 'someone else\'s app',
-      'surface.image.choose': 'Choose an image',
+      'surface.image.choose': 'Add image',
       'surface.image.placeholder': 'Paste an image URL, or add one',
       'surface.image.uploading': 'Uploading…',
       'surface.image.failed': 'That image could not be uploaded.',
+      // Once a door holds a picture the raw value steps out of the way: for every provider
+      // whose upload answers an opaque handle rather than a URL (RunningHub's `api/…`
+      // fileName), the string in the field is not a URL a person typed or could edit.
+      'surface.image.set': 'Image added',
+      'surface.image.replace': 'Replace',
+      'surface.image.remove': 'Remove',
+      // The empty door's card is a drop zone, and it says so — twice: once at rest, once while
+      // a file is over it and the only thing left to do is let go.
+      'surface.image.drop': 'or drop an image here',
+      'surface.image.dropNow': 'Drop the image',
       // A list door's two controls. The add control says the door's own `addLabel` when the
       // catalogue has one (Krea's vocabulary: "Add style"), so these are the fallbacks.
       'surface.list.add': 'Add',
@@ -215,25 +261,14 @@ window.__ModuleLoader__.load({
       // it here would break the instruction this line exists to give. A user may
       // say it in their own language; what must not move is the sentence we show.
       'pane.add.hint': 'To add a workflow, ask the agent in chat: “add this RunningHub workflow <app link>”.',
-      // The pane's home is a stacked accordion, one section per provider (founder,
-      // 2026-09-23). A provider with nothing installed no longer draws a paragraph
-      // about being empty either: it says so in one line and names the header glyph
-      // whose click yields the prompt that installs one. That is also why the linked
-      // screen has no separate "how to add" note any more — the glyph IS that sentence.
-      'pane.section.none': 'No workflows yet',
-      'pane.section.count': 'installed',
-      // The family word the count line opens with. ONE WORD FOR EVERY PROVIDER
-      // (founder, 2026-09-23: *"use same naming on Krea accordion (and all
-      // accordions)"*) — the Krea section used to read "Image · 3 installed" while
-      // RunningHub read "Workflows · …". The family tag still tells the two apart on
-      // the Settings row, which is where the distinction is worth drawing; the pane's
-      // count line is about how much is in the section, and settings already counts a
-      // Krea section's entries as workflows too (`settings.workflows.many`).
-      'pane.section.family': 'Workflows',
-      // The open section of a provider with nothing installed. The empty state used to
-      // BE the add control; the control moved to the header (founder, 2026-09-23:
-      // *"move + workflow button as an icon button next to refresh"*), so the body says
-      // what is missing and names the glyph that fixes it.
+      // The block of a provider with nothing installed. The empty state used to BE the add
+      // control; the control moved to the facts line (founder, 2026-09-23: *"move +
+      // workflow button as an icon button next to refresh"*), so the body says what is
+      // missing and names the glyph that fixes it.
+      //
+      // THE COUNT LINE IS GONE (founder, 2026-09-25: *"remove workflows 3 installed"*):
+      // `pane.section.family`, `pane.section.count` and `pane.section.none` went with it.
+      // The block already shows what it holds, because the cards are under it.
       'pane.section.empty': 'Nothing installed yet. Use + above to add one.',
       // The header's add glyph. A glyph has no text of its own, so this is both its
       // hover tooltip and its accessible name.
@@ -276,9 +311,11 @@ window.__ModuleLoader__.load({
       'wallet.running': 'running',
       'wallet.refresh': 'Refresh the balance',
       'wallet.notLinked': 'No key linked',
-      'wallet.fromEnvironment': 'from your environment',
-      'wallet.fromStore': 'stored on this machine',
-      // The accordion's status light (founder, 2026-09-23): green when the section
+      // THE PROVENANCE SENTENCES ARE GONE (founder, 2026-09-25: *"remove stored on this
+      // machine"*): `wallet.fromStore` and `wallet.fromEnvironment` left both dictionaries
+      // with the lines that printed them. What a key's source decides — whether this page
+      // may change it — is said by `settings.readOnly`. The caption line's status light
+      // (founder, 2026-09-23): green when the block
       // is ready to run, amber when the key is good but nothing is installed, red
       // when there is no key at all. A colour alone is not a fact, so each state
       // also carries its own sentence for the dot's tooltip.
@@ -375,13 +412,24 @@ window.__ModuleLoader__.load({
       'error.noCredentials': 'This harness has no credential store, so the key cannot be saved.',
       'error.generic': 'The key could not be saved.',
       'error.storedKeyRejected': 'The stored key is no longer accepted. Link a new one in Settings.',
+      // Cancel: the button inside the run strip while a job is queued or running.
+      'run.cancel': 'Cancel',
+      'run.canceling': 'Cancelling…',
+      'run.phase.cancelled': 'Cancelled',
+      // Queue band: the counts under the preview card while a job is in flight.
+      'queue.running': '{n} running',
+      'queue.queued': '{n} queued',
+      'queue.limit': 'Limit {n}',
     }
 
     const ZH = {
       'type.label': '生成',
       'guide.title': '生成',
       'guide.description': '在这里运行你的工作流',
-      'surface.back': '全部工作流',
+      'tabs.close': '关闭',
+      'tabs.add': '添加工作流标签页',
+      'tabs.addLabel': '添加',
+      'tabs.running': '运行中',
       'surface.step.down': '减少',
       'surface.step.up': '增加',
       'run.mode': '运行模式',
@@ -391,7 +439,7 @@ window.__ModuleLoader__.load({
       'surface.advanced': '高级',
       'surface.advanced.hide': '收起高级选项',
       'surface.pending': '该工作流暂不能运行。',
-      'run.action': '运行',
+      'run.action': '生成',
       'run.starting': '正在启动…',
       'run.phase.queued': '排队中',
       'run.phase.running': '运行中',
@@ -411,10 +459,15 @@ window.__ModuleLoader__.load({
       'error.payloadRefused': '有数值暂时无法发送。',
       'error.jobGone': '服务商上已经没有这次运行。',
       'card.community': '他人的应用',
-      'surface.image.choose': '选择图片',
+      'surface.image.choose': '添加图片',
       'surface.image.placeholder': '粘贴图片链接，或添加一张图片',
       'surface.image.uploading': '正在上传…',
       'surface.image.failed': '该图片上传失败。',
+      'surface.image.set': '已添加图片',
+      'surface.image.replace': '替换',
+      'surface.image.remove': '移除',
+      'surface.image.drop': '或将图片拖到这里',
+      'surface.image.dropNow': '松手即可上传',
       'surface.list.add': '添加',
       'surface.list.remove': '移除',
       'pane.loading': '正在检查密钥…',
@@ -426,9 +479,6 @@ window.__ModuleLoader__.load({
       'pane.linked.manage': '在「设置 → 生成」里修改或移除密钥。设置菜单位于左侧边栏底部。',
       // 引号内的指令保持英文：它就是技能 whenToUse 里写的那句，翻译会让这行失去作用。
       'pane.add.hint': '要添加工作流，在对话里对智能体说：「add this RunningHub workflow <app link>」。',
-      'pane.section.none': '还没有工作流',
-      'pane.section.count': '个已安装',
-      'pane.section.family': '工作流',
       'pane.section.empty': '尚未安装任何工作流。点击上方的 + 添加。',
       'pane.add.button': '添加工作流',
       'pane.list.failed': '无法读取已安装的工作流。',
@@ -455,8 +505,6 @@ window.__ModuleLoader__.load({
       'wallet.running': '个任务运行中',
       'wallet.refresh': '刷新余额',
       'wallet.notLinked': '未连接密钥',
-      'wallet.fromEnvironment': '来自环境变量',
-      'wallet.fromStore': '保存在本机',
       'pane.light.ready': '就绪：密钥已连接，且已安装工作流',
       'pane.light.keyOnly': '密钥已连接，尚未安装工作流',
       'pane.light.noKey': '未连接密钥',
@@ -526,6 +574,12 @@ window.__ModuleLoader__.load({
       'error.noCredentials': '此环境没有凭据存储，密钥无法保存。',
       'error.generic': '密钥保存失败。',
       'error.storedKeyRejected': '已保存的密钥不再被接受。请在设置中连接新的密钥。',
+      'run.cancel': '取消',
+      'run.canceling': '正在取消…',
+      'run.phase.cancelled': '已取消',
+      'queue.running': '{n} 个运行中',
+      'queue.queued': '{n} 个排队中',
+      'queue.limit': '上限 {n}',
     }
 
     /**
@@ -596,6 +650,18 @@ window.__ModuleLoader__.load({
         fontWeight: 600,
         lineHeight: 1.4,
         color: 'var(--dsw-alias-label-primary)',
+      },
+      /**
+       * The tab title's own glyph (founder, 2026-09-25: *"add sparkles icon to generate tab at
+       * top to match other dsh tabs"*). The guide tab draws its compass the same way: the
+       * glyph first in the tertiary ink, then the label — 16px, which is that glyph's own
+       * default size, so the two tab titles read at one weight.
+       */
+      tabTitleIcon: {
+        display: 'inline-flex',
+        flex: 'none',
+        marginRight: 6,
+        color: 'var(--dsw-alias-label-tertiary)',
       },
       body: {
         marginTop: 6,
@@ -1044,8 +1110,8 @@ window.__ModuleLoader__.load({
         color: 'var(--dsw-alias-label-secondary)',
         overflowWrap: 'anywhere',
       },
+      /** The number itself: no weight of its own, since the whole line is a quiet fact. */
       balanceValue: {
-        fontWeight: 600,
         whiteSpace: 'nowrap',
       },
       balanceNote: {
@@ -1077,83 +1143,95 @@ window.__ModuleLoader__.load({
         color: 'var(--dsw-alias-state-warn-primary)',
       },
       /**
-       * The pane's home as a stacked accordion (founder, 2026-09-23): one section per
-       * provider, in the registry's own order, and a section holds that provider's
-       * workflows as cards.
+       * THE HOME IS A DASHBOARD, NOT A STACK OF CARDS (founder, 2026-09-25: *"it should be
+       * minimal like start surface and make like dashboard"*).
+       *
+       * The Start surface is one centred column of entry cards on the page's own
+       * background: nothing wraps a group, there are no separators and nothing folds. The
+       * home keeps that shape — one light caption line per provider, one facts line under
+       * it, and that provider's workflows under them as the guide's own entries. The
+       * column is the guide's own 380px, centred, so the wide Generate tab and the narrow
+       * right column read the same.
        */
       sections: {
         display: 'flex',
         flexDirection: 'column',
-        // The gap below each section card — the founder's *"increase gap space below
-        // separator and krea card"* (2026-09-23). One number, so every section's
-        // bottom edge gets the same air.
-        gap: 14,
+        alignItems: 'center',
+        // VERTICALLY CENTRED ON THE PAGE (founder, 2026-09-25: *"vertical center on page"*).
+        // The Start surface centres its column and so does this one.
+        //
+        // `margin: auto` is how that is done SAFELY: a flex item with auto margins centres
+        // itself while there is room and falls back to 0 when the content is taller than the
+        // pane. `justify-content: center` would instead push the first provider off the top
+        // of an overflowing pane, where no scroll reaches it. `flex: none` keeps the column
+        // at its natural height so the auto margins have something to compute against.
+        margin: 'auto 0',
+        flex: 'none',
+        // The air between one provider's block and the next is now the only thing
+        // separating them, so it carries what the border used to.
+        gap: 18,
         padding: '14px 12px 2px',
       },
       /**
-       * ONE SECTION IS ONE CARD (founder, 2026-09-23): the header and the body it opens
-       * share a single border and radius, so expanding a section grows that card rather
-       * than stacking a second one under it. The header keeps no card of its own.
+       * ONE PROVIDER IS ONE BLOCK, AND NOTHING DRAWS ITS EDGE (founder, 2026-09-25). It
+       * was a card with a border and a radius; that box plus a hairline band made the page
+       * read as a form. The block is a column at the guide's own width, and the only lines
+       * on the page are the cards'.
        */
       section: {
         display: 'flex',
         flexDirection: 'column',
-        background: 'var(--dsw-alias-bg-layer-1)',
-        border: '.5px solid var(--dsw-alias-border-l4)',
-        borderRadius: 12,
-        overflow: 'hidden',
+        gap: 8,
+        width: 380,
+        maxWidth: '100%',
+        boxSizing: 'border-box',
       },
+      /**
+       * The caption line: the status light and the provider's name with its account
+       * glyph, and nothing clickable about the row. It is no longer a toggle — every
+       * provider is always open (founder, 2026-09-25) — so it carries no chevron, no
+       * `role="button"` and no pointer.
+       */
       sectionHead: {
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
         width: '100%',
         boxSizing: 'border-box',
-        padding: '10px 12px',
-        textAlign: 'left',
-        font: 'inherit',
-        color: 'inherit',
-        background: 'transparent',
-        border: 'none',
-        cursor: 'pointer',
+        padding: '0 4px',
       },
       /**
-       * THE SUBHEADER (founder, 2026-09-23: *"the accordion header for generate is too
-       * cluttered. remove the wallet balance, workflows counter, add/refresh icons.
-       * make a subheader with separator top/bottom and move these elements into it"*).
+       * THE FACTS LINE (founder, 2026-09-25: *"it should be minimal like start surface and
+       * make like dashboard"*). This was the subheader band: the same items, with a
+       * hairline above and below and a card around them. The lines and the card are gone,
+       * the facts stayed, and the caption line above them names the provider.
        *
-       * A second band under the header, inside the same card: one hairline above and
-       * one below, holding the balance, the count line and the two glyph controls that
-       * used to crowd the header. The header keeps only the status light, the
-       * provider's name with its account glyph, and the chevron — one row whatever a
-       * provider's numbers say. The band draws only while the section is OPEN (founder,
-       * the same day: *"when the accordion is closed don't show the subheader"*), so a
-       * shut section is the bare name row. It is NOT the toggle — only the header above
-       * it folds the section.
+       * One flex row, so the balance grows into the room the count line and the two glyphs
+       * leave it and clips rather than pushing them out.
        */
-      sectionSub: {
+      sectionFacts: {
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        padding: '8px 12px',
-        borderTop: '1px solid var(--dsw-alias-border-l1)',
-        borderBottom: '1px solid var(--dsw-alias-border-l1)',
+        padding: '0 4px',
       },
+      /** The status light's box, the height of the caption line's own text. */
       sectionLight: {
         flex: 'none',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: 26,
-        height: 26,
+        width: 16,
+        height: 16,
       },
       /**
-       * The wallet balance, now the SUBHEADER's own row: it sat in a strip above the
-       * accordion (founder, 2026-09-23: *"move the wall balance to row 2 below
-       * accordion title"*), then in the header's second row, and now in the band under
-       * the header (the same day: the header was *"too cluttered"*). The subheader is
-       * ONE flex row, so the balance grows into the room the count line and the two
-       * glyphs leave it and clips rather than pushing them out.
+       * The wallet balance, on the facts line under the name it belongs to (founder,
+       * 2026-09-23: *"move the wall balance to row 2 below accordion title"*; it has been
+       * on row 2 ever since, and only the box around it went on 2026-09-25).
+       *
+       * SMALL AND MUTED (founder, 2026-09-25: *"make coins usd key saved small muted font
+       * color / fontsize sm"*): 11px in the caption ink, and the value lost the weight it
+       * used to carry. A balance is a fact someone checks, not a number the page sells.
        */
       sectionBalance: {
         display: 'flex',
@@ -1161,11 +1239,11 @@ window.__ModuleLoader__.load({
         gap: 6,
         flex: '1 1 auto',
         minWidth: 0,
-        fontSize: 12,
-        lineHeight: '18px',
-        color: 'var(--dsw-alias-label-secondary)',
-        // One line, always: the band clips rather than grows, so a provider's
-        // explanatory note cannot deepen the section.
+        fontSize: 11,
+        lineHeight: '16px',
+        color: 'var(--dsw-alias-label-caption)',
+        // One line, always: the line clips rather than grows, so a provider's explanatory
+        // note cannot deepen the block.
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -1193,43 +1271,23 @@ window.__ModuleLoader__.load({
         flex: 1,
       },
       sectionTitle: {
-        fontSize: 14,
-        fontWeight: 600,
+        // A SECTION LABEL, NOT A CARD TITLE (founder, 2026-09-25): the provider's name
+        // reads at the weight of a label on the page, so the six cards under it are what
+        // the eye lands on.
+        fontSize: 13,
+        fontWeight: 500,
         lineHeight: 1.4,
-        color: 'var(--dsw-alias-label-primary)',
-        // The header is ONE ROW and the subheader under it is one more, so nothing a
-        // provider says can deepen the section (founder, 2026-09-23: the title was
-        // *"too cluttered"* after an earlier *"should only be 2 rows"*): the name, the
-        // balance, the count line and the notes all clip rather than wrap.
+        color: 'var(--dsw-alias-label-secondary)',
+        // One line, always: nothing a provider says can deepen the block, so the name,
+        // the balance, the count line and the notes all clip rather than wrap.
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
       },
       /**
-       * The count line: the subheader's own text, sitting immediately left of the add
-       * glyph (founder, 2026-09-23). It takes its width from its words and never
-       * shrinks — the balance beside it is the one that gives way.
-       */
-      sectionMeta: {
-        flex: 'none',
-        fontSize: 12,
-        lineHeight: 1.4,
-        color: 'var(--dsw-alias-label-caption)',
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-      },
-      sectionChevron: {
-        flex: 'none',
-        display: 'flex',
-        alignItems: 'center',
-        color: 'var(--dsw-alias-label-tertiary)',
-      },
-      /**
-       * The subheader's own controls, at the end of the band: add a workflow and
-       * re-read the section, both as glyphs (founder, 2026-09-23: *"move + workflow
-       * button as an icon button next to refresh"*), with the count line immediately
-       * to their left.
+       * The facts line's own controls, at the end of the row: add a workflow and re-read
+       * the block, both as glyphs (founder, 2026-09-23: *"move + workflow button as an
+       * icon button next to refresh"*).
        */
       sectionActions: {
         flex: 'none',
@@ -1251,17 +1309,16 @@ window.__ModuleLoader__.load({
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
-        // The space between the band's bottom separator and the first card, the other
-        // half of *"increase gap space below separator and krea card"* (2026-09-23) —
-        // it was 2px, which read as the card stuck to the line.
-        padding: '14px 12px 12px',
+        // No inset: the entries sit on the same left edge as the caption above them, the
+        // way the guide's own column lines up.
+        padding: 0,
       },
       sectionCards: {
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
       },
-      /** The note under the accordion: where the key is managed, and nothing else. */
+      /** The note under the dashboard: where the key is managed, and nothing else. */
       sectionNotes: {
         padding: '8px 12px 0',
       },
@@ -1358,23 +1415,147 @@ window.__ModuleLoader__.load({
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
-        padding: '0 2px 2px',
-      },
-      /** One workflow's surface: the form column, inside the pane, under the strip. */
-      surface: {
-        padding: '10px 12px 24px',
       },
       /**
-       * The way out, and the room under it (founder, 2026-09-23: *"the All workflows
-       * button should have back arrow … Increase gap space below"*): the chevron rides
-       * with the label, and the control is a ghost button with the arrow's own width
-       * reserved so the label never shifts.
+       * THE ADD CONTROL'S POPOVER (founder, 2026-09-25: *"click add button launch popover w
+       * snippet"*). The snippet used to open inline at the foot of the block, which pushed
+       * every card under it down and re-flowed the page; it floats now, anchored to the
+       * glyph that opened it.
+       *
+       * THE SURFACE IS SOLID, NOT THE MENU'S TRANSLUCENT FILL (founder, 2026-09-25: *"fix
+       * popover; it should have solid bg (its transparent now)"*). The app's menu card is
+       * `--dsw-specific-menu`, which is ~50% alpha and reads through the `backdrop-filter` the
+       * app's own menus carry; this card has no such filter, so it came out see-through. It
+       * wears the opaque layer-2 surface and the l3 border the pane's other `Card`s wear
+       * (white in the light theme, `#2c2c2e` in the dark one) with the menu's own elevation
+       * over the top, so it is legible the moment it opens.
+       *
+       * `position: fixed` and the two coordinates come from the primitives'
+       * `useAnchoredPosition`; nothing in the pane clips it.
        */
-      surfaceHead: {
+      popover: {
+        position: 'fixed',
+        zIndex: 100,
+        width: 320,
+        maxWidth: 'calc(100vw - 24px)',
+        boxSizing: 'border-box',
+        padding: 12,
+        borderRadius: 16,
+        background: 'var(--dsw-alias-bg-layer-2)',
+        border: '.5px solid var(--dsw-alias-border-l3)',
+        boxShadow: 'var(--dsw-elevation-prominent)',
+      },
+      /** One workflow's surface: the form column, inside the pane, under the header. */
+      surface: {
+        padding: '14px 12px 24px',
+      },
+      /**
+       * THE HEADER, ONE ROW LOWER: the DSH strip's own pattern (founder, 2026-09-25). A tab
+       * per open workflow and a plus, exactly as the strip above carries a tab per open page
+       * and a plus — and the plus leads to the start screen, which is where a workflow is
+       * chosen and its tab is made, the way DSH's `addTab` opens the guide. The separator
+       * above this row is the DSH strip's own, so the row draws none of its own.
+       */
+      tabsBar: {
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        marginBottom: 18,
+        gap: 2,
+        // THE SAME BREATH ABOVE AND BELOW THE TABS THE DSH STRIP TAKES (founder, 2026-09-25:
+        // *"add gap spacing same as between top of viewport and top edge of panel tab
+        // (generate)"*, then *"i meant same spacing top and bottom"*). The strip's own rule is
+        // `padding:10px 6px 0 var(--dsh-dockkit-strip-inline-start, 10px)`, so a DSH pill sits
+        // 10px under the top of the viewport; these tabs sit 10px under the DSH strip's own
+        // hairline above them and 10px above whatever follows them.
+        padding: '10px 8px',
+        minHeight: 40,
+        boxSizing: 'border-box',
+        overflowX: 'auto',
+        background: 'var(--dsw-alias-bg-base)',
+        // NO HAIRLINE OF ITS OWN, ABOVE OR BELOW (founder, 2026-09-25: *"remove separator"*).
+        // The row drew one above itself for a few hours (*"add separator below the panel tabs"*,
+        // then *"move separator above the generate tabs (between files & qwen"*), which put a
+        // second line directly under the DSH strip's own — the header carrying that strip already
+        // draws `.5px solid var(--dsw-alias-border-l2)` — so the boundary read as one thick rule
+        // rather than a divider. That line is the app's and stays; this row draws none, which is
+        // where it started.
+        // STICKY, LIKE THE STRIP ABOVE IT (founder, 2026-09-25: *"the generate start page
+        // does not have + icon"*). The row was drawn on the start page and scrolled away with
+        // the grid, so the plus vanished the moment a person looked down the card list. The
+        // DSH strip never scrolls; this one does not either.
+        position: 'sticky',
+        top: 0,
+        zIndex: 2,
+      },
+      /**
+       * One workflow header. The geometry is the harness `Button`'s own `sm` capsule — 28px
+       * tall, a 14px radius, 10px of side padding, 12px text — so a tab here reads as the
+       * same control as every other capsule in the app.
+       *
+       * SELECTED DRAWS A BORDER AND UNSELECTED DRAWS NONE (founder, 2026-09-25). The border
+       * is the primitive's own `outline` pair (`0.5px solid --dsw-alias-border-l3`), and an
+       * unselected tab keeps a transparent border of the SAME width so nothing shifts
+       * sideways the moment a tab becomes the active one.
+       */
+      tab: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 2,
+        height: 28,
+        boxSizing: 'border-box',
+        padding: '0 6px 0 10px',
+        borderRadius: 14,
+        border: '.5px solid transparent',
+        background: 'transparent',
+        color: 'var(--dsw-alias-label-secondary)',
+        flexShrink: 0,
+        // THE STRIP'S OWN TYPE, NOT THE PANE'S (founder, 2026-09-25: *"the workflow tab
+        // fontsize too big"*). The label inherited the pane's 14px; the DSH strip and the
+        // harness `Button`'s `sm` size are 12px on an 18px line, which is what a tab is.
+        fontSize: 12,
+        lineHeight: '18px',
+        // THE WHOLE LABEL, ALWAYS (founder, the same day: *"can we make width of tab to show
+        // entire label?"*). The pill used to cap at 200px and ellipsise, which is what turned
+        // two Qwen apps into one repeated "qwen-2-1-image-e…". A tab's name is the one thing it
+        // has to say, so the pill is as wide as its words and the row scrolls when they do not fit.
+      },
+      tabSelected: {
+        border: '.5px solid var(--dsw-alias-border-l3)',
+        color: 'var(--dsw-alias-label-primary)',
+      },
+      tabHover: {
+        background: 'var(--dsw-alias-interactive-bg-hover)',
+      },
+      /** The tab's label: a button, because choosing it is what switches the pane. */
+      tabLabel: {
+        border: 'none',
+        background: 'transparent',
+        padding: 0,
+        margin: 0,
+        font: 'inherit',
+        color: 'inherit',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+      },
+      /**
+       * The tab's own close: a glyph-sized button, tertiary at rest, and HIDDEN until its tab
+       * is selected, hovered or focused. The visibility rule is not here — it is
+       * `.dsh-generate-tabClose` in the one injected sheet, because `:hover` and
+       * `:focus-within` are what reveal it and no inline style can say that (the app's own
+       * `_tabClose_11olo_411` is the same rule). This object is only the box.
+       */
+      tabClose: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 18,
+        height: 18,
+        padding: 0,
+        border: 'none',
+        background: 'transparent',
+        borderRadius: 9,
+        cursor: 'pointer',
+        color: 'var(--dsw-alias-label-tertiary)',
+        flex: 'none',
       },
       /**
        * A CARD: the surface a group of controls or a piece of output is drawn on.
@@ -1572,6 +1753,139 @@ window.__ModuleLoader__.load({
         alignItems: 'flex-start',
         gap: 8,
         flexWrap: 'wrap',
+      },
+      /**
+       * AN EMPTY IMAGE DOOR IS ONE DASHED CARD (founder, 2026-09-24: *"choose an image and paste
+       * an image url should be stacked inside a card with dashed border"*). Stacked rather than
+       * side by side, because the two are one choice — bring a picture — made two ways; the row
+       * of two controls read as two unrelated fields.
+       */
+      imageDrop: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        marginTop: 6,
+        padding: 12,
+        border: '1px dashed var(--dsw-alias-border-l2)',
+        borderRadius: 8,
+        background: 'var(--dsw-alias-bg-layer-1)',
+      },
+      /** THE SAME CARD WHILE A FILE IS OVER IT: the border lights up, so the drop lands somewhere visible. */
+      imageDropOver: {
+        borderColor: 'var(--dsw-alias-brand-primary)',
+        background: 'var(--dsw-alias-bg-layer-2)',
+      },
+      /**
+       * The pick control INSIDE a card that already carries the dashes: solid, so the border is
+       * said once. `imageBox` stays the dashed, standalone control the list door's add uses.
+       */
+      imagePick: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        padding: '8px 12px',
+        fontSize: 12,
+        color: 'var(--dsw-alias-label-primary)',
+        background: 'var(--dsw-alias-bg-layer-2)',
+        border: '1px solid var(--dsw-alias-border-l1)',
+        borderRadius: 6,
+        cursor: 'pointer',
+      },
+      /** The sentence that says the card takes a dragged file. */
+      imageDropHint: {
+        fontSize: 11,
+        lineHeight: '16px',
+        color: 'var(--dsw-alias-label-tertiary)',
+        textAlign: 'center',
+      },
+      /**
+       * A FILLED IMAGE DOOR IS A COLUMN: the picture, then what a person does to it
+       * (founder, 2026-09-24: *"the replace and remove buttons should be below"*). The
+       * picture leads because it is the thing being checked before a run.
+       */
+      imageField: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        minWidth: 0,
+      },
+      /**
+       * THE THUMBNAIL'S FRAME TAKES THE PICTURE'S OWN SHAPE (founder, 2026-09-24: *"match the
+       * aspect of ref image"*). Its `aspectRatio` is written per render from the image's own
+       * `naturalWidth / naturalHeight` once it loads, so a portrait garment reads as a
+       * portrait and a square reference as a square — never a crop that hides what was chosen.
+       * A square stands in until the first load, which is also what the neutral mark uses.
+       */
+      imageThumbFrame: {
+        width: '100%',
+        maxWidth: 240,
+        borderRadius: 8,
+        border: '1px solid var(--dsw-alias-border-l1)',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        overflow: 'hidden',
+        display: 'block',
+      },
+      /** The picture inside the frame: it fills the frame's own shape exactly. */
+      imageThumb: {
+        display: 'block',
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+      },
+      /** A door that holds a picture this surface cannot draw: a provider's opaque handle. */
+      imageThumbEmpty: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: '100%',
+        color: 'var(--dsw-alias-label-tertiary)',
+      },
+      /** Replace and Remove, under the picture. */
+      imageActions: {
+        display: 'flex',
+        gap: 6,
+        alignItems: 'stretch',
+      },
+      /**
+       * One action button under the picture: Replace or Remove. Both sit in the same flex row
+       * and share this style so they end up the same size — same padding, same radius, same
+       * height — regardless of whether one carries an icon and the other does not.
+       */
+      imageAction: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        flex: '1 1 0',
+        padding: '5px 0',
+        fontSize: 12,
+        lineHeight: '16px',
+        color: 'var(--dsw-alias-label-secondary)',
+        background: 'var(--dsw-alias-bg-layer-2)',
+        border: '1px solid var(--dsw-alias-border-l1)',
+        borderRadius: 6,
+        cursor: 'pointer',
+      },
+      /** The one-line "this door is filled" sentence that replaces the raw value. */
+      imageSetLine: {
+        fontSize: 12,
+        lineHeight: '16px',
+        color: 'var(--dsw-alias-label-secondary)',
+      },
+      /** Two or more image doors side by side in the parameters card. */
+      imageGroup: {
+        display: 'flex',
+        gap: 12,
+        alignItems: 'flex-start',
+      },
+      /** One image door inside the side-by-side group. */
+      imageGroupItem: {
+        flex: '1 1 0',
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
       },
       /** A file that could not be uploaded. The provider's own reason is in the attribute. */
       imageProblem: {
@@ -2046,17 +2360,17 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Where the `credentials` seam says the value came from, in its own words
-     * (read from `@deepseek-ai/dsh-credentials-local`, 2026-09-22): `file` is the
-     * provider-managed store, which is what a key pasted here becomes; `env` is
-     * the inherited process environment; `project-env` and `user-env` are the
-     * `.env` fallbacks. This half knew only a `store` string the seam never emits,
-     * so the strip called a freshly pasted key "from your environment" on the next
-     * read — the accepted feature stating a false fact about its own key. An
-     * unknown source now says nothing rather than guessing.
+     * The `credentials` seam's own vocabulary for where a value came from —
+     * `@deepseek-ai/dsh-credentials-local`, read 2026-09-22: `file` is the
+     * provider-managed store, `env` the inherited process environment, `project-env`
+     * and `user-env` the `.env` fallbacks. The pane used to print two of those as
+     * sentences ("stored on this machine", "from your environment"); the founder had
+     * them removed on 2026-09-25 (*"remove stored on this machine"*), so nothing here
+     * names a source any more. The seam is still read — the facts line still carries
+     * `data-generate-source` for the DOM, and `writable: false` is what says a key
+     * cannot be changed from this page — but no constant is left for a sentence that
+     * no longer exists.
      */
-    const STORED_SOURCE = 'file'
-    const ENVIRONMENT_SOURCES = ['env', 'project-env', 'user-env']
 
     /**
      * What a successful save has to say, in the harness's own centered dialog and
@@ -2516,9 +2830,9 @@ window.__ModuleLoader__.load({
      * card is same design as dsh start page card; icon + label + 2nd row (no
      * thumbnails)"*). The cover the API returns is dropped: it is a screenshot of an app
      * the person has not opened, and at pane width it read as a 72px postage stamp. The
-     * provider is not repeated either — the card sits inside that provider's own
-     * accordion section, whose header names it — while `data-generate-provider` still
-     * carries the fact for anyone reading the DOM.
+     * provider is not repeated either — the card sits under that provider's own caption
+     * line, which names it — while `data-generate-provider` still carries the fact for
+     * anyone reading the DOM.
      */
     function UnitCard({ t, unit, onOpen }) {
       const [hover, hoverProps] = useHover()
@@ -2570,30 +2884,92 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * A circle-with-an-X, Lucide-style, at 16px. The harness ships no circle-x, so this tiny
+     * SVG stands in for the Remove button only — never exported, never shared.
+     */
+    function IconCircleX16(props) {
+      return h(
+        'svg',
+        {
+          width: 16,
+          height: 16,
+          viewBox: '0 0 16 16',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.5,
+          strokeLinecap: 'round',
+          ...props,
+        },
+        h('circle', { cx: 8, cy: 8, r: 7 }),
+        h('path', { d: 'M5.5 5.5l5 5M10.5 5.5l-5 5' }),
+      )
+    }
+
+    /**
      * AN IMAGE DOOR: a file a person picks, or a URL they paste.
      *
      * Both halves are the API's own vocabulary. Krea's `image_url` and a style reference's
      * `url` each take *"an external URL, base64 data URI, or uploaded asset URL"*
      * (its OpenAPI, read 2026-09-23), so a paste is a first-class way to fill the field, and
      * a file — which cannot be pasted — goes to the provider's upload route and comes back as
-     * the URL the field carries. The one thing that is NOT a value is what a file input
+     * the value the field carries. The one thing that is NOT a value is what a file input
      * reports on its own (`C:\fakepath\…`), which is why this control never reads it: the
      * nothing-uploaded-yet state is the button itself, and the field stays empty until the
      * upload answers.
      *
-     * The value is the URL string, so a surface that only ever pastes one still works, and
-     * the gate shows the same string a run would send.
+     * THE THUMBNAIL IS THE FILE THE PERSON PICKED, NOT THE VALUE (measured 2026-09-24). An
+     * uploaded value is only sometimes a picture URL: Krea answers one, RunningHub answers an
+     * opaque `fileName` (`api/7a8b80db…`) that is a node input and nothing a browser can open.
+     * Drawing the value as `<img src>` therefore put a broken image on RunningHub's doors — the
+     * founder saw exactly that (*"I don't see thumbnails"*). So the preview is a blob URL of the
+     * picked file itself, which is the picture in hand, and a value is only drawn when it is
+     * really addressable (`http(s)`, `data:image/`, `blob:`); anything else gets a neutral mark
+     * rather than a guess at a host.
+     *
+     * AND THE RAW VALUE LEAVES THE SCREEN ONCE A PICTURE IS SET (founder, same day: *"why is
+     * api/editable?"*). An opaque provider handle is not a string a person typed, can read or
+     * should edit, so a filled door shows the thumbnail with Replace and Remove, and the text
+     * field returns only when the door is empty — where pasting a URL is the point.
+     *
+     * AND THE EMPTY DOOR IS ONE DASHED CARD THAT TAKES A DRAGGED FILE (founder, 2026-09-24:
+     * *"choose an image and paste an image url should be stacked inside a card with dashed
+     * border, it is also a drop zone for drag and drop image"*). The picker and the URL field
+     * are the same act done two ways, so they stack; the card is the drop target, and the
+     * browser's own drag events supply the file — the same bytes the picker would have handed
+     * over, so both paths run one upload.
      */
     function ImageField({ t, provider, id, doorKey, value, onChange, canUpload }) {
       const [phase, setPhase] = React.useState('idle')
       const [problem, setProblem] = React.useState(null)
+      /** The picked file's own bytes, as a blob URL. Revoked whenever it is replaced. */
+      const [preview, setPreview] = React.useState(null)
+      /** The picture's own width/height, once it has loaded. Null until then: a square stands in. */
+      const [ratio, setRatio] = React.useState(null)
+      /** Whether a file is currently over the card, which is what lights its border. */
+      const [dragging, setDragging] = React.useState(false)
 
-      const pick = async (event) => {
-        const file = event.target.files && event.target.files[0]
-        // Clearing the input is what lets the same file be picked twice: a file input fires
-        // no change event for a value it already had.
-        event.target.value = ''
+      // THE BLOB IS RELEASED TWICE ON PURPOSE. React runs this cleanup when `preview` changes and
+      // on unmount, which is what stops a leak in the browser; the explicit calls below release
+      // the same URL at the moment it is replaced or removed, so the transition is observable
+      // without waiting for a React commit. Revoking an already-revoked URL is a no-op.
+      React.useEffect(() => () => {
+        if (preview) URL.revokeObjectURL(preview)
+      }, [preview])
+
+      const release = (url) => {
+        if (url) URL.revokeObjectURL(url)
+      }
+
+      /**
+       * ONE FILE IN, WHATEVER BROUGHT IT. The picker and the drop both land here, so a dragged
+       * file travels the same route, preview and failure handling as a picked one.
+       */
+      const accept = async (file) => {
         if (!file) return
+        const local = URL.createObjectURL(file)
+        setPreview(local)
+        // A new picture's shape is unknown until it loads; the old ratio would be a lie.
+        setRatio(null)
         setPhase('uploading')
         setProblem(null)
         const uploaded = await uploadImage(provider, file)
@@ -2602,39 +2978,159 @@ window.__ModuleLoader__.load({
           onChange(uploaded.url)
           return
         }
+        // A failed upload leaves nothing behind: the preview goes and the door stays as it was.
+        release(local)
+        setPreview(null)
+        setRatio(null)
         setPhase('failed')
         setProblem(uploaded.error)
       }
 
+      const pick = (event) => {
+        const file = event.target.files && event.target.files[0]
+        // Clearing the input is what lets the same file be picked twice: a file input fires
+        // no change event for a value it already had.
+        event.target.value = ''
+        accept(file)
+      }
+
+      /**
+       * THE DROP. `preventDefault` on drag-over is what makes an element a drop target at all —
+       * without it the browser navigates to the file. The card also has to drop the highlight
+       * when the pointer leaves, which `dragleave` reports; a nested child can fire it once more
+       * on the way out, and the cost of that is one extra render, not a stuck border.
+       */
+      const overFile = (event) => {
+        if (!canUpload) return
+        event.preventDefault()
+        if (!dragging) setDragging(true)
+      }
+      const leaveFile = () => {
+        if (dragging) setDragging(false)
+      }
+      const dropFile = (event) => {
+        if (!canUpload) return
+        event.preventDefault()
+        setDragging(false)
+        const transfer = event.dataTransfer
+        const file = transfer && transfer.files && transfer.files[0]
+        accept(file)
+      }
+
+      const remove = () => {
+        release(preview)
+        setPreview(null)
+        setRatio(null)
+        setPhase('idle')
+        setProblem(null)
+        onChange('')
+      }
+
+      const busy = phase === 'uploading'
+      const filled = value !== undefined && value !== null && String(value) !== ''
+      // A value this surface can actually draw as itself, or null when it is a provider handle.
+      const addressable = filled && /^(https?:|data:image\/|blob:)/i.test(String(value)) ? String(value) : null
+      const thumb = preview || addressable
+      /**
+       * THE PICTURE'S OWN SHAPE, read once it loads. `naturalWidth`/`naturalHeight` are the
+       * bytes' real dimensions, which is the only honest source for an aspect ratio a person
+       * picked; a square stands in until the first load answers.
+       */
+      const readRatio = (event) => {
+        const node = event && event.target
+        if (node && node.naturalWidth > 0 && node.naturalHeight > 0) setRatio(node.naturalWidth / node.naturalHeight)
+      }
+      const filePicker = (label, extra, Icon) =>
+        h(
+          'label',
+          { style: { ...S.imagePick, ...(extra || {}) }, htmlFor: id + '-file' },
+          h(Icon || IconSparkle16, { size: 12 }),
+          h('span', null, busy ? t('surface.image.uploading') : label),
+          h('input', {
+            id: id + '-file',
+            'data-generate-upload': doorKey,
+            type: 'file',
+            accept: 'image/*',
+            style: { display: 'none' },
+            onChange: pick,
+          }),
+        )
+      const failure = () =>
+        phase === 'failed' ? h('div', { style: S.imageProblem, 'data-generate-upload-failed': problem || 'yes' }, t('surface.image.failed')) : null
+
+      // FILLED — the picture, then the two things a person does to it, underneath. No raw value
+      // on screen, and the frame wears the picture's own aspect once it is known.
+      if (filled || busy) {
+        return h(
+          'div',
+          { style: S.imageField, 'data-generate-image': doorKey, 'data-generate-image-set': 'yes' },
+          h(
+            'div',
+            {
+              style: { ...S.imageThumbFrame, aspectRatio: ratio === null ? '1 / 1' : String(ratio) },
+              'data-generate-thumb-frame': doorKey,
+            },
+            thumb
+              ? h('img', {
+                  src: thumb,
+                  style: S.imageThumb,
+                  alt: '',
+                  onLoad: readRatio,
+                  'data-generate-thumb': doorKey,
+                })
+              : h('div', { style: S.imageThumbEmpty, 'data-generate-thumb-missing': doorKey }, h(IconSparkle16, { size: 20 })),
+          ),
+          h('div', { style: S.imageSetLine }, busy ? t('surface.image.uploading') : t('surface.image.set')),
+          h(
+            'div',
+            { style: S.imageActions },
+            h(
+              'button',
+              { type: 'button', style: S.imageAction, 'data-generate-image-clear': doorKey, onClick: remove },
+              h(IconCircleX16, { size: 14 }),
+              h('span', null, t('surface.image.remove')),
+            ),
+          ),
+          failure(),
+        )
+      }
+
+      // EMPTY — ONE DASHED CARD, stacked, and a drop target: the picker, then the field a URL is
+      // pasted into, then the sentence that says a dragged file lands here too. The card wears the
+      // lit border while a file is over it, and the drag props are only attached where the
+      // provider can actually take an upload — a card that could not finish the job must not
+      // invite the drop.
+      const dropProps = canUpload
+        ? {
+            onDragOver: overFile,
+            onDragEnter: overFile,
+            onDragLeave: leaveFile,
+            onDrop: dropFile,
+          }
+        : {}
       return h(
         'div',
-        { style: S.imageRow, 'data-generate-image': doorKey },
-        canUpload
-          ? h(
-              'label',
-              { style: S.imageBox, htmlFor: id + '-file' },
-              h(IconSparkle16, { size: 12 }),
-              h('span', null, phase === 'uploading' ? t('surface.image.uploading') : t('surface.image.choose')),
-              h('input', {
-                id: id + '-file',
-                'data-generate-upload': doorKey,
-                type: 'file',
-                accept: 'image/*',
-                style: { display: 'none' },
-                onChange: pick,
-              }),
-            )
-          : null,
+        {
+          style: dragging ? { ...S.imageDrop, ...S.imageDropOver } : S.imageDrop,
+          'data-generate-image': doorKey,
+          'data-generate-drop': canUpload ? 'yes' : 'no',
+          ...(dragging ? { 'data-generate-drag-over': 'yes' } : {}),
+          ...dropProps,
+        },
+        canUpload ? filePicker(t('surface.image.choose'), { alignSelf: 'stretch' }, IconPlusOutline16) : null,
         h('input', {
-          style: S.input,
+          style: { ...S.input, marginTop: 0 },
           id,
           'data-generate-door': doorKey,
           type: 'text',
-          value: value === undefined || value === null ? '' : value,
+          // Empty by definition: a filled door took the branch above, so this field only
+          // ever draws before a value exists — the state a paste starts from.
+          value: '',
           placeholder: t('surface.image.placeholder'),
           onChange: (event) => onChange(event.target.value),
         }),
-        phase === 'failed' ? h('div', { style: S.imageProblem, 'data-generate-upload-failed': problem || 'yes' }, t('surface.image.failed')) : null,
+        canUpload ? h('div', { style: S.imageDropHint }, dragging ? t('surface.image.dropNow') : t('surface.image.drop')) : null,
+        failure(),
       )
     }
 
@@ -2781,16 +3277,27 @@ window.__ModuleLoader__.load({
      * Krea array field is an array of objects, so a row carries the object's own doors and
      * `advanced` decides whether the whole list sits behind the disclosure.
      */
-    function WorkflowSurface({ t, provider, name, onBack, canUpload = false, runOption = null }) {
+    function WorkflowSurface({ t, provider, name, canUpload = false, runOption = null }) {
       const { phase, adapter } = useWorkflow(provider, name)
       const [values, setValues] = React.useState({})
       const [showAdvanced, setShowAdvanced] = React.useState(false)
 
       // Depends on the adapter arriving: the doors are what the starting values come from.
+      // The saved state is merged on top, so a person who switched the aspect ratio once
+      // keeps it the next time they open the same workflow.
       React.useEffect(() => {
         if (phase !== 'ready' || !adapter) return
         const start = {}
         for (const key of Object.keys(adapter.doors)) start[key] = startFor(key, adapter.doors[key], adapter.defaults)
+        // Load saved state, if any. Errors are silent — the defaults are enough.
+        fetch(`/plugins/generate/providers/${provider}/state?name=${encodeURIComponent(adapter.name)}`)
+          .then((r) => r.json())
+          .then((saved) => {
+            if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+              setValues((current) => ({ ...current, ...saved }))
+            }
+          })
+          .catch(() => {})
         setValues(start)
       }, [phase])
 
@@ -2798,23 +3305,33 @@ window.__ModuleLoader__.load({
        * One top-level door's value, set. The control layer passes VALUES, not events: an
        * image door hands back a URL an upload answered, and the four native controls hand
        * back what a person typed, so the two cannot share an event-shaped callback.
+       *
+       * Every change is debounced to the host, which writes it to a file. The next time this
+       * workflow opens, the saved values are loaded on top of the defaults.
        */
+      const saveTimer = React.useRef(null)
       const set = (key) => (next) => {
-        setValues((current) => ({ ...current, [key]: next }))
+        setValues((current) => {
+          const updated = { ...current, [key]: next }
+          // Debounce the save: in a real browser setTimeout exists; in a test sandbox it
+          // may not, and that is fine — the test verifies the UI, not the persistence.
+          if (typeof setTimeout === 'function') {
+            if (saveTimer.current) clearTimeout(saveTimer.current)
+            saveTimer.current = setTimeout(() => {
+              fetch(`/plugins/generate/providers/${provider}/state`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ name: adapter.name, values: updated }),
+              }).catch(() => {})
+            }, 500)
+          }
+          return updated
+        })
       }
 
-      // The way out wears a left chevron (founder, 2026-09-23: *"the All workflows button
-      // should have back arrow"*), and the label follows it.
-      const head = h(
-        'div',
-        { style: S.surfaceHead },
-        h(
-          'button',
-          { type: 'button', style: { ...S.ghost, display: 'inline-flex', alignItems: 'center', gap: 4 }, 'data-generate-back': 'yes', onClick: onBack },
-          h(IconChevronLeftOutline14, { size: 14 }),
-          t('surface.back'),
-        ),
-      )
+      // THE WAY OUT IS THE HEADER'S "All workflows" TAB (founder, 2026-09-25): the surface
+      // used to repeat it as a ← All workflows button at the top of the form, which was the
+      // same control twice on one screen once the pane grew a tab row.
 
       // The run state is READ HERE, above the early return, because a hook may not be
       // called conditionally: the run outlives the loading phase, and a person who
@@ -2825,7 +3342,6 @@ window.__ModuleLoader__.load({
         return h(
           'div',
           { style: S.surface, 'data-generate-surface': phase },
-          head,
           h('div', { style: S.hint }, phase === 'failed' ? t('surface.failed') : t('surface.loading')),
         )
       }
@@ -3016,10 +3532,52 @@ window.__ModuleLoader__.load({
           adapter.doors[key].hint ? h('div', { style: S.hint }, adapter.doors[key].hint) : null,
         )
 
+      /**
+       * Render a list of doors in order, but group every run of consecutive image doors
+       * into one side-by-side row (founder: the two reference images sit on the same row).
+       * A lone image door renders normally, and a non-image door always breaks a run.
+       */
+      const renderDoors = (keys) => {
+        const elements = []
+        let buffer = []
+        const flush = () => {
+          if (buffer.length === 0) return
+          if (buffer.length === 1) {
+            elements.push(doorRow(buffer[0]))
+          } else {
+            elements.push(
+              h(
+                'div',
+                { style: S.imageGroup, 'data-generate-image-group': buffer.join('+') },
+                buffer.map((key) =>
+                  h(
+                    'div',
+                    { key, style: S.imageGroupItem, 'data-generate-door-row': key },
+                    h('label', { style: S.label, htmlFor: 'generate-door-' + key }, adapter.doors[key].label),
+                    control(key),
+                    adapter.doors[key].hint ? h('div', { style: S.hint }, adapter.doors[key].hint) : null,
+                  ),
+                ),
+              ),
+            )
+          }
+          buffer = []
+        }
+        for (const key of keys) {
+          if (adapter.doors[key].type === 'image') {
+            buffer.push(key)
+          } else {
+            flush()
+            elements.push(doorRow(key))
+          }
+        }
+        flush()
+        return elements
+      }
+
       return h(
         'div',
         { style: S.surface, 'data-generate-surface': 'ready', 'data-generate-unit': adapter.name, 'data-generate-provider': provider },
-        head,
         h(
           'div',
           { style: S.surfaceColumns, 'data-generate-columns': 'two' },
@@ -3031,7 +3589,7 @@ window.__ModuleLoader__.load({
             { style: S.surfaceParams, 'data-generate-column': 'params', 'data-generate-card': 'params' },
             h('div', { style: S.title }, adapter.title),
             adapter.blurb ? h('div', { style: S.body }, adapter.blurb) : null,
-            ...main.map(doorRow),
+            ...renderDoors(main),
             advanced.length > 0
               ? h(
                   'button',
@@ -3076,6 +3634,7 @@ window.__ModuleLoader__.load({
             adapter.runnable === true
               ? h(RunOutput, { key: adapter.name + '-out', t, adapter, run })
               : h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
+            h(QueueBand, { t, run }),
           ),
         ),
       )
@@ -3107,42 +3666,88 @@ window.__ModuleLoader__.load({
      * Splitting the state from both views is what lets one run be drawn in two places.
      */
     function useRun({ t, provider, adapter, values, runOption = null }) {
-      const [run, setRun] = React.useState({ phase: 'form' })
+      /**
+       * CONCURRENT RUNS: the provider may allow several jobs at once (RunningHub
+       * allows 3). We track an array of runs; the latest one is the "active" run
+       * shown in the output column. Pressing Generate always starts a new run.
+       */
+      const [runs, setRuns] = React.useState([])
+      /** The most recent run — the one the output column and controls draw. */
+      const run = runs.length > 0 ? runs[runs.length - 1] : { phase: 'form' }
       /**
        * THE RUN'S OWN MODE, when the provider declares one (RunningHub's `instanceType`).
-       *
-       * It lives with the run rather than with the doors because it is not a door: it is the
-       * same choice for every app, it goes to the request's top level, and it changes what a
-       * run costs. `null` means "whatever the provider's own fallback is", so a surface that
-       * was never touched sends a complete request.
        */
       const declared = runOption && Array.isArray(runOption.modes) && runOption.modes.length > 0 ? runOption : null
       const [mode, setMode] = React.useState(null)
       const modeId = declared ? mode || declared.fallback : null
       const options = declared ? { [declared.key]: modeId } : null
 
-      /** Whether a run is on its way: the control stays disabled until the host answers. */
+      /** Whether the LATEST run is still going. New runs are always allowed. */
       const inFlight = run.phase === 'starting' || run.phase === 'queued' || run.phase === 'running'
 
-      // The press IS the confirmation (founder, 2026-09-23): no preview is fetched and no
-      // dialog opens — the run posts now, and `confirmed: true` travels with it because
-      // the host still demands a person's own action in the request.
-      const confirm = async () => {
-        if (inFlight) return
-        setRun({ phase: 'starting' })
-        const started = await postRun(provider, adapter.name, values, options)
-        if (!started.ok) {
-          setRun({ phase: 'failed', error: started.error, detail: started.detail, startedAt: Date.now(), finishedAt: Date.now() })
-          return
+      /** ASK to cancel the latest run. */
+      const [cancelBusy, setCancelBusy] = React.useState(false)
+      const cancel = async () => {
+        if (!inFlight || cancelBusy) return
+        setCancelBusy(true)
+        try {
+          await fetch(providerUrl(provider, 'cancel'), {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify({ jobId: run.jobId }),
+          })
+        } catch {
+          // Network failure — the poll will settle the state.
+        } finally {
+          setCancelBusy(false)
         }
-        setRun({ phase: 'queued', jobId: started.jobId, startedAt: Date.now() })
       }
 
-      // THE POLL. The host holds the key, so the host asks Krea; this half asks the host
-      // once every two seconds until the job settles, and stops the moment it does.
+      // Start a new run. Always allowed — the host queues them.
+      const confirm = async () => {
+        setRuns((prev) => [...prev, { phase: 'starting', startedAt: Date.now() }])
+        const started = await postRun(provider, adapter.name, values, options)
+        if (!started.ok) {
+          setRuns((prev) => {
+            const copy = [...prev]
+            copy[copy.length - 1] = { phase: 'failed', error: started.error, detail: started.detail, startedAt: Date.now(), finishedAt: Date.now() }
+            return copy
+          })
+          return
+        }
+        setRuns((prev) => {
+          const copy = [...prev]
+          copy[copy.length - 1] = { phase: 'queued', jobId: started.jobId, startedAt: Date.now() }
+          return copy
+        })
+      }
+
+      // QUEUE BAND. The host reads the account's queue while a job is in flight.
+      const [queue, setQueue] = React.useState(null)
+      const anyInFlight = runs.some((r) => r.phase === 'starting' || r.phase === 'queued' || r.phase === 'running')
       React.useEffect(() => {
-        // Keyed by the JOB, not by the phase: a phase change must not restart the loop,
-        // or every "queued → running" would fire another poll on the spot.
+        if (!anyInFlight || !provider) return undefined
+        let live = true
+        const pollQueue = async () => {
+          try {
+            const response = await fetch(providerUrl(provider, 'queue'), { headers: { accept: 'application/json' } })
+            if (!response.ok || !live) return
+            const body = await response.json()
+            if (body && typeof body.running === 'number') setQueue(body)
+          } catch {
+            // Endpoint is marked "developing" — a failure is no answer, not an error.
+          }
+        }
+        pollQueue()
+        const timer = setInterval(pollQueue, 5000)
+        return () => { live = false; clearInterval(timer) }
+      }, [anyInFlight, provider])
+      React.useEffect(() => {
+        if (!anyInFlight) setQueue(null)
+      }, [anyInFlight])
+
+      // THE POLL. One per run, keyed by jobId. Each run settles independently.
+      React.useEffect(() => {
         const jobId = run.jobId
         if (typeof jobId !== 'string' || jobId === '') return undefined
         let live = true
@@ -3153,41 +3758,33 @@ window.__ModuleLoader__.load({
           if (!live) return
           if (!read.ok) {
             settled = true
-            setRun((current) => (current.jobId === jobId ? { ...current, phase: 'failed', finishedAt: Date.now(), error: read.error } : current))
+            setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: 'failed', finishedAt: Date.now(), error: read.error } : r)))
+            return
+          }
+          if (read.state === 'cancelled') {
+            settled = true
+            setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: 'cancelled', finishedAt: Date.now() } : r)))
             return
           }
           if (read.state === 'done') {
             settled = true
-            setRun((current) =>
-              current.jobId === jobId ? { ...current, phase: 'done', finishedAt: Date.now(), urls: read.urls, saved: read.saved } : current,
-            )
+            setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: 'done', finishedAt: Date.now(), urls: read.urls, saved: read.saved } : r)))
             return
           }
           if (read.state === 'failed') {
             settled = true
-            setRun((current) =>
-              current.jobId === jobId
-                ? {
-                    ...current,
-                    phase: 'failed',
-                    finishedAt: Date.now(),
-                    status: read.status,
-                    message: read.error && read.error.message ? String(read.error.message) : null,
-                  }
-                : current,
-            )
+            setRuns((prev) => prev.map((r) =>
+              r.jobId === jobId
+                ? { ...r, phase: 'failed', finishedAt: Date.now(), status: read.status, message: read.error && read.error.message ? String(read.error.message) : null }
+                : r,
+            ))
             return
           }
-          setRun((current) => (current.jobId === jobId ? { ...current, phase: read.state } : current))
+          setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: read.state } : r)))
         }
-        // Once now, then every two seconds: a strip that waited two seconds to say
-        // anything would look like a control that did not respond.
         tick()
         const timer = setInterval(tick, 2000)
-        return () => {
-          live = false
-          clearInterval(timer)
-        }
+        return () => { live = false; clearInterval(timer) }
       }, [run.jobId])
 
       const elapsed = run.startedAt ? Math.max(0, Math.round(((run.finishedAt || Date.now()) - run.startedAt) / 1000)) : 0
@@ -3196,6 +3793,10 @@ window.__ModuleLoader__.load({
         elapsed,
         confirm,
         inFlight,
+        anyInFlight,
+        cancel,
+        cancelBusy,
+        queue,
         // The provider's run option, and the mode chosen in it. A provider that declares
         // none gives `runOption: null` and the surface draws a plain run button.
         runOption: declared,
@@ -3212,14 +3813,12 @@ window.__ModuleLoader__.load({
     function RunControl({ t, adapter, run }) {
       if (!adapter) return null
       const runLabel = adapter.runLabel || t('run.action')
-      // One press posts the run (founder, 2026-09-23); while it is on its way the control
-      // is disabled and says so, and the strip in the output column takes over.
+      // Always enabled: the host queues concurrent runs. The label changes while
+      // the latest run is starting.
       const label = run.phase === 'starting' ? t('run.starting') : runLabel
       return h(
         'div',
         { style: S.runBlock, 'data-generate-run-block': adapter.name },
-        // A provider that declares run modes gets the split control — the action, and the
-        // mode it will run in; one that declares none gets the plain button it always had.
         run.runOption
           ? h(SplitButton, {
               t,
@@ -3227,7 +3826,7 @@ window.__ModuleLoader__.load({
               modes: run.runOption.modes,
               value: run.mode,
               onValue: run.setMode,
-              disabled: run.inFlight,
+              disabled: false,
               onClick: run.confirm,
               attrs: { 'data-generate-run': adapter.name, 'data-generate-run-mode': run.runOption.key },
             })
@@ -3237,7 +3836,7 @@ window.__ModuleLoader__.load({
                 type: 'button',
                 style: { ...S.primary, alignSelf: 'flex-start' },
                 'data-generate-run': adapter.name,
-                disabled: run.inFlight,
+                disabled: false,
                 onClick: run.confirm,
               },
               label,
@@ -3355,6 +3954,23 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Queue band: how many tasks this provider's account is running and queuing,
+     * plus the concurrency ceiling. Only drawn when a run is in flight (founder,
+     * 2026-09-23: *"a queue component under the preview card"*).
+     */
+    function QueueBand({ t, run }) {
+      if (!run.queue) return null
+      const q = run.queue
+      return h(
+        'div',
+        { style: { display: 'flex', gap: 12, padding: '4px 0', fontSize: 12, color: 'var(--dsw-alias-label-secondary)' }, 'data-generate-queue-band': true },
+        typeof q.running === 'number' ? h('span', { 'data-generate-queue-running': String(q.running) }, t('queue.running').replace('{n}', String(q.running))) : null,
+        typeof q.queued === 'number' && q.queued > 0 ? h('span', { 'data-generate-queue-queued': String(q.queued) }, t('queue.queued').replace('{n}', String(q.queued))) : null,
+        typeof q.limit === 'number' ? h('span', { 'data-generate-queue-limit': String(q.limit) }, t('queue.limit').replace('{n}', String(q.limit))) : null,
+      )
+    }
+
+    /**
      * Stage two: the body, under the type's own id.
      *
      * ONE PANE HOLDS EVERY WORKFLOW SURFACE (founder, 2026-09-22). Its first screen is
@@ -3404,49 +4020,64 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * One provider's section of the pane's accordion: a header that names the provider
-     * and says what the section holds, and a body holding its cards.
+     * One provider's block on the home: a caption line that names it, a facts line that
+     * says what it holds, and its workflows under them as the guide's own entries.
      *
-     * ONE SECTION PER PROVIDER, ALL OF THEM (founder, 2026-09-23). A provider with
-     * nothing installed is still a section, because a section's header is where its add
-     * control lives: an install that showed only the providers that already work could
-     * never be filled. A provider whose list could not be read says so instead of
-     * showing the empty state, because "nothing installed" and "nothing answered" are
-     * different facts.
+     * ONE BLOCK PER PROVIDER, ALL OF THEM (founder, 2026-09-23). A provider with nothing
+     * installed is still a block, because the facts line is where its add control lives:
+     * an install that showed only the providers that already work could never be filled.
+     * A provider whose list could not be read says so instead of showing the empty
+     * state, because "nothing installed" and "nothing answered" are different facts.
+     *
+     * NOTHING FOLDS AND NOTHING IS BOXED (founder, 2026-09-25: *"it should be minimal like
+     * start surface and make like dashboard"*). The section card, its chevron and its
+     * toggle are gone: a block is a caption, a facts line and the entries, drawn on the
+     * page's own background the way the Start surface's are.
      */
-    function ProviderSection({ t, provider, units, failed, open, onToggle, onOpen, onRefresh }) {
-      // Whether this section's install prompt is revealed. It lives here rather than in
-      // the panel below, because the control that toggles it is in the SUBHEADER now
-      // (founder, 2026-09-23: *"move + workflow button as an icon button next to
-      // refresh"*, then the header decluttering that created the band) and the thing
-      // it reveals is still the body's.
+    function ProviderGroup({ t, provider, units, failed, onOpen, onRefresh }) {
+      // Whether this block's install prompt is open. It lives here because the control that
+      // opens it is on the facts line and the popover it opens belongs to this block.
       const [addShown, setAddShown] = React.useState(false)
+      // Where the popover lands, and what closes it, are the app's own two rules — see the
+      // destructure at the top of this module. The anchor is the wrapper AROUND the add
+      // glyph, because the harness's `Button` forwards no ref; the root is the block, which
+      // holds both the glyph and the panel, so a click on either counts as inside.
+      const groupRef = React.useRef(null)
+      const addRef = React.useRef(null)
+      const popoverRef = React.useRef(null)
+      const popoverAt = useAnchoredPosition({
+        open: addShown,
+        anchorRef: addRef,
+        panelRef: popoverRef,
+        side: 'bottom',
+        align: 'end',
+        gap: 8,
+      })
+      useDismissOnOutsidePointer(groupRef, addShown, setAddShown, popoverRef)
+      // Escape closes it, the way it closes every other floating surface in the app.
+      React.useEffect(() => {
+        if (!addShown) return
+        const onKey = (event) => {
+          if (event.key === 'Escape') setAddShown(false)
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+      }, [addShown])
       // The account arrow's hover colour, swapped from state the way the workflow
       // cards do theirs: an inline style carries no `:hover` (founder, 2026-09-23:
       // *"add onhover on the website link arrow to theme primary token color"*).
       const [accountHover, accountHoverProps] = useHover()
-      // "Workflows · 2 installed", not "Workflows · 2 workflows installed": the line
-      // says the family itself, so the count is only the number after it. The family
-      // word is the same on every section (founder, 2026-09-23) — see
-      // `pane.section.family`.
-      const meta =
-        t('pane.section.family') +
-        ' · ' +
-        (units.length === 0 ? t('pane.section.none') : units.length + ' ' + t('pane.section.count'))
-      // The header's light (founder, 2026-09-23): green when the section is ready to
-      // run, amber when a key is there and the section still is not ready — nothing
-      // installed yet, or a key the provider never confirmed — and red when there is no
-      // usable key. Three colours, four sentences: the colour is the state, the sentence
-      // is its tooltip, and an unconfirmed key is not the same fact as an empty section.
+      // The caption's light (founder, 2026-09-23): green when the block is ready to run,
+      // amber when a key is there and the block still is not ready — nothing installed
+      // yet, or a key the provider never confirmed — and red when there is no usable key.
+      // Three colours, four sentences: the colour is the state, the sentence is its
+      // tooltip, and an unconfirmed key is not the same fact as an empty block.
       const look = providerState(provider).state
       const light = look === 'none' || look === 'refused' ? 'noKey' : look === 'ok' ? (units.length > 0 ? 'ready' : 'keyOnly') : 'unchecked'
       const lightStyle = { ready: S.dotOk, keyOnly: S.dotWarn, unchecked: S.dotWarn, noKey: S.dotBad }[light]
       const lightText = {
         ready: t('pane.light.ready'),
         keyOnly: t('pane.light.keyOnly'),
-        // The settings row's own words for the same fact: a third sentence for
-        // "amber because nothing is installed" would be a lie on a section that has
-        // workflows and an unconfirmed key.
         unchecked: t('settings.linked.unverified'),
         noKey: t('pane.light.noKey'),
       }[light]
@@ -3455,30 +4086,17 @@ window.__ModuleLoader__.load({
       const parts = balanceParts(t, provider)
       return h(
         'div',
-        { style: S.section, 'data-generate-section-wrap': provider.id },
-        // The header is the section's toggle and it also holds the way out to the
-        // provider's own page. A <button> may not contain a link, so the row carries the
-        // button's ROLE rather than its tag: one toggle, with the account anchor inside.
-        // It holds ONLY that now: the balance, the count line and the add/refresh
-        // glyphs live in the subheader band below (founder, 2026-09-23: *"the
-        // accordion header for generate is too cluttered"*).
+        { ref: groupRef, style: S.section, 'data-generate-section-wrap': provider.id },
+        // The caption line: the light, then the provider's name with the glyph that leads
+        // to its own page. It carries ONLY those — everything else it used to hold lives
+        // on the facts line under it.
         h(
           'div',
           {
-            role: 'button',
-            tabIndex: 0,
             style: S.sectionHead,
             'data-generate-section': provider.id,
-            'data-generate-section-toggle': provider.id,
-            'aria-expanded': open ? 'true' : 'false',
-            onClick: onToggle,
-            onKeyDown: (event) => {
-              if (event.key !== 'Enter' && event.key !== ' ') return
-              event.preventDefault()
-              onToggle()
-            },
+            'data-generate-section-head': provider.id,
           },
-          // The header's marker: the status light, where it used to draw the kind.
           h(
             'span',
             { style: S.sectionLight },
@@ -3497,8 +4115,8 @@ window.__ModuleLoader__.load({
               { style: S.sectionTitleRow },
               h('span', { style: S.sectionTitle }, provider.label),
               // The way out to the provider's own page: the glyph beside the name it
-              // belongs to, instead of a word lower down (founder, 2026-09-23). The row
-              // is the toggle, so this click must not fold the section.
+              // belongs to (founder, 2026-09-23). The row is not a toggle any more, so
+              // this click no longer needs to stop one.
               provider.accountUrl
                 ? h(
                     'a',
@@ -3514,7 +4132,6 @@ window.__ModuleLoader__.load({
                       title: t('settings.account'),
                       'aria-label': t('settings.account'),
                       'data-generate-account': provider.id,
-                      onClick: (event) => event.stopPropagation(),
                       ...accountHoverProps,
                     },
                     h(IconRightUpOutline16, { size: 12 }),
@@ -3522,22 +4139,13 @@ window.__ModuleLoader__.load({
                 : null,
             ),
           ),
-          h('span', { style: S.sectionChevron }, h(open ? IconChevronDownOutline14 : IconChevronRightOutline14, { size: 14 })),
         ),
-        // THE SUBHEADER (founder, 2026-09-23: *"the accordion header for generate is
-        // too cluttered. remove the wallet balance, workflows counter, add/refresh
-        // icons. make a subheader with separator top/bottom and move these elements
-        // into it"*, and on seeing it: *"when the accordion is closed don't show the
-        // subheader"*): a band under the header, hairline above and below, holding what
-        // crowded the toggle row — the balance, then the count line, then the add and
-        // refresh glyphs. It draws only while the section is open, so a shut section is
-        // the bare name row. The header stays the ONLY toggle; the band is its sibling,
-        // not its child, so a click here never folds the section. The `&&` renders
-        // nothing when shut — `walk()` normalises booleans to null and React drops
-        // `false` children alike.
-        open && h(
+        // THE FACTS LINE: the balance, then the add and refresh glyphs — the items the
+        // subheader band carried, without the hairlines that made the page read as a form,
+        // and without the count line the founder had removed (2026-09-25).
+        h(
           'div',
-          { style: S.sectionSub, 'data-generate-section-sub': provider.id },
+          { style: S.sectionFacts, 'data-generate-section-facts': provider.id },
           h(
             'span',
             { style: S.sectionBalance, 'data-generate-provider-strip': provider.id },
@@ -3557,20 +4165,20 @@ window.__ModuleLoader__.load({
                 // "the one stored on this machine" for a different reason.
                 'data-generate-source': provider.source || 'none',
               },
+              // THE PROVENANCE LINE IS GONE (founder, 2026-09-25: *"remove stored on this
+              // machine"*): `stored on this machine` and `from your environment` were the
+              // seam's vocabulary printed at a person, and neither changes what they can do
+              // here. What stays is what does: a key this page cannot change, and the
+              // provider's own note when there is one to give.
               provider.writable === false ? t('settings.readOnly') : null,
-              provider.writable !== false && provider.source === STORED_SOURCE ? t('wallet.fromStore') : null,
-              provider.writable !== false && ENVIRONMENT_SOURCES.includes(provider.source) ? t('wallet.fromEnvironment') : null,
               provider.note ? t('note.' + provider.note) : null,
             ),
           ),
-          // The count line, immediately left of the add glyph (founder, 2026-09-23:
-          // *"Move Workflows 3 installed to left of + icon"*) — the two moved together.
-          h('span', { style: S.sectionMeta, 'data-generate-section-meta': provider.id }, meta),
-          // The section's own controls: add a workflow, then re-read the section. Both
-          // are glyphs, so both carry a hover tooltip (the harness's own bubble, not a
-          // native `title`) and an `aria-label` — the bubble is the sighted answer, the
-          // label is the one a screen reader reads (founder, 2026-09-23: *"add tooltip
-          // on hover for both"*).
+          // The block's own controls: add a workflow, then re-read the block. Both are
+          // glyphs, so both carry a hover tooltip (the harness's own bubble, not a native
+          // `title`) and an `aria-label` — the bubble is the sighted answer, the label is
+          // the one a screen reader reads (founder, 2026-09-23: *"add tooltip on hover for
+          // both"*).
           h(
             'span',
             { style: S.sectionActions },
@@ -3583,22 +4191,17 @@ window.__ModuleLoader__.load({
                   { label: t('pane.add.button'), side: 'bottom', delayMs: 500 },
                   h(
                     'span',
-                    { style: S.tipAnchor, 'data-generate-add-tip': provider.id },
+                    { ref: addRef, style: S.tipAnchor, 'data-generate-add-tip': provider.id },
                     h(Button, {
                       variant: 'ghost',
                       size: 'sm',
                       icon: h(IconPlusOutline16, { size: 14 }),
                       'aria-label': t('pane.add.button'),
                       'aria-expanded': addShown ? 'true' : 'false',
+                      'aria-haspopup': 'dialog',
                       'data-generate-add-button': provider.id,
                       style: { flex: 'none' },
-                      onClick: (event) => {
-                        // The prompt it reveals lives in the body, so a closed section
-                        // opens first: a click that changed nothing visible would read
-                        // as a control that does not work.
-                        if (!open) onToggle()
-                        setAddShown(!addShown)
-                      },
+                      onClick: () => setAddShown(!addShown),
                     }),
                   ),
                 ),
@@ -3621,33 +4224,119 @@ window.__ModuleLoader__.load({
             ),
           ),
         ),
-        open
+        // The body: this provider's workflows as the guide's entries, and the sentence that
+        // says there are none. The install prompt is no longer part of it — it floats in
+        // the popover below, so opening it cannot re-flow the cards.
+        h(
+          'div',
+          { style: S.sectionBody, 'data-generate-section-body': provider.id },
+          failed
+            ? h('div', { style: S.hint, 'data-generate-provider-failed': provider.id }, t('pane.list.failed'))
+            : h(
+                'div',
+                {
+                  style: S.sectionCards,
+                  'data-generate-cards': String(units.length),
+                  // The empty state is this container. Its one child is the sentence
+                  // that says so and names the facts line's glyph that fixes it, because
+                  // the add control is not here to explain itself.
+                  ...(units.length === 0 ? { 'data-generate-none': provider.id } : {}),
+                },
+                units.map((unit) => h(UnitCard, { key: unit.name, t, unit, onOpen })),
+                units.length === 0
+                  ? h('div', { style: S.hint, 'data-generate-section-empty': provider.id }, t('pane.section.empty'))
+                  : null,
+              ),
+        ),
+        // THE POPOVER: the prompt the add glyph opens, on the app's own menu card. It is a
+        // child of the block so a pointerdown inside it counts as inside the trigger's root,
+        // and `position: fixed` puts it over the pane rather than inside its scroll box.
+        addShown
           ? h(
               'div',
-              { style: S.sectionBody, 'data-generate-section-body': provider.id },
-              failed
-                ? h('div', { style: S.hint, 'data-generate-provider-failed': provider.id }, t('pane.list.failed'))
-                : h(
-                    'div',
-                    {
-                      style: S.sectionCards,
-                      'data-generate-cards': String(units.length),
-                      // The empty state is this container. Its one child is the sentence
-                      // that says so and names the header glyph that fixes it, because
-                      // the add control is no longer here to explain itself.
-                      ...(units.length === 0 ? { 'data-generate-none': provider.id } : {}),
-                    },
-                    units.map((unit) => h(UnitCard, { key: unit.name, t, unit, onOpen })),
-                    units.length === 0 && !addShown
-                      ? h('div', { style: S.hint, 'data-generate-section-empty': provider.id }, t('pane.section.empty'))
-                      : null,
-                    // The revealed prompt rides at the foot of the section, not only on
-                    // an empty one: a provider with three workflows still needs a way to
-                    // gain a fourth, and this is the only place in the pane that says how.
-                    addShown ? h(AddPromptPanel, { t, provider }) : null,
-                  ),
+              {
+                ref: popoverRef,
+                role: 'dialog',
+                'aria-label': t('pane.add.button'),
+                style: popoverAt
+                  ? { ...S.popover, left: popoverAt.left, top: popoverAt.top }
+                  // Before the first measurement it is laid out but unpainted, so the card
+                  // never flashes at the top-left corner of the window.
+                  : { ...S.popover, visibility: 'hidden' },
+                'data-generate-add-popover': provider.id,
+              },
+              h(AddPromptPanel, { t, provider }),
             )
           : null,
+      )
+    }
+
+    /**
+     * ONE WORKFLOW HEADER (founder, 2026-09-25: *"then below that are the generate workflows
+     * headers … styling for tab is: selected=border; unselected=no border"*).
+     *
+     * A component rather than a builder inside the pane, because a tab owns hover state and
+     * a hook may not be called from a loop: React counts hooks by position, and the row's
+     * length changes every time a tab opens or closes.
+     *
+     * The pill is the harness `Button`'s own `sm` capsule geometry (28px tall, a 14px radius,
+     * 12px text), with the label and the close as separate controls inside it — a button may
+     * not contain a button, so the tab is the box and the two things you can click are the
+     * children. The SELECTED tab draws the primitive's `outline` border; an unselected one
+     * keeps the same border transparent, so switching tabs moves no pixel.
+     *
+     * Every tab here stands for an open workflow, so every one of them closes: the start
+     * screen is not a tab (see the header's own comment), and it is reached with the plus.
+     *
+     * THE CLOSE IS HIDDEN ON AN UNSELECTED TAB (founder, 2026-09-25, with the row on screen:
+     * *"the pattern in dsh is when the tab is unselected there is no close icon"*). The row of
+     * `×` glyphs beside every name is what the founder saw. The app's own tab carries the rule
+     * in `_tabClose_11olo_411` — `opacity:0; pointer-events:none` at rest, revealed by
+     * `:hover`, `:focus-within` or the active tab — and this is that rule, moved to the class
+     * `.dsh-generate-tabClose` in the one injected sheet, because `:hover` and `:focus-within`
+     * are the two things inline styles cannot express. The close keeps its box either way (the
+     * rule hides it, it does not remove it), so a tab never changes width when it is selected.
+     */
+    function WorkflowTab({ t, label, selected, name, onOpen, onClose }) {
+      const [hover, hoverProps] = useHover()
+      return h(
+        'div',
+        {
+          style: {
+            ...S.tab,
+            ...(selected ? S.tabSelected : null),
+            ...(hover && !selected ? S.tabHover : null),
+          },
+          'data-generate-tab-pill': name,
+          'data-generate-tab-selected': selected ? 'yes' : 'no',
+          ...hoverProps,
+        },
+        h(
+          'button',
+          {
+            type: 'button',
+            style: S.tabLabel,
+            title: label,
+            'data-generate-tab': name,
+            onClick: onOpen,
+          },
+          label,
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            style: S.tabClose,
+            // Hidden until this tab is selected, hovered or focused — the app's own rule, in
+            // the injected sheet (see this component's comment).
+            className: 'dsh-generate-tabClose',
+            'aria-label': t('tabs.close'),
+            title: t('tabs.close'),
+            'data-generate-tab-close': name,
+            onClick: onClose,
+          },
+          '×',
+        ),
       )
     }
 
@@ -3655,13 +4344,14 @@ window.__ModuleLoader__.load({
       const t = translatorOf(props)
       const providers = useProviders()
       const units = useWorkflows(providers.providers)
-      // `null` means the user has not chosen; `{ provider, name }` opens that
-      // workflow's surface; `''` is the way back to the cards.
-      const [chosen, setChosen] = React.useState(null)
-      // Which accordion section is open, in the same three states: `null` is "not
-      // chosen yet" (the default below applies), `''` is "closed on purpose", and an id
-      // is that provider's section.
-      const [openId, setOpenId] = React.useState(null)
+      /**
+       * MULTI-WORKFLOW TABS: each opened workflow becomes a keep-alive tab.
+       * `openTabs` is an array of `{ provider, name }` objects. `activeTab` is the
+       * name of the visible tab, or `null` to show the card grid. All open surfaces
+       * stay mounted (CSS visibility only) so form values and run state persist.
+       */
+      const [openTabs, setOpenTabs] = React.useState([])
+      const [activeTab, setActiveTab] = React.useState(null)
 
       // A tab may be opened at a unit by an opener that passed `params.unit` — and
       // `params.provider` when there is more than one place it could live.
@@ -3669,11 +4359,32 @@ window.__ModuleLoader__.load({
       const params = tab && tab.tab && tab.tab.navigation ? tab.tab.navigation.params : null
       const asked = params && typeof params.unit === 'string' ? params.unit : null
       const askedProvider = params && typeof params.provider === 'string' ? params.provider : null
-      const opened =
-        asked === null
-          ? null
-          : units.units.find((unit) => unit.name === asked && (askedProvider === null || unit.provider === askedProvider)) || null
-      const active = chosen === null ? opened : chosen || null
+
+      // Open a workflow tab: add it to the list if not already there, activate it.
+      const openWorkflow = React.useCallback((providerId, name) => {
+        setOpenTabs((prev) => {
+          const exists = prev.some((t) => t.provider === providerId && t.name === name)
+          return exists ? prev : [...prev, { provider: providerId, name }]
+        })
+        setActiveTab(name)
+      }, [])
+
+      // Close a workflow tab: remove it and switch to the card grid.
+      const closeTab = React.useCallback((name) => {
+        setOpenTabs((prev) => prev.filter((t) => t.name !== name))
+        setActiveTab((current) => (current === name ? null : current))
+      }, [])
+
+      // Handle external opener (params.unit from a guide card). Runs synchronously
+      // during render so the surface is visible on the first paint.
+      if (asked !== null && openTabs.every((t) => t.name !== asked)) {
+        const unit = units.units.find((u) => u.name === asked && (askedProvider === null || u.provider === askedProvider))
+        if (unit) {
+          openTabs.push({ provider: unit.provider, name: unit.name })
+          // Sync the active tab without a state update (we are in render).
+          setActiveTab(unit.name)
+        }
+      }
 
       if (providers.phase === 'loading') {
         return h('div', { style: S.root, 'data-generate-pane': 'loading' }, h('div', { style: S.empty }, h('div', { style: S.body }, t('pane.loading'))))
@@ -3713,13 +4424,27 @@ window.__ModuleLoader__.load({
         shown.find((provider) => !provider.linked) ||
         shown[0] ||
         null
-      // The accordion's own bookkeeping: which units belong to which provider, and
-      // which section is open before anyone has clicked. The default is the first
-      // provider that actually has workflows — landing on four closed rows would hide
-      // the thing the pane exists for — and failing that, the first provider.
+      // Every provider shows at once, in registry order, and nothing folds.
       const unitsOf = (id) => units.units.filter((unit) => unit.provider === id)
-      const openDefault = (shown.find((provider) => unitsOf(provider.id).length > 0) || shown[0] || {}).id || null
-      const open = openId === null ? openDefault : openId
+
+      /**
+       * A TAB IS NAMED BY ITS WORKFLOW, NOT BY ITS FILE (founder, 2026-09-25): the adapter
+       * name is what the file is called, and on screen two Qwen apps truncated to the same
+       * "qwen-2-1-image-e…". The unit carries the title, so the title is the label, and the
+       * name is only the fallback for a tab whose adapter has since gone.
+       *
+       * A WORKFLOW MAY CARRY A SHORT LABEL FOR THE TAB (founder, the same day: *"the workflow
+       * tab fontsize too big, maybe we need to use different names in to make it easier to
+       * read. Qwen Duo / Qwen Multi / H3 F/L / Krea Raw / Krea Turbo / Krea Medium / Krea
+       * Large"*). The card keeps the name the workflow was given — a card is 380px wide and
+       * the name was chosen for it — and the narrow tab reads `ui.tabLabel` when the adapter
+       * authors one, falling back to that same title.
+       */
+      const labelOf = (open) => {
+        const unit = units.units.find((candidate) => candidate.provider === open.provider && candidate.name === open.name)
+        if (!unit) return open.name
+        return unit.tabLabel || unit.title
+      }
 
       // No provider linked yet: the pane asks for the first one's key. That is the
       // first-run screen a new install lands on, unchanged in shape.
@@ -3764,11 +4489,9 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { style: S.root, 'data-generate-pane': active === null ? 'home' : 'unit' },
-        // The link just happened. The dialog says the key works, that the provider
-        // answered, and where the balance went; the section header's own row is the
-        // thing the dialog is pointing at.
-        saved && active === null ? h(SaveDialog, { t, provider: saved, onClose: providers.forget }) : null,
+        { style: S.root, 'data-generate-pane': activeTab === null ? 'home' : 'unit' },
+        // The link just happened.
+        saved && activeTab === null ? h(SaveDialog, { t, provider: saved, onClose: providers.forget }) : null,
         linked
           .filter((provider) => provider.error)
           .map((provider) =>
@@ -3776,23 +4499,85 @@ window.__ModuleLoader__.load({
               'div',
               { key: provider.id, style: S.warn, role: 'alert' },
               h(IconWarningOutline16, { size: 14 }),
-              // A stored key that stopped working is a different fact from a field
-              // that was just typed into, and the fix is different too.
               h('span', null, provider.error === 'invalid-key' ? t('error.storedKeyRejected') : errorText(t, provider.error)),
             ),
           ),
-        // THE HOME SCREEN IS A STACKED ACCORDION, ONE SECTION PER PROVIDER (founder,
-        // 2026-09-23). All of them, linked or not, in the registry's own order: a
-        // provider with nothing installed is where its add card lives. One section is
-        // open at a time — opening a second closes the first, which is what keeps a
-        // four-provider pane short enough to read.
-        active === null
+        // THE HEADER: THE DSH STRIP'S OWN PATTERN, ONE ROW LOWER (founder, 2026-09-25:
+        // *"the separator is below the dsh tabs. then below that are the generate workflows
+        // headers … styling for tab is: selected=border; unselected=no border. then add
+        // button like dsh pattern"*, then *"the dsh pattern does not have all workflows, it
+        // uses add button to create new tab and uses start screen to add the tab. we can
+        // follow that pattern"* and *"same navigation but below the dsh navigation. same
+        // pattern but below the separator"*).
+        //
+        // So the row carries TABS OF OPEN WORKFLOWS and a plus, exactly as the strip above it
+        // carries tabs of open pages and a plus — no "All workflows" tab, because DSH has no
+        // such tab either. DSH's `addTab` opens the GUIDE tab, the start screen where a page
+        // is chosen and its tab made (`openTab(GUIDE_KIND, …)` in the sidebar's own actions);
+        // this plus does the same thing one level down: it shows the start screen — the
+        // workflow grid — and a card there is what opens a workflow's tab.
+        //
+        // The separator above this row is the DSH strip's own, so the row draws none of its
+        // own: the workflow headers are the first thing under that line.
+        //
+        // THE ROW IS ONLY THERE WHEN A WORKFLOW IS OPEN (founder, 2026-09-25: *"we don't need
+        // add icon here"*, on the start screen with a lone plus on an otherwise empty strip).
+        // The start screen is not a tab and needs nothing beside it, so with nothing open the
+        // pane goes straight from the separator to the grid. The plus stays where it means
+        // something: it is how a person gets back to that start screen from a workflow.
+        openTabs.length > 0
+          ? h(
+              'div',
+              { style: S.tabsBar, 'data-generate-header': 'yes' },
+              // One tab per opened workflow, named by its title (see `labelOf`).
+              ...openTabs.map((wt) =>
+                h(WorkflowTab, {
+                  key: wt.name,
+                  t,
+                  label: labelOf(wt),
+                  selected: activeTab === wt.name,
+                  name: wt.name,
+                  onOpen: () => setActiveTab(wt.name),
+                  onClose: () => closeTab(wt.name),
+                }),
+              ),
+              // THE ADD BUTTON, the DSH pattern: the plus that leads to the start screen, and
+              // it SAYS SO (founder, 2026-09-25: *"lets change + to +add to keep disinction"*)
+              // — a bare plus reads as the DSH strip's own add above it, and this one is not
+              // that: it opens the pane's start screen, where a workflow is chosen. The glyph
+              // carries the meaning and the word names it; the accessible name stays the whole
+              // sentence.
+              //
+              // AND IT WEARS THE SAME STATE A TAB DOES (founder, the same day: *"when I click +
+              // there should be border if we follow pattern"*): while the start screen is what
+              // the pane is showing, it draws the primitive's own `outline` pair — the exact
+              // border a selected tab draws — so "which view am I on" reads the same on both
+              // controls. With a workflow selected it is a plain ghost.
+              h(
+                'span',
+                { style: S.tipAnchor, 'data-generate-add-tab': 'yes' },
+                h(
+                  Button,
+                  {
+                    variant: activeTab === null ? 'outline' : 'ghost',
+                    size: 'sm',
+                    icon: h(IconPlusOutline16, { size: 14 }),
+                    'aria-label': t('tabs.add'),
+                    title: t('tabs.add'),
+                    'data-generate-tab-add': 'yes',
+                    onClick: () => setActiveTab(null),
+                  },
+                  t('tabs.addLabel'),
+                ),
+              ),
+            )
+          : null,
+        // THE DASHBOARD: visible when no tab is active. One block per provider — the
+        // caption, the facts, the entries — separated by air, not by hairlines.
+        activeTab === null
           ? h(
               'div',
               { style: S.sections, 'data-generate-sections': String(shown.length) },
-              // A host that cannot answer says so, and the sections under the sentence
-              // still carry each provider's light and its balance: a failed workflow read
-              // is not a reason to hide what the wallet says.
               units.phase === 'failed'
                 ? h(
                     'div',
@@ -3802,19 +4587,13 @@ window.__ModuleLoader__.load({
                   )
                 : null,
               shown.map((provider) =>
-                h(ProviderSection, {
+                h(ProviderGroup, {
                   key: provider.id,
                   t,
                   provider,
                   units: unitsOf(provider.id),
-                  // A read that failed for everyone fills no section with an empty state
-                  // and offers no add card, because neither fact is known.
                   failed: units.phase === 'failed' || units.failed.indexOf(provider.id) !== -1,
-                  open: open === provider.id,
-                  onToggle: () => setOpenId(open === provider.id ? '' : provider.id),
-                  onOpen: (id, name) => setChosen({ provider: id, name }),
-                  // Both reads again, from the section's own header: the wallet statuses
-                  // and the installed lists.
+                  onOpen: (id, name) => openWorkflow(id, name),
                   onRefresh: () => {
                     providers.load()
                     units.reload()
@@ -3822,29 +4601,28 @@ window.__ModuleLoader__.load({
                 }),
               ),
             )
-          : h(WorkflowSurface, {
-              key: active.provider + '/' + active.name,
+          : null,
+        // KEEP-ALIVE WORKFLOW SURFACES: every open tab stays mounted; only the active
+        // one is visible. This preserves form values and run state when switching tabs.
+        ...openTabs.map((wt) =>
+          h('div', {
+            key: 'surface-' + wt.name,
+            style: { display: activeTab === wt.name ? 'block' : 'none' },
+            'data-generate-surface-wrapper': wt.name,
+          },
+            h(WorkflowSurface, {
               t,
-              provider: active.provider,
-              name: active.name,
-              // Whether this provider can turn a picked file into a URL. The pane knows the
-              // rows it drew, so it says; the surface does not guess from the id.
-              canUpload: !!((providers.providers || []).find((row) => row.id === active.provider) || {}).upload,
-              // The provider's own run modes (RunningHub's `instanceType`), on the same
-              // rule: the pane read the row, so the run control draws a split button from
-              // what that row declared rather than from the provider's id.
-              runOption: ((providers.providers || []).find((row) => row.id === active.provider) || {}).runOption || null,
-              onBack: () => setChosen(''),
+              provider: wt.provider,
+              name: wt.name,
+              canUpload: !!((providers.providers || []).find((row) => row.id === wt.provider) || {}).upload,
+              runOption: ((providers.providers || []).find((row) => row.id === wt.provider) || {}).runOption || null,
             }),
-        active === null
+          ),
+        ),
+        activeTab === null
           ? h(
               'div',
               { style: S.sectionNotes },
-              // The directions sit under the screen they explain, not at the top of
-              // the pane: this is the surface a person returns to when they rotate
-              // the key. How to ADD a workflow is no longer a sentence here — it lives
-              // on the add button in each section, which is also the control that
-              // hands over the prompt.
               h(Note, {
                 text: t('pane.linked.manage'),
                 attrs: { 'data-generate-manage-hint': 'yes' },
@@ -4457,9 +5235,25 @@ window.__ModuleLoader__.load({
         h(LibraryFolder, { t, library }),
       )
     }
-    /** The chip's live text. Thunked copy is read again on every use, not captured. */
+    /**
+     * The chip's live text, with the tab's own glyph in front of it (founder, 2026-09-25:
+     * *"add sparkles icon to generate tab at top to match other dsh tabs"*). The guide tab
+     * draws its compass exactly this way — glyph, then label — so a Generate tab reads as one
+     * of the app's own tabs rather than as a bare word. The glyph is the same sparkle the
+     * start-page card wears; only the ink differs, because a tab title is chrome and the card
+     * is the product's own door.
+     */
     function GenerateTitle(props) {
-      return translatorOf(props)('type.label')
+      return h(
+        React.Fragment,
+        null,
+        h(
+          'span',
+          { style: S.tabTitleIcon, 'data-generate-title-icon': 'yes', 'aria-hidden': true },
+          h(IconSparkle16, { size: 16 }),
+        ),
+        translatorOf(props)('type.label'),
+      )
     }
 
     /**
@@ -4525,7 +5319,18 @@ window.__ModuleLoader__.load({
         style.textContent =
           '@keyframes dsh-generate-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }\n' +
           '.dsh-generate-spin { animation: dsh-generate-spin 0.9s linear infinite; }\n' +
-          '@media (prefers-reduced-motion: reduce) { .dsh-generate-spin { animation: none; } }'
+          '@media (prefers-reduced-motion: reduce) { .dsh-generate-spin { animation: none; } }\n' +
+          // A TAB'S CLOSE SHOWS ONLY ON THE SELECTED, THE HOVERED OR THE FOCUSED TAB (founder,
+          // 2026-09-25: *"the pattern in dsh is when the tab is unselected there is no close
+          // icon"*). Copied from the app's own `_tabClose_11olo_411`, which is
+          // `opacity:0;pointer-events:none` at rest and `:hover` / `:focus-within` / active
+          // otherwise. Opacity, not `visibility` or `display`, so the glyph keeps its 18px box
+          // and a tab never changes width when it becomes the active one.
+          '.dsh-generate-tabClose { opacity: 0; pointer-events: none; }\n' +
+          '[data-generate-tab-pill]:hover .dsh-generate-tabClose,\n' +
+          '[data-generate-tab-pill]:focus-within .dsh-generate-tabClose,\n' +
+          '[data-generate-tab-pill][data-generate-tab-selected="yes"] .dsh-generate-tabClose' +
+          ' { opacity: 1; pointer-events: auto; }'
         document.head.appendChild(style)
         return () => {
           style.remove()

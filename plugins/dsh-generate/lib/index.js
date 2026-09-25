@@ -152,6 +152,14 @@ const SKILLS = [
       'Use when the user wants to design, change or review how a workflow\'s screen looks in the Generate panel — which doors show, what they are called, what the button says — rather than to install one.',
     file: fileURLToPath(new URL('../skills/design-generate-screen/SKILL.md', import.meta.url)),
   },
+  {
+    name: 'subject-swap',
+    description:
+      'Swap the outfit from one photo onto a person in another using the Qwen 2.1 Image Edit workflow. The user provides two images; you run the workflow.',
+    whenToUse:
+      'Use when the user wants to swap, transfer or put an outfit/garment from one image onto a person in another image — "swap the outfit", "put this dress on her", "outfit swap", "subject swap", "clothing transfer".',
+    file: fileURLToPath(new URL('../skills/subject-swap/SKILL.md', import.meta.url)),
+  },
 ]
 
 function str(value) {
@@ -833,12 +841,19 @@ export function apply(ctx, config = {}) {
       send(res, status, { error: read.error, detail: read.detail || null })
       return
     }
-    // `runnable` is the PROVIDER's fact, added here rather than in the adapter file: an
-    // adapter describes an app, and whether this plugin can spend on it is a property of
-    // the provider behind it (Krea could always run; RunningHub could not until 2026-09-23).
-    // The surface draws the run control from this flag, so a provider that cannot run keeps
-    // saying "running comes next" instead of offering a button that would 501.
-    send(res, 200, { ...read.adapter, runnable: provider.runnable === true })
+    // `runnable`, `canCancel` and `canQueue` are the PROVIDER's facts, added here
+    // rather than in the adapter file: an adapter describes an app, and whether this
+    // plugin can spend on it — or stop it, or read the account's queue — is a property
+    // of the provider behind it (Krea could always run; RunningHub could not until
+    // 2026-09-23; cancel and queue arrived the same day). The surface draws the run
+    // control, the cancel button and the queue band from these flags, so a provider
+    // that has none keeps saying so instead of offering controls that would 501.
+    send(res, 200, {
+      ...read.adapter,
+      runnable: provider.runnable === true,
+      canCancel: typeof provider.cancelRun === 'function',
+      canQueue: typeof provider.queueStatus === 'function',
+    })
   }
 
   /**
@@ -1044,6 +1059,125 @@ export function apply(ctx, config = {}) {
     send(res, 200, started)
   }
 
+  /**
+   * ASK to cancel a run. No `confirmed` flag: a cancel spends nothing, it stops spend —
+   * a gate in front of it would be a dialog that protects nothing. The answer is
+   * fire-and-ask (the API accepts the request, it does not promise the GPU stopped),
+   * so `200 { ok: true }` means "asked", and the pane keeps polling until the status
+   * itself settles — a cancel that raced a finishing task still shows the result.
+   */
+  const providerCancel = async (provider, req, res) => {
+    const method = (req.method || 'POST').toUpperCase()
+    if (method !== 'POST') {
+      methodNotAllowed(res, 'POST')
+      return
+    }
+    if (typeof provider.cancelRun !== 'function') {
+      send(res, 501, { error: 'unsupported', detail: 'this provider cannot cancel a run' })
+      return
+    }
+    const body = await readJsonBody(req)
+    if (body === undefined) {
+      send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
+      return
+    }
+    const jobId = str(body.jobId)
+    if (jobId === null) {
+      send(res, 400, { error: 'bad-request', detail: 'jobId names the run to cancel' })
+      return
+    }
+    const key = await providerKeyValue(provider)
+    if (key.error) {
+      send(res, key.error === 'no-key' ? 400 : 500, { error: key.error })
+      return
+    }
+    const cancelled = await provider.cancelRun({ jobId, key: key.key })
+    if (cancelled.error) {
+      // 807 — the task is already gone (finished, or cancelled before): an answer the
+      // pane turns into "settle on the next poll", not an error to shout about.
+      const status = cancelled.error === 'job-not-found' ? 404 : cancelled.error === 'invalid-key' ? 401 : 502
+      send(res, status, cancelled)
+      return
+    }
+    send(res, 200, { ok: true })
+  }
+
+  /**
+   * READ the account's queue for the band under the preview card: how many tasks run,
+   * how many wait, the key's concurrency ceiling. A GET like every read, and every
+   * failure answers its own error — the band treats any non-200 as "no band" rather
+   * than as a message, because their spec marks this endpoint `developing` and a
+   * component showing nothing is the honest answer to an endpoint that says nothing.
+   */
+  const providerQueue = async (provider, req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    if (method !== 'GET') {
+      methodNotAllowed(res, 'GET')
+      return
+    }
+    if (typeof provider.queueStatus !== 'function') {
+      send(res, 501, { error: 'unsupported', detail: 'this provider has no queue endpoint' })
+      return
+    }
+    const key = await providerKeyValue(provider)
+    if (key.error) {
+      send(res, key.error === 'no-key' ? 400 : 500, { error: key.error })
+      return
+    }
+    const queue = await provider.queueStatus({ key: key.key })
+    if (queue.error) {
+      send(res, queue.error === 'invalid-key' ? 401 : 502, queue)
+      return
+    }
+    send(res, 200, queue)
+  }
+
+  /**
+   * Per-workflow state persist. The surface saves every value change, and opens with the
+   * last-saved values — so a person who switches the aspect ratio once keeps it the next
+   * time they open the same workflow. The file lives at
+   * `<profile>/<provider>/state/<workflow-name>.json`, and the route is method-agnostic:
+   * GET returns the saved values (or {}), POST writes them.
+   */
+  const providerState = async (provider, req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    const url = new URL(req.url || '/', 'http://127.0.0.1')
+    const name = method === 'GET'
+      ? str(url.searchParams.get('name'))
+      : str((req.body && req.body.name) || '')
+    if (!name) {
+      send(res, 400, { error: 'missing-name', detail: 'a workflow name is required' })
+      return
+    }
+    const stateDir = join(provider.root, 'state')
+    const file = join(stateDir, name + '.json')
+
+    if (method === 'GET') {
+      try {
+        const data = await readFile(file, 'utf8')
+        send(res, 200, JSON.parse(data))
+      } catch {
+        send(res, 200, {})
+      }
+      return
+    }
+
+    if (method === 'POST') {
+      const values = req.body && req.body.values
+      if (!values || typeof values !== 'object' || Array.isArray(values)) {
+        send(res, 400, { error: 'missing-values', detail: 'values must be an object' })
+        return
+      }
+      const { mkdir, writeFile } = await import('node:fs/promises')
+      await mkdir(stateDir, { recursive: true })
+      await writeFile(file, JSON.stringify(values, null, 2))
+      send(res, 200, { ok: true })
+      return
+    }
+
+    methodNotAllowed(res, 'GET,POST')
+  }
+
   /** `/providers/<id>/<action>`, with the provider resolved before any work happens. */
   const route = async (req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1')
@@ -1092,6 +1226,30 @@ export function apply(ctx, config = {}) {
 
     if (action === 'run') {
       await providerRun(provider, req, res)
+      return
+    }
+
+    // Per-workflow state persist: the surface writes every value change, and opens with the
+    // last-saved values — so a person who switches the aspect ratio once keeps it the next
+    // time they open the same workflow.
+    if (action === 'state') {
+      await providerState(provider, req, res)
+      return
+    }
+
+    // The cancel the preview's strip asks for, and the queue the band under it reads.
+    // Capability is method-presence, the same rule as the run above: a provider
+    // without the method answers 501, and the workflow answer's `canCancel` /
+    // `canQueue` flags tell the surface whether to draw either control at all
+    // (founder, 2026-09-23: *"lets design a cancel button inside the preview & a
+    // queue component under the preview card"*).
+    if (action === 'cancel') {
+      await providerCancel(provider, req, res)
+      return
+    }
+
+    if (action === 'queue') {
+      await providerQueue(provider, req, res)
       return
     }
 
