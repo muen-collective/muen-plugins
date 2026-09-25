@@ -699,8 +699,9 @@ export function apply(ctx, config = {}) {
         role: 'user',
         content: [{ type: 'text', text }],
         source: {
-          kind: 'plugin',
-          plugin: PLUGIN,
+          // Session format v4 retired the wrapper form `{ kind: 'plugin', plugin }`
+          // and refuses it on admission; a plugin's own kind is `plugin:<name>`.
+          kind: `plugin:${PLUGIN}`,
           form: 'snapshot',
           sections: entry.sections,
         },
