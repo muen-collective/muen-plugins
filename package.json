@@ -13,8 +13,10 @@
     "pack:browser-skill": "npm pack --pack-destination dist ./plugins/dsh-browser-skill",
     "pack:turn-summary": "npm pack --pack-destination dist ./plugins/dsh-turn-summary",
     "pack:changes-card": "npm pack --pack-destination dist ./plugins/dsh-changes-card",
+    "pack:cms": "npm pack --pack-destination dist ./plugins/dsh-cms",
     "pack:codex-fold": "npm pack --pack-destination dist ./plugins/dsh-codex-fold",
     "pack:context-watchdog": "npm pack --pack-destination dist ./plugins/dsh-context-watchdog",
+    "pack:fast-context": "npm pack --pack-destination dist ./plugins/dsh-fast-context",
     "test": "node --test tests/*.test.mjs"
   }
 }
