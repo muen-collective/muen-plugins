@@ -126,6 +126,28 @@ is said out loud:
 reads its source to confirm it consumes exactly those three params. Shipped alone, that last check says so
 instead of failing.
 
+## Looking at one picture closely (epic 63 A4)
+
+**Zoom is arithmetic, not WebGL.** The hard part — keeping the point under the cursor under the
+cursor — is pure functions (`fitScale`, `fitView`, `zoomAt`, `panBy`, `oneToOne`) kept out of the
+component so they can be asserted as arithmetic: `verify/inspect.mjs` checks the invariant over a
+matrix of cursors and factors, not one example. **The range is the contract: 0.2 to 8, and at a
+limit the view comes back UNCHANGED — scale and offset both** — which is what stops a wheel at the
+floor from walking the picture a pixel at a time. `fitScale` never magnifies past 1:1 (a small
+picture is shown at its own size) and a fit is deliberately NOT clamped to the zoom floor, because
+a fit that refused to go below it would open a 10,000-pixel plate as a crop.
+
+The stage sits in the metadata block, above the facts: the picture is **fitted and centred**,
+the wheel zooms about the cursor, a drag pans, and **1:1 asks for the original file** — the stage
+draws the `&w=1024` preview until you ask, because a grid of tiles should never cost originals.
+The frame is measured with a `ResizeObserver`, so the fit follows the pane as it resizes (docked,
+split, fullscreen). Compare is deliberately **not** in this slice — the OS cut it on purpose and
+the founder's word is what would turn it on.
+
+**The arithmetic is exposed on the plugin's own exports** (`zoom`) as a deliberate test seam: the
+client half is one self-contained script that cannot import a sibling module, so this is what lets
+the suite assert the math without rendering.
+
 ## What the picture itself carries (epic 64 S8)
 
 A picture is not only pixels. ComfyUI writes its graph into the PNG it saves, and RunningHub
@@ -167,6 +189,7 @@ node verify/intake.mjs     # A2: the folders, the records, the filters, the carr
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, the carrier       37
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
+node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36
 ```
 
 The suites share `verify/harness.mjs`: a reporter, the server fakes, and enough React to render a

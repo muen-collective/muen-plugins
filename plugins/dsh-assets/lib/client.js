@@ -100,6 +100,10 @@ window.__ModuleLoader__.load({
       // WHAT THE FILE ITSELF CARRIES (epic 64 S8): a graph makes a picture openable in a local
       // ComfyUI, so it is a fact about the asset. Three answers, not two — a format the library
       // cannot read says so rather than claiming there is no graph.
+      'stage.hint': 'Scroll to zoom · drag to pan',
+      'stage.fit': 'Fit',
+      'stage.one': '1:1',
+      'stage.oneHint': 'Show the picture at its own pixels, at full resolution',
       'meta.carrier': 'Graph inside',
       'meta.carrier.yes': 'Yes — {nodes} nodes',
       'meta.carrier.no': 'No — only the provider’s label',
@@ -165,6 +169,10 @@ window.__ModuleLoader__.load({
       'meta.date': '日期',
       'meta.context': '情境',
       'meta.where': '位置',
+      'stage.hint': '滚轮缩放 · 拖拽平移',
+      'stage.fit': '适应',
+      'stage.one': '1:1',
+      'stage.oneHint': '按原始像素、全分辨率显示',
       'meta.carrier': '内嵌工作流图',
       'meta.carrier.yes': '有 —— {nodes} 个节点',
       'meta.carrier.no': '没有 —— 只有提供方的标记',
@@ -239,6 +247,13 @@ window.__ModuleLoader__.load({
       toggleButton: { display: 'inline-flex', alignItems: 'center', gap: 4, border: 0, borderRadius: 6, padding: '3px 7px', cursor: 'pointer', font: 'inherit', fontSize: 11.5 },
       meta: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l2)', paddingTop: 10 },
       metaHead: { color: 'var(--dsw-alias-label-primary)', fontSize: 12.5, fontWeight: 600 },
+      // THE INSPECT STAGE (epic 63 A4): the picture in a frame of its own, above the facts.
+      stage: { position: 'relative', width: '100%', height: 280, overflow: 'hidden', borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))', cursor: 'grab', touchAction: 'none' },
+      stageImage: { position: 'absolute', top: 0, left: 0, transformOrigin: '0 0', maxWidth: 'none', maxHeight: 'none', display: 'block', userSelect: 'none' },
+      stageControls: { position: 'absolute', right: 6, bottom: 6, display: 'flex', alignItems: 'center', gap: 4, padding: '3px 5px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)', border: '1px solid var(--dsw-alias-border-l2)' },
+      stageHint: { position: 'absolute', left: 8, bottom: 8, color: 'var(--dsw-alias-label-tertiary)', fontSize: 10.5, pointerEvents: 'none' },
+      stageButton: { border: 0, background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 11.5, padding: '2px 6px', borderRadius: 6, cursor: 'pointer' },
+      stageScale: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, minWidth: 34, textAlign: 'center', fontVariantNumeric: 'tabular-nums' },
       metaRow: { display: 'flex', gap: 10, justifyContent: 'space-between', minWidth: 0 },
       metaKey: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11.5, whiteSpace: 'nowrap' },
       metaValue: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, textAlign: 'right', overflowWrap: 'anywhere', minWidth: 0 },
@@ -294,6 +309,93 @@ window.__ModuleLoader__.load({
       if (bytes < 1024) return bytes + ' B'
       if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB'
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+    }
+
+    // ── the inspect stage's arithmetic (epic 63 A4) ────────────────────────────
+    //
+    // ZOOM IS ARITHMETIC, NOT WEBGL, and the hard part — keeping the point under the cursor
+    // under the cursor — is pure functions kept OUT of the component so they can be asserted
+    // without rendering. The range is the stage's contract: 0.2 to 8, and a wheel AT a limit
+    // returns the view UNCHANGED, scale and offset both, so scrolling at the floor cannot
+    // drift the picture a pixel at a time.
+    const ZOOM_MIN = 0.2
+    const ZOOM_MAX = 8
+
+    /** A scale inside the interaction range. */
+    function clampZoom(scale, min = ZOOM_MIN, max = ZOOM_MAX) {
+      if (!Number.isFinite(scale)) return min
+      return Math.min(max, Math.max(min, scale))
+    }
+
+    /**
+     * The scale a picture opens at: the largest that fits the frame, and never magnified past
+     * 1:1 — a small picture is shown at its own size rather than blown up to fill the stage.
+     *
+     * A fit is NOT clamped to the zoom floor. The floor belongs to the wheel (it is where a
+     * person stops zooming OUT); a fit that refused to go below it would open a 10,000-pixel
+     * plate as a crop, which is the one thing "fit" promises not to do.
+     */
+    function fitScale(natural, frame) {
+      if (!natural || !frame) return 1
+      const nw = Number(natural.width)
+      const nh = Number(natural.height)
+      const fw = Number(frame.width)
+      const fh = Number(frame.height)
+      if (!(nw > 0) || !(nh > 0) || !(fw > 0) || !(fh > 0)) return 1
+      return Math.min(1, fw / nw, fh / nh)
+    }
+
+    /** The offset that centres a picture of this natural size in the frame at this scale. */
+    function centreOffset(natural, frame, scale) {
+      const nw = natural && Number(natural.width) > 0 ? Number(natural.width) : 0
+      const nh = natural && Number(natural.height) > 0 ? Number(natural.height) : 0
+      const fw = frame && Number(frame.width) > 0 ? Number(frame.width) : 0
+      const fh = frame && Number(frame.height) > 0 ? Number(frame.height) : 0
+      return { x: (fw - nw * scale) / 2, y: (fh - nh * scale) / 2 }
+    }
+
+    /** The view a picture opens at: fitted, centred. */
+    function fitView(natural, frame) {
+      const scale = fitScale(natural, frame)
+      return { scale, offset: centreOffset(natural, frame, scale) }
+    }
+
+    /**
+     * Zoom about a point, keeping the picture point under it exactly there.
+     *
+     * `p = (cursor - offset) / scale` is the point in the picture that is under the cursor;
+     * after the zoom it must satisfy `cursor = p * scale' + offset'`. At a limit the input
+     * comes back unchanged — including the offset — which is the property that makes the
+     * limits feel like a wall rather than a slow leak.
+     */
+    function zoomAt(view, factor, cursor, min = ZOOM_MIN, max = ZOOM_MAX) {
+      const from = view && view.scale ? view.scale : 1
+      const offset = { x: (view && view.offset && view.offset.x) || 0, y: (view && view.offset && view.offset.y) || 0 }
+      const next = clampZoom(from * factor, min, max)
+      if (next === from) return { scale: from, offset: { x: offset.x, y: offset.y } }
+      const ratio = next / from
+      const at = { x: (cursor && cursor.x) || 0, y: (cursor && cursor.y) || 0 }
+      return { scale: next, offset: { x: at.x - (at.x - offset.x) * ratio, y: at.y - (at.y - offset.y) * ratio } }
+    }
+
+    /** Drag: the picture follows the hand, and the scale does not move. */
+    function panBy(view, delta) {
+      const scale = view && view.scale ? view.scale : 1
+      const offset = { x: (view && view.offset && view.offset.x) || 0, y: (view && view.offset && view.offset.y) || 0 }
+      return { scale, offset: { x: offset.x + ((delta && delta.x) || 0), y: offset.y + ((delta && delta.y) || 0) } }
+    }
+
+    /**
+     * 1:1 — the picture at its own pixels, with `focus` (a point in picture coordinates, the
+     * middle by default) left in the middle of the frame.
+     */
+    function oneToOne(natural, frame, focus = null) {
+      const nw = natural && Number(natural.width) > 0 ? Number(natural.width) : 0
+      const nh = natural && Number(natural.height) > 0 ? Number(natural.height) : 0
+      const fw = frame && Number(frame.width) > 0 ? Number(frame.width) : 0
+      const fh = frame && Number(frame.height) > 0 ? Number(frame.height) : 0
+      const at = focus === null ? { x: nw / 2, y: nh / 2 } : { x: Number(focus.x) || 0, y: Number(focus.y) || 0 }
+      return { scale: 1, offset: { x: fw / 2 - at.x, y: fh / 2 - at.y } }
     }
 
     /** The name without its extension: a picture is called by what it is, not by its format. */
@@ -483,6 +585,120 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /** The extensions the browser can draw. A clip gets its facts and no stage. */
+    const PICTURE_EXT = /^(png|jpe?g|webp|gif|avif|tiff?|bmp|heic)$/i
+
+    /**
+     * THE INSPECT STAGE (epic 63 A4): the selected picture, fitted, zoomable about the cursor,
+     * draggable, with its own pixels one press away.
+     *
+     * THE MATH IS NOT HERE — `fitView`, `zoomAt`, `panBy` and `oneToOne` are pure functions
+     * above this component, so "the point under the cursor stays under the cursor" is asserted
+     * without rendering anything (verify/inspect.mjs does exactly that, and the factory exposes
+     * them for it). What this component owns is the parts that need a browser: measuring the
+     * frame, turning a wheel event into a cursor, and holding the drag.
+     *
+     * PROGRESSIVE: it draws the 320–1024px preview the file route can make, and the 1:1 control
+     * asks for the ORIGINAL — which is what a person inspecting focus wants, and is not what a
+     * grid of tiles should ever cost.
+     */
+    function InspectStage({ detail, t }) {
+      const frameRef = React.useRef(null)
+      const [frame, setFrame] = React.useState({ width: 0, height: 0 })
+      const [full, setFull] = React.useState(false)
+      const drag = React.useRef(null)
+      const natural = detail && detail.dimensions && detail.dimensions.width > 0 ? detail.dimensions : null
+      const [view, setView] = React.useState(() => fitView(natural, { width: 0, height: 0 }))
+
+      // The frame is MEASURED: the pane resizes (docked, split, fullscreen) and the fit follows
+      // it. Without a ResizeObserver the stage opens at 1:1, which is a picture, not a blank.
+      React.useEffect(() => {
+        if (typeof ResizeObserver !== 'function' || !frameRef.current) return () => {}
+        const observer = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const box = entry.contentRect || {}
+            setFrame({ width: Number(box.width) || 0, height: Number(box.height) || 0 })
+          }
+        })
+        observer.observe(frameRef.current)
+        return () => observer.disconnect()
+      }, [detail && detail.path])
+
+      // A new picture, a new frame, or the full-resolution swap: back to the fit.
+      React.useEffect(() => {
+        setView(fitView(natural, frame))
+      }, [detail && detail.path, frame.width, frame.height])
+
+      const src = (width) => '/plugins/assets/file?path=' + encodeURIComponent(detail.path) + (width ? '&w=' + width : '')
+
+      /** A wheel event, in the stage's own coordinates. */
+      const onWheel = (event) => {
+        const box = event && event.currentTarget && event.currentTarget.getBoundingClientRect ? event.currentTarget.getBoundingClientRect() : { left: 0, top: 0 }
+        const cursor = { x: (event && event.clientX ? event.clientX : 0) - (box.left || 0), y: (event && event.clientY ? event.clientY : 0) - (box.top || 0) }
+        const factor = (event && event.deltaY ? event.deltaY : 0) < 0 ? 1.1 : 1 / 1.1
+        setView((current) => zoomAt(current, factor, cursor))
+      }
+      const onPointerDown = (event) => {
+        drag.current = { x: (event && event.clientX) || 0, y: (event && event.clientY) || 0 }
+      }
+      const onPointerMove = (event) => {
+        if (drag.current === null) return
+        const at = { x: (event && event.clientX) || 0, y: (event && event.clientY) || 0 }
+        const delta = { x: at.x - drag.current.x, y: at.y - drag.current.y }
+        drag.current = at
+        setView((current) => panBy(current, delta))
+      }
+      const onPointerUp = () => {
+        drag.current = null
+      }
+      const scale = view && view.scale ? view.scale : 1
+      const offset = (view && view.offset) || { x: 0, y: 0 }
+      return h(
+        'div',
+        {
+          ref: frameRef,
+          style: S.stage,
+          'data-assets-stage': 'yes',
+          'data-assets-stage-scale': String(scale),
+          'data-assets-stage-full': full ? 'yes' : 'no',
+          onWheel,
+          onPointerDown,
+          onPointerMove,
+          onPointerUp,
+          onPointerLeave: onPointerUp,
+        },
+        h('img', {
+          style: { ...S.stageImage, transform: 'translate(' + offset.x + 'px, ' + offset.y + 'px) scale(' + scale + ')' },
+          src: src(full ? null : 1024),
+          alt: '',
+          draggable: false,
+          'data-assets-stage-image': 'yes',
+        }),
+        h('span', { style: S.stageHint }, t('stage.hint')),
+        h(
+          'div',
+          { style: S.stageControls },
+          h('span', { style: S.stageScale, 'data-assets-stage-label': 'yes' }, String(Math.round(scale * 100)) + '%'),
+          h('button', { type: 'button', style: S.stageButton, title: t('stage.fit'), 'data-assets-stage-fit': 'yes', onClick: () => setView(fitView(natural, frame)) }, t('stage.fit')),
+          h(
+            'button',
+            {
+              type: 'button',
+              style: S.stageButton,
+              title: t('stage.oneHint'),
+              'data-assets-stage-one': 'yes',
+              onClick: () => {
+                // 1:1 IS the full-resolution ask: the preview cannot show a pixel it does not have.
+                setFull(true)
+                setView(oneToOne(natural, frame))
+              },
+            },
+            t('stage.one'),
+          ),
+        ),
+      )
+    }
+
     /**
      * THE METADATA BLOCK: what the catalog job is for.
      *
@@ -530,10 +746,13 @@ window.__ModuleLoader__.load({
             [t('meta.settled'), provenance.settledAt || provenance.at || '—'],
           ]
         : []
+      const picture = detail.where === 'present' && PICTURE_EXT.test(String(detail.ext || ''))
       return h(
         'div',
         { style: S.meta, 'data-assets-meta': 'yes' },
         h('span', { style: S.metaHead }, t('meta.title')),
+        // The stage first: the facts describe the picture, so the picture leads.
+        picture ? h(InspectStage, { detail, t }) : null,
         ...rows.map(([key, value]) => h('div', { key: 'f:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
         provenance
           ? h(
@@ -917,6 +1136,12 @@ window.__ModuleLoader__.load({
       )
     }
 
-    return { inject, apply }
+    /**
+     * `zoom` is a TEST SEAM and it is deliberate: the client half is one self-contained script,
+     * so the pure arithmetic cannot live in a module a suite could import. Exposing it here is
+     * what lets verify/inspect.mjs assert "the point under the cursor stays under the cursor"
+     * as arithmetic rather than by rendering and squinting at a transform.
+     */
+    return { inject, apply, zoom: { ZOOM_MIN, ZOOM_MAX, clampZoom, fitScale, fitView, centreOffset, zoomAt, panBy, oneToOne } }
   },
 })
