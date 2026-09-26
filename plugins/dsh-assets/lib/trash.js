@@ -32,12 +32,31 @@ export function canTrash(platform = process.platform) {
 /**
  * Finder's own delete, so the file lands in the Trash this machine actually uses.
  *
- * `delete POSIX file (item 1 of argv)` answers with a reference to the trashed item; the script
- * returns a word rather than the reference so the answer is a fact and not an AppleScript object.
+ * THE COERCION IS NOT ADDRESSED TO FINDER, and that is the whole of the 2026-09-26 fix. `POSIX
+ * file` is a **Standard Additions** term and has to be resolved by the script itself — which is
+ * how this plugin's sibling verb already resolves it, at the top level of its handler
+ * (`lib/folder-actions.js`, `choose folder`). Written INSIDE `tell application "Finder"`, the same
+ * words are read as Finder's own terminology; Finder's dictionary on macOS 26 (`Finder.sdef`)
+ * defines no `POSIX file`, so AppleScript sent that term to Finder as an event and Finder
+ * answered
+ *
+ *   Finder got an error: Can't get POSIX file "…". (-1728)
+ *
+ * The file never moved and the route answered `500 trash-failed`, which the pane printed as *The
+ * Trash refused it*: a confirmation that worked and a delete that did nothing. Building the alias
+ * FIRST, in the script's own context, hands Finder the one thing its `delete` command asks for — a
+ * `specifier` to an item.
+ *
+ * `verify/intake.mjs` pins the shape rather than the sentence: the term must be resolved before
+ * the script ever addresses Finder.
+ *
+ * The script returns a word rather than the reference Finder hands back, so what the route reads
+ * is a fact and not an AppleScript object.
  */
 const FINDER_DELETE = [
   'on run argv',
-  '  tell application "Finder" to delete POSIX file (item 1 of argv)',
+  '  set theFile to (POSIX file (item 1 of argv)) as alias',
+  '  tell application "Finder" to delete theFile',
   '  return "trashed"',
   'end run',
 ].join('\n')

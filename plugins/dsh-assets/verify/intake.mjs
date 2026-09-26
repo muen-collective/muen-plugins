@@ -31,6 +31,7 @@ import { pathToFileURL } from 'node:url'
 import { ROOT, callRoute, fakeServer, reporter } from './harness.mjs'
 
 const { chooseStart } = await import(pathToFileURL(join(ROOT, 'lib/folder-actions.js')).href)
+const { canTrash, trashFile } = await import(pathToFileURL(join(ROOT, 'lib/trash.js')).href)
 const FOLDERS_PATH = '/plugins/assets/folders'
 const CATALOG_PATH = '/plugins/assets/catalog'
 const DETAIL_PATH = '/plugins/assets/detail'
@@ -384,6 +385,46 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
   // fixture that quietly grew one would be testing a different library from that line on.
   if (existsSync(revived)) unlinkSync(revived)
   if (existsSync(join(projectA, 'out'))) unlinkSync(join(projectA, 'out'))
+}
+
+// ── 3d. THE REAL macOS VERB: asserted by its SHAPE, without moving a file ───
+//
+// EVERY CHECK ABOVE RAN AGAINST AN INJECTED TRASH — which is exactly why the real macOS verb could
+// ship broken. `tell application "Finder" to delete POSIX file (item 1 of argv)` COMPILES (measured
+// 2026-09-26: `osacompile` accepts it), and Finder's own dictionary on macOS 26
+// (`/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.sdef`) defines no `POSIX file`
+// term at all, so AppleScript sent that term to Finder as an event and Finder answered
+//
+//   Finder got an error: Can't get POSIX file "…". (-1728)
+//
+// The founder pressed Delete, answered the confirmation, and the file stayed. A fake trash cannot
+// see the script, so the script is what is asserted here: the coercion must be resolved BY THE
+// SCRIPT and never inside the tell block, and the path must travel as ARGV.
+
+{
+  const calls = []
+  const run = (command, args, options, cb) => { calls.push({ command, args, options }); cb(null, 'trashed') }
+  const AWKWARD = '/tmp/a file with "quotes" and ; rm -rf ~.png'
+  const answer = await trashFile(AWKWARD, { run, platform: 'darwin' })
+  const call = calls[0] || { command: '', args: [] }
+  const script = String(call.args[1] || '')
+  const lines = script.split('\n')
+  const tell = lines.findIndex((line) => line.includes('tell application "Finder"'))
+  const coerce = lines.findIndex((line) => line.includes('POSIX file'))
+
+  check('the macOS verb addresses Finder at all — that is what makes Put Back work', call.command === 'osascript' && tell !== -1, call.command + ' ' + JSON.stringify(lines))
+  check(
+    'and the coercion is resolved BEFORE the tell: Finder.sdef has no `POSIX file`, so written inside the tell block it is an event Finder answers with -1728',
+    coerce !== -1 && coerce < tell,
+    'POSIX file on line ' + String(coerce) + ', tell on line ' + String(tell) + ': ' + JSON.stringify(lines),
+  )
+  check('the item it deletes is the alias the script itself built, not a term Finder has to resolve', tell !== -1 && lines[tell].includes('delete theFile'), String(lines[tell]))
+  check('the path is ARGV and never interpolated: a name full of quotes and shell words is only a name', call.args[0] === '-e' && call.args[2] === AWKWARD && !script.includes('rm -rf') && !script.includes('.png'), JSON.stringify(call.args))
+  check('a run that succeeds answers with a word and where the file went', answer.ok === true && answer.where === 'Trash', JSON.stringify(answer))
+
+  const noVerb = await trashFile(AWKWARD, { run, platform: 'aix' })
+  check('a platform with no trash verb is refused by name rather than approximated', noVerb.error === 'unsupported', JSON.stringify(noVerb))
+  check('and `canTrash` is that same question, which is what hides the control', canTrash('darwin') === true && canTrash('aix') === false, String(canTrash('darwin')) + '/' + String(canTrash('aix')))
 }
 
 // ── 4. the picker's start folder, as a pure function ────────────────────────

@@ -969,7 +969,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function MetadataBlock({ detail, loading, t, openGenerate, generateReady, withStage = true, canTrash = false, asking = false, busy = false, onAsk, onCancel, onConfirm }) {
+    function MetadataBlock({ detail, loading, t, openGenerate, generateReady, withStage = true, canTrash = false, asking = false, busy = false, trashError = null, onAsk, onCancel, onConfirm }) {
       if (loading) return h('div', { style: S.meta, 'data-assets-meta': 'loading' }, h('span', { style: S.muted }, t('pane.loading')))
       if (!detail) return null
       const provenance = detail.provenance || null
@@ -1073,6 +1073,14 @@ window.__ModuleLoader__.load({
                   ],
             )
           : null,
+
+        // THE DESTRUCTIVE ACT ANSWERS WHERE IT WAS PRESSED. A refused trash used to be reported by
+        // the room — the pane's `failed` line, above the two columns and wearing the folder-add
+        // sentence — so the founder's press left the picture on screen and the explanation off to
+        // the side (2026-09-26). It belongs under the control that asked, in the trash's own words.
+        // The SUCCESS notice stays in the room instead: a delete that lands clears the selection,
+        // which unmounts this block along with the file.
+        trashError ? h('span', { style: S.error, 'data-assets-trash-failed': 'yes' }, trashError) : null,
       )
     }
 
@@ -1099,6 +1107,12 @@ window.__ModuleLoader__.load({
       // button does, and the block is a child that may not even be mounted when the key is pressed.
       const [asking, setAsking] = React.useState(false)
       const [notice, setNotice] = React.useState(null)
+      // THE TRASH'S OWN REFUSAL, kept apart from `failed`: that one belongs to the folder actions and
+      // wears their sentence ("The folder could not be added."), which is not what a refused delete has
+      // to say — and it is drawn by the room, one column away from the control that asked. Both halves
+      // of that were the founder's report (2026-09-26): *"confirmation works -- but it doesn't delete
+      // (still there)"*, against a route that had answered `500 trash-failed` all along.
+      const [trashError, setTrashError] = React.useState(null)
 
       const chosen = view.data || { view: 'grid', context: null, date: null, selected: null }
       const layout = chosen.view === 'list' ? 'list' : chosen.view === 'gallery' ? 'gallery' : 'grid'
@@ -1134,6 +1148,7 @@ window.__ModuleLoader__.load({
       }
       const select = (path) => {
         setNotice(null)
+        setTrashError(null)
         patchView({ selected: selectedPath === path ? null : path })
       }
 
@@ -1153,19 +1168,19 @@ window.__ModuleLoader__.load({
       const remove = async (path) => {
         setAsking(false)
         setBusy(true)
-        setFailed(null)
+        setTrashError(null)
         try {
           const answer = await fetch(DELETE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, confirm: true }) })
           const result = await answer.json().catch(() => null)
           if (!answer.ok) {
-            setFailed(t('meta.trashFailed') + ': ' + String((result && (result.detail || result.error)) || 'http-' + answer.status))
+            setTrashError(t('meta.trashFailed') + ': ' + String((result && (result.detail || result.error)) || 'http-' + answer.status))
             return
           }
           setNotice(t('meta.trashed').replace('{name}', String((result && result.name) || '')))
           if (selectedPath === path) await patchView({ selected: null })
           reloadCatalog()
         } catch (error) {
-          setFailed(t('meta.trashFailed') + ': ' + String((error && error.message) || error))
+          setTrashError(t('meta.trashFailed') + ': ' + String((error && error.message) || error))
         } finally {
           setBusy(false)
         }
@@ -1184,6 +1199,9 @@ window.__ModuleLoader__.load({
         const tag = String(target.tagName || '').toLowerCase()
         if (tag === 'input' || tag === 'textarea' || target.isContentEditable === true) return
         event.preventDefault()
+        // A NEW QUESTION CLEARS THE LAST ANSWER: the refusal belongs to the attempt that is over, not
+        // to the one being asked about.
+        setTrashError(null)
         setAsking(true)
       }
 
@@ -1467,7 +1485,8 @@ window.__ModuleLoader__.load({
                   canTrash: canTrash,
                   asking,
                   busy,
-                  onAsk: () => setAsking(true),
+                  trashError: trashError,
+                  onAsk: () => { setTrashError(null); setAsking(true) },
                   onCancel: () => setAsking(false),
                   onConfirm: () => remove(detail.data && detail.data.path ? detail.data.path : selectedPath),
                 }),

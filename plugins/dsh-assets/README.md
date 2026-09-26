@@ -172,7 +172,8 @@ verb per platform — macOS goes through **Finder itself** (`osascript`, with th
 interpolated, so a file called `"; rm -rf ~` is a file name), Linux through **`gio trash`** (which writes
 the XDG `.trashinfo`), Windows through the **Recycle Bin**. A platform with none of them answers
 **`501 unsupported`** and the file stays: a destructive verb this host cannot take back is refused by
-name rather than approximated.
+name rather than approximated. The macOS script's **shape** is load-bearing, not cosmetic — the coercion
+must be resolved by the script itself, never addressed to Finder; the subsection below is the whole of why.
 
 **THE HOST REFUSES FOUR WAYS, EACH BY NAME** — `POST /plugins/assets/delete`:
 
@@ -212,6 +213,65 @@ because being wrong there costs a file: `deletableIn()` requires the file's **re
 the folder's **real path**, so a symlink inside a registered folder (`proj/incoming -> /Volumes/Photos`)
 cannot become a way out. The reader deliberately keeps following links — a link inside the library is the
 person's own business, and that is what Finder does too.
+
+### What the founder's first live test found: the verb macOS 26 does not answer (2026-09-26, later)
+
+> "i tested delete, click on button, confirmation works --but it doesn't delete (still there)"
+
+**Nothing had ever asked the real verb to succeed.** The suites inject `trash`
+(`apply(ctx, { trash })`, so no verify run moves a real file) and every live step in
+`scripts/acceptance-live.mjs` stopped at a **refusal** (`not-in-library`, `needs-confirmation`). The one
+path no test drove — a confirmed delete that should land — is where the bug was, and the answer to the
+question "does the pane work" was being read off a stub.
+
+Measured against the **running app**, with a throwaway file in a temp folder registered in the library:
+
+```
+POST /plugins/assets/delete  {path: …, confirm: true}
+→ 500 {"error":"trash-failed","detail":"…Finder got an error: Can't get POSIX file "…". (-1728)"}
+```
+
+The file stayed. The AppleScript was
+
+```applescript
+tell application "Finder" to delete POSIX file (item 1 of argv)
+```
+
+`POSIX file` is a **Standard Additions** term, and inside `tell application "Finder"` it is read as
+**Finder's** terminology — addressed to Finder as an event. Finder's own dictionary on macOS 26
+(`/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.sdef`) defines no `POSIX file` at all
+(`grep -i posix Finder.sdef` → nothing; the `delete` command is there, `coredelo`), so Finder answered
+`-1728 Can't get POSIX file`. The command still **compiles** — `osacompile` is happy with it — which is why
+this could not be caught by inspection. This plugin's sibling verb already had the right shape: `choose
+folder` resolves `POSIX file` at the **top level of the handler** (`lib/folder-actions.js`), where Standard
+Additions owns it.
+
+The fix builds the alias outside the tell block, so Finder is handed the one thing its `delete` command
+asks for — a `specifier`:
+
+```applescript
+set theFile to (POSIX file (item 1 of argv)) as alias
+tell application "Finder" to delete theFile
+```
+
+Three things now guard it, at three layers:
+
+| where | what it pins | count |
+|---|---|---|
+| `verify/intake.mjs` §3d | the verb's **shape**: the coercion is resolved before the tell, the item deleted is the alias the script built, and the path travels as ARGV (a name full of quotes and shell words stays a name) | 89 → 96 |
+| `verify/views.mjs` §10 | a **refused** trash is drawn **inside the block that owns the control**, in the trash's own words — never the room's folder sentence | 124 → 127 |
+| `scripts/acceptance-live.mjs` | the **act**: a confirmed delete over real HTTP really moves the file out of the folder | 18 → 19 |
+
+The pane half is its own defect, found while tracing this one: `remove()` reported a refused trash through
+the pane's `failed` state, whose copy is *"The folder could not be added."* and whose line is drawn by the
+**room**, one column away from the Delete control. A confirmation that works, a file that does not move,
+and the explanation in the wrong place wearing the wrong sentence is exactly the report above. The trash
+now has its own `trashError`, drawn under the control; the success notice stays in the room, because a
+successful delete clears the selection and unmounts that block with the file.
+
+**The suites were green against the broken verb, twice over.** Not one of them could have failed: the
+injected trash was a fake, and a fake cannot see the script. `intake` §3d is the answer to that — it
+asserts the real verb by its shape, with an injected `run` so it still moves nothing.
 
 ## The bar, and the two columns (the polish pass, 2026-09-26)
 

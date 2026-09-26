@@ -118,6 +118,9 @@ const looseDetail = { ...detailBody, path: LOOSE, name: 'hand-added.jpg', ext: '
 
 let view = { schema: 'muen-assets-view/v1', view: 'grid', context: null, date: null, selected: null }
 const posted = []
+// A HOST WHOSE TRASH REFUSES. Every section below drove a stub that always succeeded, so the
+// branch the founder actually hit — the route answering `500 trash-failed` — had never been drawn.
+let trashRefuses = false
 
 net.fetch = async (url, options) => {
   const href = String(url)
@@ -134,6 +137,9 @@ net.fetch = async (url, options) => {
       // THE STUB MOVES THE FILE THE WAY THE HOST DOES: a POST that changed nothing would make "the
       // grid no longer lists it" unfalsifiable, and that is the claim the founder is buying.
       const gone = String(body.path || '')
+      // A REFUSED TRASH IS A REAL ANSWER THIS PANE HAS TO DRAW, in the host's own words: the route
+      // answers `500 trash-failed` and the detail carries osascript's message.
+      if (trashRefuses) return { ok: false, status: 500, json: async () => ({ error: 'trash-failed', detail: 'Finder got an error: Can’t get POSIX file "…". (-1728)' }) }
       catalogBody = { ...catalogBody, assets: catalogBody.assets.filter((row) => row.path !== gone) }
       return { ok: true, json: async () => (body.confirm === true ? { trashed: true, path: gone, name: gone.split('/').filter(Boolean).pop(), where: 'Trash' } : { error: 'needs-confirmation' }) }
     }
@@ -788,6 +794,39 @@ async function render(passes = 4) {
     JSON.stringify(sent),
   )
   check('and the pane says where the file went', textOf(tree).join(' ').includes(EN['meta.trashed'].replace('{name}', '20260926-job-aaa.png')), textOf(tree).join(' ').slice(0, 90))
+
+  // A TRASH THAT IS REFUSED ANSWERS WHERE IT WAS PRESSED. The route had in fact been answering
+  // `500 trash-failed` while the founder read "it doesn't delete (still there)": the sentence went
+  // to the room, one column from the control, wearing the folder-add copy.
+  trashRefuses = true
+  view = { ...view, selected: RECORDED }
+  tree = await render()
+  const refusedControl = collect(tree, (node) => node.props && node.props['data-assets-delete'] === 'yes')[0]
+  if (refusedControl) refusedControl.props.onClick()
+  tree = rerender()
+  const refusedConfirm = collect(tree, (node) => node.props && node.props['data-assets-delete-confirm'] === 'yes')[0]
+  if (refusedConfirm) await refusedConfirm.props.onClick()
+  tree = rerender()
+  const refusal = collect(tree, (node) => node.props && node.props['data-assets-trash-failed'] === 'yes')[0]
+  const side = collect(tree, (node) => node.props && node.props['data-assets-side'] === 'yes')[0]
+  check(
+    'a refused trash says so BESIDE the control that asked, not one column away',
+    !!refusal && !!side && collect(side, (node) => node.props && node.props['data-assets-trash-failed'] === 'yes').length === 1,
+    refusal ? textOf(refusal).join('') : 'nothing on screen',
+  )
+  check(
+    'and in the trash’s own words — not the folder sentence the room uses',
+    // THE HOST'S OWN DETAIL IS WHAT A PERSON READS after the sentence: the pane prints the answer,
+    // not its slug (`trash-failed` is only the fallback for an answer with no detail at all).
+    !!refusal && textOf(refusal).join('').includes(EN['meta.trashFailed']) && textOf(refusal).join('').includes('(-1728)') && !textOf(refusal).join('').includes(EN['pane.add.failed']),
+    refusal ? textOf(refusal).join('') : 'nothing on screen',
+  )
+  check(
+    'while the picture stays on screen: a refusal is not a delete',
+    !!collect(tree, (node) => node.props && node.props['data-assets-delete'] === 'yes')[0] && String(view.selected) === RECORDED,
+    JSON.stringify(view.selected),
+  )
+  trashRefuses = false
   check(
     'and the selection is cleared IN THE VIEW FILE, so a reload does not ask for a path that is gone',
     posted.filter((entry) => entry.url.includes('/view') && entry.body.selected === null).length >= 1,
