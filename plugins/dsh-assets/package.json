@@ -1,6 +1,6 @@
 {
   "name": "@muen/dsh-assets",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The Assets library for DeepSeek Harness: an index over the folders a person adds \u2014 the ones their projects already live in, outside this app \u2014 so a finished picture can be found again, read, and regenerated. It owns no bytes: it reads the run records the Generate plugin writes and points at the files they saved. The MVP is the catalog job (find the original), not the review job (stars, colour tags, keywords).",
   "license": "MIT",
   "repository": {
