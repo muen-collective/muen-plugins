@@ -2,8 +2,8 @@
 
 The DSH market (`dshmarket`) shows the catalog at `awesome-dsh-plugin.com/plugins.json`, which is
 **generated** from `github.com/awesome-dsh-plugin/awesome-dsh-plugin`'s `data/plugins/*.yml`. Registering
-a plugin is a PR against that repo adding ONE file per plugin — the two here are ready to copy, named
-exactly as that repo expects.
+a plugin is a PR against that repo adding ONE file per plugin — the three here are ready to copy, named
+exactly as that repo expects (generate, assets, localize).
 
 The Release tarballs work **without** this step: paste a tarball URL into Settings → Plugins → Add plugin
 (or `dsh plugin --profile <p> add <url>`). The catalog entry is what makes a plugin *findable* in the

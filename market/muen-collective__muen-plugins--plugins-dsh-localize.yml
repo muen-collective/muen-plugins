@@ -1,0 +1,5 @@
+url: https://github.com/muen-collective/muen-plugins/tree/main/plugins/dsh-localize
+name: muen-collective/muen-plugins#dsh-localize
+category: ui
+description:
+  en: Language and translation control for DeepSeek Harness. Registers the languages Muen offers (Korean, Japanese, French, German, Spanish) with the locale service so they can actually be picked, adds a globe beside Settings that switches between them, and carries the review memory that keeps per-key verdicts — keyed by a hash of the English source, so a rename cannot lose one and a changed translation asks for review again. Also scans an installed plugin's client bundle for the strings an overlay can translate, and can apply per-plugin overlay files from the profile for plugins that are not locale-aware.
