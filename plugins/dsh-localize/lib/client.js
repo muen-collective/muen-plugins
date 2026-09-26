@@ -175,8 +175,17 @@ window.__ModuleLoader__.load({
      * half-matched sentence is how an overlay produces nonsense. A string with no translation is
      * returned UNCHANGED — the English fallback, never blank and never a raw key.
      */
-    function resolveOverlay(map, source) {
-      if (typeof source !== 'string' || source === '') return source
+    /**
+     * THE MAP'S ANSWER FOR ONE STRING, or `undefined` when it has none.
+     *
+     * Separate from `resolveOverlay` because "the map has no entry" and "the entry is the source"
+     * read as the same string but are NOT the same decision. The walk may only WRITE a node the map
+     * answers for; writing the source back over an unanswered node is what froze every live text
+     * node in the app - a composer kept the first character of a draft and silently dropped the
+     * rest, because the walk restored the value it had memorised before the keystroke.
+     */
+    function translate(map, source) {
+      if (typeof source !== 'string' || source === '') return undefined
       const direct = map[source]
       if (typeof direct === 'string' && direct !== '') return direct
       // A rendered node keeps its surrounding whitespace; the map is keyed by the trimmed string.
@@ -187,7 +196,28 @@ window.__ModuleLoader__.load({
         const tail = source.slice(source.indexOf(trimmed) + trimmed.length)
         return lead + spaced + tail
       }
-      return source
+      return undefined
+    }
+
+    function resolveOverlay(map, source) {
+      const hit = translate(map, source)
+      return hit === undefined ? source : hit
+    }
+
+    /**
+     * True when the DOM inside `node` belongs to an EDITOR rather than to us: a form field, or any
+     * contenteditable host and its descendants.
+     *
+     * A rich-text composer (Lexical, in this shell) OWNS its subtree - it reads that DOM back on every
+     * keystroke and reconciles it against its own state, so a text node we rewrite inside it is a
+     * draft we have corrupted. The overlay translates RENDERED copy, so these subtrees are stepped
+     * over rather than walked.
+     */
+    function ownsItsText(node) {
+      if (node === null || typeof node !== 'object' || node.nodeType !== 1) return false
+      const tag = typeof node.tagName === 'string' ? node.tagName.toLowerCase() : ''
+      if (tag === 'input' || tag === 'textarea') return true
+      return node.isContentEditable === true
     }
 
     /**
@@ -203,6 +233,7 @@ window.__ModuleLoader__.load({
         out.push(root)
         return out
       }
+      if (ownsItsText(root)) return out
       const children = root.childNodes
       if (children === null || typeof children !== 'object' || typeof children.length !== 'number') return out
       for (let index = 0; index < children.length; index += 1) textNodesUnder(children[index], out)
@@ -210,14 +241,23 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * THE OVERLAY ITSELF, and the property that makes it safe to switch language: `apply` RESOLVES
-     * AGAINST THE TEXT IT FIRST SAW, never against what it last wrote. A second language therefore
-     * lands on the English original even if nobody called `restore` — translation is not cumulative,
-     * and a screen cannot decay into a language-of-a-language. (`restore` is still the way back: it is
-     * what puts the DOM in its own words again, for a language with no overlay or for teardown.)
+     * THE OVERLAY ITSELF - the rule that makes it safe to run this over a LIVE tree.
+     *
+     * A node is resolved against the text it says RIGHT NOW, and the walk writes only what the map
+     * answers for. Two consequences, and both are the difference between a translator and a freeze:
+     *
+     *   - a node with no entry is left alone; if it changed since we memorised it (an editor
+     *     inserting a character, a counter ticking, a live status) the text it shows now becomes what
+     *     we memorise. The overlay never restores a stale value over its owner's own text;
+     *   - a node we DID translate still resolves from the English source, never from our own
+     *     translation, so a second language lands on the original even if nobody called `restore` -
+     *     translation is not cumulative, and a screen cannot decay into a language-of-a-language.
+     *     (`restore` is still the way back: it is what puts the DOM in its own words again, for a
+     *     language with no overlay or for teardown.)
      */
     function makeOverlay() {
       const originals = new WeakMap()
+      const written = new WeakMap()
       let last = 0
       return {
         apply(root, map) {
@@ -226,12 +266,20 @@ window.__ModuleLoader__.load({
           for (const node of textNodesUnder(root)) {
             const current = node.nodeValue
             if (typeof current !== 'string') continue
-            if (!originals.has(node)) originals.set(node, current)
-            const next = resolveOverlay(map, originals.get(node))
-            if (next !== current) {
-              node.nodeValue = next
-              changed += 1
+            // What the node says in the language we translate FROM: what we memorised, unless it has
+            // moved. Moved away from what WE last wrote means its owner re-rendered it - a node that
+            // is not ours is adopted, never overwritten.
+            let source = originals.has(node) ? originals.get(node) : current
+            if (source !== current && written.get(node) !== current) {
+              source = current
+              written.delete(node)
             }
+            originals.set(node, source)
+            const hit = translate(map, source)
+            if (hit === undefined || hit === current) continue
+            node.nodeValue = hit
+            written.set(node, hit)
+            changed += 1
           }
           last = changed
           return changed
@@ -330,7 +378,7 @@ window.__ModuleLoader__.load({
     function makeGlobe(locale, overlay = null) {
       return function GlobeAction(props) {
         const wide = props && props.wide === true
-        const t = typeof locale.bind === 'function' ? locale.bind(NS) : (key) => key
+        const t = locale && typeof locale.bind === 'function' ? locale.bind(NS) : (key) => key
         const state = React.useSyncExternalStore(
           (notify) => (locale && typeof locale.subscribe === 'function' ? locale.subscribe(notify) : () => {}),
           () => (locale && typeof locale.getSnapshot === 'function' ? locale.getSnapshot() : { active: '', locales: [], revision: -1 }),
@@ -472,7 +520,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots'],
+      inject: ['slots', 'locale'],
       apply,
       // The seams the suites drive (deliberate, like the assets plugin's zoom logic): the catalog is
       // tested against the harness's own runtime, and the globe is mounted with a stub ctx.

@@ -221,6 +221,83 @@ function text(value) {
   check('applying no map at all changes nothing', makeOverlay().apply(body, null) === 0 && makeOverlay().apply(body, {}) === 0, 'no map')
 }
 
+// ── 4c. the LIVE tree: what "no translation" must mean ─────────────────────────
+//
+// The failure this exists for (measured 2026-09-26, in the app): the walk applied an EMPTY map - the
+// state the plugin runs in when `locale` is not resolvable, so no language ever has a dictionary - and
+// still wrote the value it had memorised back over every node that had changed since. A rich-text
+// composer inserts a character per keystroke, so the walk restored the draft's first character: the
+// composer accepted one character and silently dropped the rest, which is a composer that "does not
+// allow input". "The map has no entry" must mean LEAVE THE NODE ALONE, never put it back.
+
+{
+  const { makeOverlay, textNodesUnder } = bundle
+
+  // A composer in the shape the shell mounts it: a contenteditable host wrapping the draft's text.
+  const draft = text('h')
+  const editor = { nodeType: 1, tagName: 'DIV', isContentEditable: true, childNodes: [draft] }
+  const label = text('Send')
+  const tree = el(editor, el(label))
+
+  check(
+    'the walk steps over an editor, so a draft is never a translation target',
+    textNodesUnder(tree).length === 1 && textNodesUnder(tree)[0] === label,
+    JSON.stringify(textNodesUnder(tree).map((node) => node.nodeValue)),
+  )
+
+  const empty = makeOverlay()
+  empty.apply(tree, {})
+  draft.nodeValue = 'he'
+  check(
+    'and a keystroke in that editor survives an empty map applied over the tree',
+    empty.apply(tree, {}) === 0 && draft.nodeValue === 'he',
+    JSON.stringify({ draft: draft.nodeValue }),
+  )
+
+  check(
+    'a node whose text changed on its own is ADOPTED, not restored to what we first saw',
+    (() => {
+      const status = text('Processed 1 step')
+      const live = el(status)
+      const walk = makeOverlay()
+      walk.apply(live, {})
+      status.nodeValue = 'Processed 2 steps'
+      walk.apply(live, {})
+      return status.nodeValue === 'Processed 2 steps'
+    })(),
+    'the node was reverted to the value it had when the overlay first saw it',
+  )
+
+  check(
+    'and text that changed to something the map does know is translated from the NEW text',
+    (() => {
+      const slot = text('Send')
+      const live = el(slot)
+      const walk = makeOverlay()
+      walk.apply(live, { Send: '保存' })
+      if (slot.nodeValue !== '保存') return false
+      slot.nodeValue = 'Cancel' // the host re-rendered the same slot with another string
+      walk.apply(live, { Send: '保存', Cancel: '取消' })
+      return slot.nodeValue === '取消'
+    })(),
+    'a translated node kept the translation of the string it no longer shows',
+  )
+
+  check(
+    'and a translated node its owner rewrites is left with the owner text',
+    (() => {
+      const slot = text('Send')
+      const live = el(slot)
+      const walk = makeOverlay()
+      walk.apply(live, { Send: '保存' })
+      slot.nodeValue = 'Send now' // the host changed the label under us
+      walk.apply(live, { Send: '保存' })
+      return slot.nodeValue === 'Send now'
+    })(),
+    'the overlay re-imposed a translation the node no longer matched',
+  )
+}
+
 // ── 5. the scan ──────────────────────────────────────────────────────────────
 
 const FIXTURE = `
