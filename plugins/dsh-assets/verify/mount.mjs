@@ -19,7 +19,7 @@
  *
  *   node verify/mount.mjs
  */
-import { miniReact, textOf, loadClient, recordingCtx, reporter, net, settle } from './harness.mjs'
+import { miniReact, textOf, collect, loadClient, recordingCtx, reporter, net, settle } from './harness.mjs'
 
 const PKG_NAME = '@muen/dsh-assets'
 const KIND = 'assets'
@@ -137,13 +137,38 @@ const renderPane = async (fetchImpl) => {
   check('with a folder added, the pane lists it instead of the empty state', text.includes('yammaman') && !text.includes('No folders yet'), text.slice(0, 160))
 }
 
-// ── the chip renders ────────────────────────────────────────────────────────
+// ── the chip renders, and it wears the library's OWN mark ───────────────────
+
+/**
+ * THE MARK IS PART OF THE CLAIM (founder, 2026-09-26: *"the icon for assets card should not be
+ * folder — folder is already used for workspace files"*). Two identity places draw it: this chip
+ * and the Start-page card. A folder stays a folder where a folder IS the thing — the empty room,
+ * the Finder link on a row and its reveal — so the suite asserts the identity places carry the
+ * mark and NOT the folder glyph Workspace already uses.
+ */
+const marks = (tree) => collect(tree, (node) => node.props && node.props['data-assets-mark'] === 'yes')
+const folderGlyphs = (tree) => collect(tree, (node) => node.props && node.props['data-stub-icon'] === 'folder')
 
 {
-  const text = textOf(chip.component({ locale: { bind: () => (key) => en[key] || key } })).join('')
-  check('the chip draws the folder glyph and the name', text.includes('Assets'), text)
+  const tree = chip.component({ locale: { bind: () => (key) => en[key] || key } })
+  const text = textOf(tree).join('')
+  check('the chip draws the name', text.includes('Assets'), text)
+  const mark = marks(tree)
+  check('and the library’s own mark', mark.length === 1, mark.length + ' mark(s)')
+  check('which is NOT the folder Workspace already uses', folderGlyphs(tree).length === 0, folderGlyphs(tree).length + ' folder glyph(s)')
+  check(
+    'and it is a real glyph: a 24-unit grid drawn at 16px, currentColor, stroke 1.5 — the harness’s own Regular weight',
+    !!mark[0] && mark[0].type === 'svg' && mark[0].props.viewBox === '0 0 24 24' && mark[0].props.width === 16 && mark[0].props.height === 16 && mark[0].props.stroke === 'currentColor' && mark[0].props.strokeWidth === 1.5 && mark[0].children.length === 4,
+    JSON.stringify(mark[0] && { viewBox: mark[0].props.viewBox, size: mark[0].props.width, stroke: mark[0].props.stroke, strokeWidth: mark[0].props.strokeWidth, paths: mark[0].children.length }),
+  )
 }
 
-note('the live layer is the founder’s eyes: after an app restart the Assets card appears on the Start page')
+{
+  const tree = guide.icon()
+  const mark = marks(tree)
+  check('the Start-page card wears the same mark, not a second Workspace folder', mark.length === 1 && folderGlyphs(tree).length === 0, mark.length + ' mark(s) / ' + folderGlyphs(tree).length + ' folder glyph(s)')
+}
+
+note('the live layer is the founder’s eyes: the Assets card on the Start page, carrying its own mark')
 
 finish()

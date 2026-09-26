@@ -33,6 +33,14 @@ So there are **no stars, no colour tags and no keyword library** here yet.
   `<profile>/assets/folders.json`.
 - **A folder a person added is a place, so its name is the way there**: the glyph says what it is,
   the name is a button, and Finder opens it.
+- **The card wears its own mark, not a folder** (founder, 2026-09-26: *"the icon for assets card should not be
+  folder — folder is already used for workspace files, lucide icon square-sparkles or something similar"*).
+  The folder glyph belongs to Workspace files and to the folders a person adds here, so the two **identity**
+  places — the pane chip and the Start-page card — draw Lucide's `square-sparkles` instead, hand-drawn in this
+  bundle the way the sibling plugin draws the one glyph a surface lacks. The harness ships no picture glyph at
+  all; the geometry is on a 24-unit grid at stroke 1.5 so it lands on the harness's own Regular weight (1px) at
+  16px. **A folder stays a folder where a folder IS the thing**: the empty room, the Finder link on a row and
+  its reveal are untouched.
 - **This plugin's own bookkeeping is not on screen.** The route answers with the two profile paths it
   reads (its own state root and the Generate plugin's records root) because a bug report wants them;
   the pane used to draw them, and the founder's own question retired that (2026-09-26: *"library state
@@ -79,8 +87,8 @@ trailing slash makes only the bare path match and everything below it answer 404
 |---|---|
 | `sidebarRightTabs` | the `assets` page type, id `@muen/dsh-assets`, priority `extension` |
 | `sidebar.right.pane.tab` | the pane body, keyed by the same id |
-| `sidebar.right.pane.tab.title` | the chip: the folder glyph, then the name |
-| the type's `guide[]` | one entry, which puts the **Assets** card on the right panel's start page — the harness's own standard card |
+| `sidebar.right.pane.tab.title` | the chip: the library's own mark, then the name |
+| the type's `guide[]` | one entry, which puts the **Assets** card on the right panel's start page — the harness's own standard card, wearing the same mark |
 | the client locale registry | namespace `assets`, en + zh |
 
 ## The grid, the tile, and the metadata block
@@ -215,7 +223,8 @@ them.
 ## Verify
 
 ```
-node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room   31
+node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room,
+                           #     and the card's own mark (not the folder)                  35
 node verify/intake.mjs     # A2: the folders, the records, the filters, the carrier       63
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, and EVERY
                            #     folder control pressed through to the host               49

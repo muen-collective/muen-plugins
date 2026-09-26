@@ -1079,20 +1079,59 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** The chip beside the DSH glyph: the folder, then the name — the guide tab's own shape. */
+    /**
+     * THE CARD'S OWN MARK (founder, 2026-09-26: *"the icon for assets card should not be folder —
+     * folder is already used for workspace files, lucide icon square-sparkles or something
+     * similar"*). The harness ships no picture glyph at all — its set is ~140 glyphs in
+     * Artwork / Medium / Regular variants and not one image, gallery or square-sparkle — and the
+     * folder is Workspace's, so the mark is hand-drawn here: this plugin family draws the one
+     * glyph a surface genuinely lacks rather than borrowing a neighbour's (its sibling's
+     * `IconUpload24` is the other). Lucide's `square-sparkles` geometry on the 24-unit grid at
+     * stroke 1.5, which lands on the harness's own Regular weight (1px) when the grid is drawn
+     * at 16px, so it sits beside the app's icons rather than shouting next to them.
+     *
+     * IT IS IDENTITY ONLY. Where a folder IS the thing, a folder stays: the empty room, the
+     * Finder link on a row and its reveal all keep `IconFolderOpen`. This mark says "the
+     * library" and appears on the two identity places — the Start-page card and the pane chip.
+     */
+    function IconSquareSparkle({ size = 16, className, ...rest }) {
+      return h(
+        'svg',
+        {
+          width: size,
+          height: size,
+          className,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.5,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': 'true',
+          'data-assets-mark': 'yes',
+          ...rest,
+        },
+        h('path', { d: 'M11 15H7' }),
+        h('path', { d: 'M15.41 2.49a.6.6 0 011.18 0l.63 3.334a1.2 1.2 0 00.956.955l3.334.631a.6.6 0 010 1.18l-3.334.63a1.2 1.2 0 00-.955.956l-.631 3.334a.6.6 0 01-1.18 0l-.63-3.334a1.2 1.2 0 00-.956-.955L10.49 8.59a.6.6 0 010-1.18l3.334-.63a1.2 1.2 0 00.955-.956z' }),
+        h('path', { d: 'M21 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h6' }),
+        h('path', { d: 'M9 13v4' }),
+      )
+    }
+
+    /** The chip beside the DSH glyph: the library's own mark, then the name — the guide tab's own shape. */
     function AssetsTitle(props) {
       const t = props && props.locale ? props.locale.bind(NS) : (key) => EN[key] || key
       return h(
         'span',
         { style: { display: 'inline-flex', alignItems: 'center', gap: 6 }, 'data-assets-chip': 'yes' },
-        IconFolderOpen ? h(IconFolderOpen, { size: 16, style: S.glyph }) : null,
+        h(IconSquareSparkle, { size: 16, style: S.glyph }),
         t('type.label'),
       )
     }
 
-    /** The guide card's glyph. Without one the guide draws its cube, which reads as unfinished. */
+    /** The guide card's glyph — the library's mark, so the card is not a second Workspace folder. */
     function AssetsGuideIcon() {
-      return IconFolderOpen ? h(IconFolderOpen, { size: 20 }) : null
+      return h(IconSquareSparkle, { size: 20 })
     }
 
     function assetsDefinition(t) {
