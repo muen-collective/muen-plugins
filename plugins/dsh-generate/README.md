@@ -37,6 +37,13 @@ card under the picture; a row's file that has gone keeps its place and says **Mi
 nothing runs and no gate is bypassed, because the press that spends is still the person's own. The strip is why
 the per-workflow restore was retired: the row is where a one-off tweak lives.
 
+**And the session starts EMPTY from the card** (founder, 2026-09-26: *"if you arrive at the workflow from the
+card it should be empty, the session starts from empty and if arrived from asset / regenerate it shows the
+session"*). So a workflow's history is not on screen by default — and no history is even read — and the strip
+fills from two directions: a run done in this visit joins it (only that run), or a tab opened to **continue** one
+arrives with **`params.run`** and shows the whole series with that run selected. That param is the surface half of
+epic 64 S7; the asset's own Regenerate button is that slice, and it needs nothing else.
+
 **The state route was dead, and its failure looked like a decision.** Two faults stacked: it read
 `provider.root`, which no provider has (a provider's own directory is `provider.data(root.root).root`), and it
 read `req.body`, which no seam sets — every POST answered `400 missing-name` and every GET threw before it

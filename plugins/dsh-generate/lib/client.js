@@ -3498,9 +3498,14 @@ window.__ModuleLoader__.load({
      * a person doubt the run had happened at all.
      */
     function useResults(provider, name, refreshKey) {
-      const [state, setState] = React.useState({ phase: 'loading', rows: [], truncated: false })
+      // NO NAME IS AN IDLE STRIP, not a pending read: a person who arrived from the card has no
+      // session yet, and "Reading the session…" forever is a lie about work nobody asked for.
+      const [state, setState] = React.useState(name ? { phase: 'loading', rows: [], truncated: false } : { phase: 'idle', rows: [], truncated: false })
       React.useEffect(() => {
-        if (!name) return () => {}
+        if (!name) {
+          setState({ phase: 'idle', rows: [], truncated: false })
+          return () => {}
+        }
         let live = true
         fetch('/plugins/generate/providers/' + provider + '/results?name=' + encodeURIComponent(name))
           .then((answer) => (answer.ok ? answer.json() : Promise.reject(new Error('http-' + answer.status))))
@@ -3579,12 +3584,15 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function WorkflowSurface({ t, provider, name, canUpload = false, runOption = null }) {
+    function WorkflowSurface({ t, provider, name, canUpload = false, runOption = null, continueRun = null }) {
       const { phase, adapter } = useWorkflow(provider, name)
       const [values, setValues] = React.useState({})
       const [showAdvanced, setShowAdvanced] = React.useState(false)
       // WHICH RESULT'S PICTURE IS ON THE CANVAS (epic 64 S3), and the values that came with it.
-      const [selectedRow, setSelectedRow] = React.useState(null)
+      // `undefined` is "nothing chosen yet" and `null` is "chosen, then cleared" — which matters
+      // when a tab arrives already continuing a run: its row is selected until a person says
+      // otherwise, and clicking it is how they say so.
+      const [selectedRow, setSelectedRow] = React.useState(undefined)
 
       /**
        * DEPENDS ON THE ADAPTER ARRIVING: the doors are what the starting values come from.
@@ -3641,9 +3649,31 @@ window.__ModuleLoader__.load({
       // called conditionally: the run outlives the loading phase, and a person who
       // started one keeps it while the surface re-renders around them.
       const run = useRun({ t, provider, adapter, values, runOption })
-      // Re-read when a run settles: the strip is where a result appears.
-      const results = useResults(provider, adapter ? adapter.name : null, run.phase === 'done' ? run.jobId : '')
-      const selected = selectedRow ? (results.rows || []).find((row) => row.jobId === selectedRow) || null : null
+
+      /**
+       * THE SESSION STARTS EMPTY WHEN YOU ARRIVE FROM THE CARD (founder, 2026-09-26: *"if you
+       * arrive at the workflow from the card it should be empty, the session starts from empty
+       * and if arrived from asset / regenerate it shows the session"*).
+       *
+       * So a workflow's history is NOT on screen by default, and the strip fills from two
+       * directions: a run you do in this visit joins it (its job id is remembered the moment it
+       * finishes), and a tab opened to CONTINUE one arrives with `params.run` and shows the whole
+       * series with that run selected. This is the surface half of epic 64 S7 — the asset's own
+       * Regenerate button is not built yet, and when it lands it needs only that param.
+       */
+      const continues = typeof continueRun === 'string' && continueRun !== ''
+      const thisVisit = React.useRef([])
+      React.useEffect(() => {
+        if (run.phase === 'done' && run.jobId && !thisVisit.current.includes(run.jobId)) thisVisit.current = [...thisVisit.current, run.jobId]
+      }, [run.phase, run.jobId])
+      // A pending run is a reason to read; nothing has happened otherwise.
+      const readName = adapter && (continues || thisVisit.current.length > 0 || run.phase === 'queued' || run.phase === 'running') ? adapter.name : null
+      const results = useResults(provider, readName, run.phase === 'done' ? run.jobId : '')
+      // The rows on screen: the whole series when continuing one, this visit's runs otherwise.
+      const rows = continues ? results.rows || [] : (results.rows || []).filter((row) => thisVisit.current.includes(row.jobId))
+      // A tab opened to continue a run selects it, so the canvas shows what the person came for.
+      const selectedRowId = selectedRow === undefined ? (continues ? continueRun : null) : selectedRow
+      const selected = selectedRowId ? rows.find((row) => row.jobId === selectedRowId) || null : null
 
       /**
        * REGENERATE (epic 64 S4): a row's own values go back into the form. NOTHING RUNS — the
@@ -3655,7 +3685,10 @@ window.__ModuleLoader__.load({
        * bodies carry; a door whose value the record does not have keeps what is on the form.
        */
       const useRow = (row) => () => {
-        setSelectedRow((current) => (current === row.jobId ? null : row.jobId))
+        setSelectedRow((current) => {
+          const effective = current === undefined ? (continues ? continueRun : null) : current
+          return effective === row.jobId ? null : row.jobId
+        })
         if (!adapter) return
         const next = {}
         for (const key of Object.keys(adapter.doors)) {
@@ -4025,7 +4058,7 @@ window.__ModuleLoader__.load({
               ? h(RunOutput, { key: adapter.name + '-out', t, adapter, run })
               : h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
             // THE STRIP IS THE SESSION (epic 64 §6): under the picture, in the same card.
-            h(Filmstrip, { t, provider, results, selected: selectedRow, onUse: useRow }),
+            h(Filmstrip, { t, provider, results: { ...results, rows }, selected: selectedRowId, onUse: useRow }),
             h(RunQueue, { t, run }),
           ),
         ),
@@ -4869,6 +4902,10 @@ window.__ModuleLoader__.load({
       const params = tab && tab.tab && tab.tab.navigation ? tab.tab.navigation.params : null
       const asked = params && typeof params.unit === 'string' ? params.unit : null
       const askedProvider = params && typeof params.provider === 'string' ? params.provider : null
+      // WHICH RUN TO CONTINUE, when the tab was opened from an ASSET rather than from a card
+      // (epic 63's Regenerate: `openTab('generate', { params: { run: jobId } })`). Absent means
+      // a person came in through the guide card, and the session starts empty.
+      const askedRun = params && typeof params.run === 'string' && params.run.trim() !== '' ? params.run.trim() : null
 
       // Open a workflow tab: add it to the list if not already there, activate it.
       const openWorkflow = React.useCallback((providerId, name) => {
@@ -5126,6 +5163,8 @@ window.__ModuleLoader__.load({
               name: wt.name,
               canUpload: !!((providers.providers || []).find((row) => row.id === wt.provider) || {}).upload,
               runOption: ((providers.providers || []).find((row) => row.id === wt.provider) || {}).runOption || null,
+              // The tab's own `params.run` travels down as the session to continue.
+              continueRun: askedRun,
             }),
           ),
         ),
