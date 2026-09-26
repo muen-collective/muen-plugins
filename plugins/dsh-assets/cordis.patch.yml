@@ -1,0 +1,21 @@
+# @muen/dsh-assets — bundle patch layer (epic 63).
+#
+# One row: mount this package into the profile tree. The host half answers where the
+# library's folders are; the client half registers the `assets` right-panel tab type, its
+# body and its chip, and the guide entry that puts the "Assets" card on the right panel's
+# start page. The card is the harness's own standard card.
+#
+# Row id `assets` is also the directory this plugin's own state lives under
+# (`<profile>/assets/`). It owns NO bytes: a person's pictures stay in the folders they
+# already keep them in, outside this app (founder, 2026-09-26: *"for me it's better to
+# create folders outside Mitsumeru — kun creates inside .kun and it's a pain to dig it out
+# when I need to attach or send to people"*), and the only file written here is the folder
+# registry.
+#
+# The Generate plugin is read, never required: this half reads the run records under
+# `<profile>/generate/<provider>/runs/` and the paths they saved, which is why the two
+# plugins stand alone (epic 63 §1) and why the data root rule below is written down as a
+# contract rather than imported.
+- insert:
+    - id: assets
+      name: '@muen/dsh-assets'

@@ -1,0 +1,43 @@
+{
+  "name": "@muen/dsh-assets",
+  "version": "0.1.0-dev",
+  "description": "The Assets library for DeepSeek Harness: an index over the folders a person adds \u2014 the ones their projects already live in, outside this app \u2014 so a finished picture can be found again, read, and regenerated. It owns no bytes: it reads the run records the Generate plugin writes and points at the files they saved. The MVP is the catalog job (find the original), not the review job (stars, colour tags, keywords).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muen-collective/muen-plugins",
+    "directory": "plugins/dsh-assets"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "verify:mount": "node verify/mount.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ],
+      "external": [
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ]
+}
