@@ -51,7 +51,7 @@ const anyFunction = () => new Proxy(function noop() {}, { get: () => anyFunction
  * exports. `react` and the primitives are supplied by the caller so a suite can render what the
  * bundle draws.
  */
-export function loadClient(path, { react, primitives }) {
+export function loadClient(path, { react, primitives, globals = {} }) {
   let captured = null
   const sandbox = {
     console,
@@ -73,6 +73,9 @@ export function loadClient(path, { react, primitives }) {
     Promise,
     RegExp,
   }
+  // Whatever the caller needs the bundle to see as a browser global (`document`, `fetch`, an
+  // observer) is injected here, because the bundle reads them from its own global scope.
+  Object.assign(sandbox, globals)
   sandbox.globalThis = sandbox
   sandbox.navigator = { languages: ['en-US', 'en'], language: 'en-US' }
   sandbox.window = {

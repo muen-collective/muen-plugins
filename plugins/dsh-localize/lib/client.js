@@ -159,6 +159,140 @@ window.__ModuleLoader__.load({
       return LANGUAGES.some((row) => row.id.toLowerCase() === String(id).toLowerCase())
     }
 
+    // ── the overlay on the rendered tree (epic 65 L4) ──────────────────────────
+    //
+    // The resolution rule lives HERE rather than in the host's store module, because this is where it
+    // is used and a bundle cannot require its sibling (see the note at the top of this file).
+
+    /** The route the host serves the maps on. */
+    const OVERLAY_API = '/plugins/localize/overlay'
+
+    /** The text node type, spelled out because this walk must work on any tree-shaped object. */
+    const TEXT_NODE = 3
+
+    /**
+     * RESOLVE ONE RENDERED STRING. The exact source wins; there is no partial matching, because a
+     * half-matched sentence is how an overlay produces nonsense. A string with no translation is
+     * returned UNCHANGED — the English fallback, never blank and never a raw key.
+     */
+    function resolveOverlay(map, source) {
+      if (typeof source !== 'string' || source === '') return source
+      const direct = map[source]
+      if (typeof direct === 'string' && direct !== '') return direct
+      // A rendered node keeps its surrounding whitespace; the map is keyed by the trimmed string.
+      const trimmed = source.trim()
+      const spaced = map[trimmed]
+      if (typeof spaced === 'string' && spaced !== '') {
+        const lead = source.slice(0, source.indexOf(trimmed))
+        const tail = source.slice(source.indexOf(trimmed) + trimmed.length)
+        return lead + spaced + tail
+      }
+      return source
+    }
+
+    /**
+     * Every text node under a root, in document order.
+     *
+     * A hand-rolled walk over `childNodes` rather than `document.createTreeWalker`, because this has to
+     * be exercisable on a plain object: the suite builds a tree by hand, and a walk that needs a real
+     * DOM could only be checked by eye.
+     */
+    function textNodesUnder(root, out = []) {
+      if (root === null || typeof root !== 'object') return out
+      if (root.nodeType === TEXT_NODE) {
+        out.push(root)
+        return out
+      }
+      const children = root.childNodes
+      if (children === null || typeof children !== 'object' || typeof children.length !== 'number') return out
+      for (let index = 0; index < children.length; index += 1) textNodesUnder(children[index], out)
+      return out
+    }
+
+    /**
+     * THE OVERLAY ITSELF, and the property that makes it safe to switch language: `apply` RESOLVES
+     * AGAINST THE TEXT IT FIRST SAW, never against what it last wrote. A second language therefore
+     * lands on the English original even if nobody called `restore` — translation is not cumulative,
+     * and a screen cannot decay into a language-of-a-language. (`restore` is still the way back: it is
+     * what puts the DOM in its own words again, for a language with no overlay or for teardown.)
+     */
+    function makeOverlay() {
+      const originals = new WeakMap()
+      let last = 0
+      return {
+        apply(root, map) {
+          if (root === null || root === undefined || map === null || typeof map !== 'object') return 0
+          let changed = 0
+          for (const node of textNodesUnder(root)) {
+            const current = node.nodeValue
+            if (typeof current !== 'string') continue
+            if (!originals.has(node)) originals.set(node, current)
+            const next = resolveOverlay(map, originals.get(node))
+            if (next !== current) {
+              node.nodeValue = next
+              changed += 1
+            }
+          }
+          last = changed
+          return changed
+        },
+        restore(root) {
+          let back = 0
+          for (const node of textNodesUnder(root)) {
+            if (!originals.has(node)) continue
+            const source = originals.get(node)
+            if (node.nodeValue !== source) {
+              node.nodeValue = source
+              back += 1
+            }
+          }
+          return back
+        },
+        changed: () => last,
+      }
+    }
+
+    /**
+     * WIRE IT UP: fetch the merged map for the active language, restore, apply — and re-apply on
+     * mutations with the map already in hand, so a late-rendered string is translated WITHOUT another
+     * request. Everything is guarded: no `document` (a test host), no `fetch`, or no map is a no-op,
+     * never an exception during activation.
+     */
+    function startOverlay(locale) {
+      const overlay = makeOverlay()
+      let current = {}
+      const draw = () => {
+        if (typeof document === 'undefined' || !document.body) return 0
+        return overlay.apply(document.body, current)
+      }
+      const refresh = async () => {
+        if (typeof fetch !== 'function' || typeof document === 'undefined' || !document.body) return 0
+        const active = locale && typeof locale.getSnapshot === 'function' ? locale.getSnapshot().active || 'en' : 'en'
+        try {
+          const answer = await fetch(OVERLAY_API + '?lang=' + encodeURIComponent(active))
+          if (!answer || !answer.ok) return 0
+          const body = await answer.json()
+          current = body && body.map && typeof body.map === 'object' ? body.map : {}
+        } catch {
+          current = {}
+        }
+        overlay.restore(document.body)
+        return draw()
+      }
+      if (typeof MutationObserver === 'function' && typeof document !== 'undefined' && document.body) {
+        try {
+          const observer = new MutationObserver(() => {
+            draw()
+          })
+          observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+        } catch {
+          // an observer that cannot be installed costs late text, not the boot
+        }
+      }
+      refresh()
+      return { refresh, draw, overlay }
+    }
+
     // ── the globe ──────────────────────────────────────────────────────────────
 
     /**
@@ -260,6 +394,21 @@ window.__ModuleLoader__.load({
         report.languages = installLanguages(locale)
       }
 
+      // THE OVERLAY, and its subscription: a language change re-reads the map for the new language.
+      try {
+        const overlay = startOverlay(locale)
+        report.overlay = { started: true }
+        if (locale && typeof locale.subscribe === 'function') {
+          const subscribe = () => locale.subscribe(() => {
+            overlay.refresh()
+          })
+          if (typeof ctx.effect === 'function') ctx.effect(subscribe, 'localize: overlay language')
+          else subscribe()
+        }
+      } catch (error) {
+        report.overlay = { started: false, error: String((error && error.message) || error) }
+      }
+
       const slots = typeof ctx.get === 'function' ? ctx.get('slots') : undefined
       if (slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
         const Globe = makeGlobe(locale)
@@ -279,6 +428,11 @@ window.__ModuleLoader__.load({
       DICT,
       ID_PATTERN,
       SEAM,
+      OVERLAY_API,
+      resolveOverlay,
+      textNodesUnder,
+      makeOverlay,
+      startOverlay,
       ACTION_ID,
       ACTION_ORDER,
       LANGUAGES,

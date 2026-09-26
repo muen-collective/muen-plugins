@@ -171,26 +171,6 @@ function overlaysFor(root, lang) {
   return overlays
 }
 
-/**
- * RESOLVE ONE RENDERED STRING. The exact source wins; there is no partial matching, because a
- * half-matched sentence is how an overlay produces nonsense. A string with no translation is
- * returned UNCHANGED — the English fallback the epic names.
- */
-function resolveOverlay(map, source) {
-  if (typeof source !== 'string' || source === '') return source
-  const direct = map[source]
-  if (typeof direct === 'string' && direct !== '') return direct
-  // A rendered node keeps its surrounding whitespace; the map is keyed by the trimmed string.
-  const trimmed = source.trim()
-  const spaced = map[trimmed]
-  if (typeof spaced === 'string' && spaced !== '') {
-    const lead = source.slice(0, source.indexOf(trimmed))
-    const tail = source.slice(source.indexOf(trimmed) + trimmed.length)
-    return lead + spaced + tail
-  }
-  return source
-}
-
 export {
   OVERLAY_DIR,
   LANGS,
@@ -206,5 +186,4 @@ export {
   listOverlays,
   mergeOverlays,
   overlaysFor,
-  resolveOverlay,
 }

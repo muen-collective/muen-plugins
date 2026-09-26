@@ -44,21 +44,24 @@ harness's own preference scope.
 Language from the same catalog, so a second row from us would be two rows listing the same languages.
 What this plugin contributes to that page is the languages themselves.
 
-**The overlay** (`lib/overlay.js`, `lib/scan.js`) is the other half of the language story: a plugin we do not
+**The overlay** (`lib/overlay.js`, `lib/scan.js`, and the walk in the bundle) is the other half of the language story: a plugin we do not
 own cannot be translated through `locale.register`, and editing its installed bundle is forbidden (an update
 would clobber it). So its translations live in the PROFILE — `<profile>/localizations/<plugin>/<lang>.json`,
 keyed by the English source string — and `lib/scan.js` finds the strings to translate inside a compiled
 `lib/client.js` without executing it. Two rules carry the weight: **a source string with no translation comes
 back as itself** (never blank, never a raw key), and **two plugins translating one string differently is
-reported** rather than decided by directory order. The DOM walk that applies a map to a rendered tree, and
-the routes that serve it, are the next slice.
+reported** rather than decided by directory order. The host serves the maps at
+`/plugins/localize/overlay` (GET one / GET a language's merged map / POST to write or `{ scan: true }` to scan
+an installed bundle / DELETE), and the bundle walks the rendered tree to apply them — **resolving against the
+text it first saw**, so a language switch is never cumulative. A `MutationObserver` re-applies the map already
+in hand, so late-rendered text is translated without another request.
 
 ## Verify
 
 ```
 node verify/catalog.mjs   # the languages we own, against the HARNESS'S OWN LocaleRuntime (22 checks)
 node verify/mount.mjs     # the bundle, the globe and its activation (27 checks)
-node verify/overlay.mjs   # the overlay store and the string scan (33 checks)
+node verify/overlay.mjs   # the store, the scan, the DOM walk and the route (62 checks)
 ```
 
 Both suites load the shipped `lib/client.js` rather than a copy of it, and `verify/catalog.mjs`

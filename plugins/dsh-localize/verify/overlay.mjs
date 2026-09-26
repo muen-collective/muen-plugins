@@ -16,13 +16,16 @@
  *   5. the SCAN finds the strings a UI draws and ignores the code around them — CSS, module ids,
  *      attributes, regex bodies and comments — because a scan that quietly stops finding strings
  *      looks exactly like a plugin with nothing to translate;
- *   6. and it is bounded, deduplicated and sorted.
+ *   6. and it is bounded, deduplicated and sorted;
+ *   7. the ROUTE serves those maps, refuses a write that would escape the profile, and can scan an
+ *      installed bundle (reading its text, never executing it).
  *
  *   node verify/overlay.mjs
  */
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 
 import {
   LANGS,
@@ -33,11 +36,14 @@ import {
   overlaysFor,
   readOverlay,
   removeOverlay,
-  resolveOverlay,
   validPluginId,
   writeOverlay,
 } from '../lib/overlay.js'
+import { CLIENT, loadClient, miniReact, primitivesStub } from './harness.mjs'
+import localize from '../lib/index.js'
 import { scanStrings, stringLiterals, looksLikeUiCopy } from '../lib/scan.js'
+
+const bundle = loadClient(CLIENT, { react: miniReact().React, primitives: primitivesStub().primitives })
 
 // ── reporter ─────────────────────────────────────────────────────────────────
 
@@ -152,9 +158,10 @@ process.on('exit', () => {
   check('an overlay can be removed, and removing one that is gone is still fine', removed.ok === true && readOverlay(ROOT, 'dsh-graphify', 'ko').missing === true && removeOverlay(ROOT, 'dsh-graphify', 'ko').ok === true, JSON.stringify(removed))
 }
 
-// ── 4. the resolution rule ───────────────────────────────────────────────────
+// ── 4. the resolution rule, driven from the shipped bundle ───────────────────
 
 {
+  const { resolveOverlay } = bundle
   const map = { Save: '저장', 'Save changes': '변경 사항 저장' }
   check('an exact source resolves to its translation', resolveOverlay(map, 'Save') === '저장', resolveOverlay(map, 'Save'))
   check('a longer source resolves as itself, not by prefix', resolveOverlay(map, 'Save changes now') === 'Save changes now', resolveOverlay(map, 'Save changes now'))
@@ -170,6 +177,47 @@ process.on('exit', () => {
   )
   check('`en` is the source language, so it is never one we store an overlay for', !LANGS.includes('en') && !LANGS.includes('zh') && LANGS.join(',') === 'ko,ja,fr,de,es', JSON.stringify(LANGS))
   check('and the overlay root is a directory beside the profile, not inside a package', overlayRoot('/some/profile') === '/some/profile/localizations', overlayRoot('/some/profile'))
+  check('the bundle asks the host on one route, with no trailing slash', bundle.OVERLAY_API === '/plugins/localize/overlay', bundle.OVERLAY_API)
+}
+
+// ── 4b. applying a map to a rendered tree ────────────────────────────────────
+
+/** A DOM-shaped tree, hand-built: the walk has to work on this, so it is the test. */
+function el(...children) {
+  return { nodeType: 1, childNodes: children }
+}
+function text(value) {
+  return { nodeType: 3, nodeValue: value }
+}
+
+{
+  const { makeOverlay, textNodesUnder } = bundle
+  const save = text('Save')
+  const nested = text('Cancel')
+  const untouched = text('Something else')
+  const body = el(el(text('  '), save), el(nested), untouched)
+
+  check('the walk finds every text node under a root, and no element', textNodesUnder(body).length === 4 && textNodesUnder(body).every((node) => node.nodeType === 3), JSON.stringify(textNodesUnder(body).map((node) => node.nodeValue)))
+  check('a tree with no children is walked without complaint', textNodesUnder(el()).length === 0 && textNodesUnder(null).length === 0 && textNodesUnder(text('x')).length === 1, 'walk')
+
+  const overlay = makeOverlay()
+  const changed = overlay.apply(body, { Save: '저장', Cancel: '취소' })
+  check('applying a map translates the matching nodes and counts them', changed === 2 && save.nodeValue === '저장' && nested.nodeValue === '취소', JSON.stringify({ changed, save: save.nodeValue, nested: nested.nodeValue }))
+  check('and a node with no translation is left EXACTLY as it was', untouched.nodeValue === 'Something else', untouched.nodeValue)
+  check('whitespace-only nodes are not disturbed', textNodesUnder(body)[0].nodeValue === '  ', JSON.stringify(textNodesUnder(body)[0].nodeValue))
+
+  // A SECOND LANGUAGE IS NOT ADDITIVE: the overlay restores the English first, then applies.
+  const back = overlay.restore(body)
+  check('restoring puts every changed node back to its own text', back === 2 && save.nodeValue === 'Save' && nested.nodeValue === 'Cancel', JSON.stringify({ back, save: save.nodeValue }))
+  const second = overlay.apply(body, { Save: '保存', Cancel: '取消' })
+  check(
+    'and a language switch lands on the ENGLISH, not on the previous language',
+    second === 2 && save.nodeValue === '保存' && nested.nodeValue === '取消',
+    JSON.stringify({ second, save: save.nodeValue }),
+  )
+  overlay.restore(body)
+  check('so switching back and forth is stable', save.nodeValue === 'Save' && nested.nodeValue === 'Cancel', JSON.stringify({ save: save.nodeValue, nested: nested.nodeValue }))
+  check('applying no map at all changes nothing', makeOverlay().apply(body, null) === 0 && makeOverlay().apply(body, {}) === 0, 'no map')
 }
 
 // ── 5. the scan ──────────────────────────────────────────────────────────────
@@ -260,6 +308,171 @@ const CASES = [
   } else {
     note('no real bundle to scan on this machine')
   }
+}
+
+// ── 5b. the wiring: a language change restores before it applies ─────────────
+
+{
+  // Driven through `startOverlay` with a real (stub) document and fetch. The rule under test is the
+  // one that makes a language switch safe: `apply` resolves against the ORIGINAL text it first saw, so
+  // a second language lands on the English even though the DOM currently holds the first language.
+  // (Resolving against the CURRENT text instead is the mutation this check exists to catch — it leaves
+  // the screen in the old language, because the new map has no entry for a translated string.)
+  const node = { nodeType: 3, nodeValue: 'Save' }
+  const body = { nodeType: 1, childNodes: [{ nodeType: 1, childNodes: [node] }] }
+  let map = { Save: '저장' }
+  let asked = []
+  const wired = loadClient(CLIENT, {
+    react: miniReact().React,
+    primitives: primitivesStub().primitives,
+    globals: {
+      document: { body },
+      fetch: async (url) => {
+        asked.push(String(url))
+        return { ok: true, json: async () => ({ map }) }
+      },
+      MutationObserver: undefined,
+    },
+  })
+  const started = wired.startOverlay({ getSnapshot: () => ({ active: 'ko' }) })
+  await started.refresh()
+  const korean = node.nodeValue
+  check('the wiring applies the map for the ACTIVE language', korean === '저장', JSON.stringify({ korean, asked }))
+  check('and the overlay asked the host for that language', asked.every((url) => url.includes('lang=ko')), JSON.stringify(asked))
+
+  // THE MECHANISM ON ITS OWN, and it has to run while the node holds a TRANSLATED word: `apply`
+  // resolves against the original it remembered, so the French lands even though the DOM says Korean.
+  // Resolving against the current text instead is the mutation this isolates (the wiring's own restore
+  // hides it, because after a restore the current text IS the original).
+  map = { Save: 'Enregistrer' }
+  const switchedAlone = started.overlay.apply(body, map)
+  check(
+    'and `apply` alone switches language, because it resolves against the remembered original',
+    switchedAlone === 1 && node.nodeValue === 'Enregistrer',
+    JSON.stringify({ switchedAlone, node: node.nodeValue }),
+  )
+
+  // THE WIRING'S OWN PATH: a refresh for another language lands on that language too.
+  map = { Save: '保存' }
+  await started.refresh()
+  const chinese = node.nodeValue
+  check('a second refresh lands on the second language: translation is not cumulative', chinese === '保存', JSON.stringify({ chinese }))
+  const back = started.overlay.restore(body)
+  check('and restore puts the DOM back in its own words, which is the way out of a language', node.nodeValue === 'Save', JSON.stringify({ back, node: node.nodeValue }))
+  check('a host with no document is a no-op, never an exception', typeof wired.startOverlay({ getSnapshot: () => ({ active: 'en' }) }).refresh === 'function', 'no-op')
+}
+
+// ── 6. the route that serves the maps ────────────────────────────────────────
+
+function fakeResponse() {
+  const res = { statusCode: 0, headers: {}, body: '' }
+  res.setHeader = (key, value) => {
+    res.headers[String(key).toLowerCase()] = value
+  }
+  res.end = (text) => {
+    res.body = text
+  }
+  res.destroy = () => {}
+  return res
+}
+function fakeRequest(method, url, body) {
+  const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
+  req.method = method
+  req.url = url
+  req.headers = { 'content-type': 'application/json' }
+  return req
+}
+const parse = (res) => {
+  try {
+    return JSON.parse(res.body)
+  } catch {
+    return null
+  }
+}
+
+{
+  // The route reads the profile from `MUEN_LOCALIZE_DIR`, which is this suite's temp root — so the
+  // route and the store are checked against the SAME place, and a drift between them would fail here.
+  process.env.MUEN_LOCALIZE_DIR = ROOT
+  const registered = []
+  const labels = []
+  const server = { register: (row) => { registered.push(row); return () => {} } }
+  const ctx = {
+    get: (service) => (service === 'webServer' ? server : undefined),
+    effect: (fn, label) => { labels.push(label); fn(); return () => {} },
+    inject: (names, fn) => fn(),
+    on: () => {},
+  }
+  const report = localize.apply(ctx)
+  check(
+    'the host registers ONE exact route, and the path carries no trailing slash',
+    registered.length === 1 && registered[0].kind === 'exact' && registered[0].path === '/plugins/localize/overlay' && !registered[0].path.endsWith('/'),
+    JSON.stringify(registered.map((row) => [row.kind, row.path])),
+  )
+  check(
+    'and its disposer is owned by ctx.effect, so the route leaves with the plugin',
+    labels.includes('localize: overlay') && report && report.overlayRoot === join(ROOT, 'localizations'),
+    JSON.stringify({ labels, root: report && report.overlayRoot }),
+  )
+
+  const route = registered[0].handler
+
+  const written = fakeResponse()
+  await route(fakeRequest('POST', '/plugins/localize/overlay', { plugin: 'dsh-discord', lang: 'fr', map: { Save: 'Enregistrer', Cancel: 'Annuler' } }), written)
+  check('a POST writes an overlay through the route', written.statusCode === 200 && parse(written).ok === true && parse(written).keys === 2, written.body)
+
+  const one = fakeResponse()
+  await route(fakeRequest('GET', '/plugins/localize/overlay?plugin=dsh-discord&lang=fr'), one)
+  check('a GET for one plugin and language answers its map', one.statusCode === 200 && parse(one).map.Save === 'Enregistrer' && parse(one).missing === false, one.body)
+
+  const mergedRead = fakeResponse()
+  await route(fakeRequest('GET', '/plugins/localize/overlay?lang=fr'), mergedRead)
+  check(
+    'a GET for a language answers the maps to merge, the merged map, and any conflict',
+    mergedRead.statusCode === 200 && parse(mergedRead).map.Save === 'Enregistrer' && Array.isArray(parse(mergedRead).conflicts) && parse(mergedRead).overlays.length === 1,
+    mergedRead.body,
+  )
+
+  const listed = fakeResponse()
+  await route(fakeRequest('GET', '/plugins/localize/overlay'), listed)
+  check('and a GET with nothing named lists what the profile holds', listed.statusCode === 200 && Array.isArray(parse(listed).overlays) && parse(listed).overlays.some((row) => row.plugin === 'dsh-discord' && row.lang === 'fr'), listed.body)
+
+  const hostile = fakeResponse()
+  await route(fakeRequest('POST', '/plugins/localize/overlay', { plugin: '../evil', lang: 'fr', map: { Save: 'x' } }), hostile)
+  check('a write that would escape the profile is refused with 400, and nothing lands', hostile.statusCode === 400 && parse(hostile).error === 'bad-plugin' && !existsSync(join(ROOT, '..', 'evil')), hostile.body)
+
+  const noBody = fakeResponse()
+  await route(fakeRequest('POST', '/plugins/localize/overlay'), noBody)
+  check('a POST with no body at all is refused rather than treated as an empty overlay', noBody.statusCode === 400 && parse(noBody).error === 'bad-body', noBody.body)
+
+  // The scan, through the route, on a bundle this suite writes: the host reads TEXT and never executes it.
+  const pluginLib = join(ROOT, 'node_modules', 'dsh-discord', 'lib')
+  mkdirSync(pluginLib, { recursive: true })
+  writeFileSync(join(pluginLib, 'client.js'), "const x = '--dsw-alias-bg-layer-2'\nh('button', null, 'Save changes')\n")
+  const scanned = fakeResponse()
+  await route(fakeRequest('POST', '/plugins/localize/overlay', { scan: true, plugin: 'dsh-discord' }), scanned)
+  check(
+    'the route can scan an installed bundle: the copy is found and the CSS is not',
+    scanned.statusCode === 200 && parse(scanned).strings.includes('Save changes') && !parse(scanned).strings.some((value) => value.includes('dsw-')),
+    scanned.body,
+  )
+  const noBundle = fakeResponse()
+  await route(fakeRequest('POST', '/plugins/localize/overlay', { scan: true, plugin: 'not-installed' }), noBundle)
+  check('and a plugin with no bundle is a 404, not an empty answer', noBundle.statusCode === 404 && parse(noBundle).error === 'no-bundle', noBundle.body)
+
+  const removed = fakeResponse()
+  await route(fakeRequest('DELETE', '/plugins/localize/overlay?plugin=dsh-discord&lang=fr'), removed)
+  const gone = fakeResponse()
+  await route(fakeRequest('GET', '/plugins/localize/overlay?plugin=dsh-discord&lang=fr'), gone)
+  check('a DELETE removes one overlay, and the next read says it is gone', removed.statusCode === 200 && parse(removed).ok === true && parse(gone).missing === true, JSON.stringify({ removed: removed.body, gone: gone.body }))
+
+  const badDelete = fakeResponse()
+  await route(fakeRequest('DELETE', '/plugins/localize/overlay'), badDelete)
+  check('a DELETE with nothing named is refused', badDelete.statusCode === 400 && parse(badDelete).error === 'bad-target', badDelete.body)
+
+  const wrongMethod = fakeResponse()
+  await route(fakeRequest('PUT', '/plugins/localize/overlay'), wrongMethod)
+  check('and a method the route does not own answers 405 with Allow', wrongMethod.statusCode === 405 && /GET, POST, DELETE/u.test(wrongMethod.headers.allow || ''), JSON.stringify({ status: wrongMethod.statusCode, allow: wrongMethod.headers.allow }))
 }
 
 note('temp profile: ' + ROOT)
