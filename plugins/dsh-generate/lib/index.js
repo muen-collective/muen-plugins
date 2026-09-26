@@ -85,6 +85,7 @@ import { CAN_CHOOSE, chooseFolder, revealFile, revealFolder } from './folder-act
 import { resolveDataRoot } from './paths.js'
 import { listRunRecords, readRunRecord, unitOf, valuesOf, whereIs } from './run-record.js'
 import { keepUpload } from './uploads.js'
+import { SESSION_SCHEMA, deleteSession, listSessions, normaliseSession, readSession, writeSession } from './sessions.js'
 
 /** Matches the row id in cordis.patch.yml. */
 export const name = 'generate'
@@ -110,6 +111,8 @@ const PROVIDERS_PATH = '/plugins/generate/providers'
 const PROVIDERS_PREFIX = '/plugins/generate/providers'
 // Exact route, no trailing slash (the webServer rule): where finished runs save.
 const LIBRARY_PATH = '/plugins/generate/library'
+// Exact route, no trailing slash: the sessions a person can come back to (epic 64 S5).
+const SESSIONS_PATH = '/plugins/generate/sessions'
 const TIMEOUT_MS = 15000
 
 /** Refuse a body past this — a key is tens of bytes, and the route is reachable. */
@@ -1652,11 +1655,90 @@ export function apply(ctx, config = {}) {
     send(res, 200, await libraryState())
   }
 
+  /**
+   * THE SESSIONS STORE (epic 64 S5). One file per session under the profile's own generate
+   * root, and three verbs over it: list, create-or-update, delete.
+   *
+   * WHY AN EXACT PATH AND NOT THE PROVIDER PREFIX: a session is not one provider's — it names
+   * the provider and the adapter it belongs to, and a person's sessions from two providers
+   * are one list. So this hangs off the plugin's own namespace, the shape the library route
+   * already keeps.
+   *
+   * CREATE AND UPDATE ARE ONE VERB. The caller sends the session it has; a POST whose id is
+   * absent or unknown creates, and one whose id exists updates in place, preserving
+   * `createdAt` — which is what an autosaving pane needs, because it should not have to know
+   * whether this is the first write.
+   *
+   * A FILE THAT IS NOT OURS IS REPORTED, NOT OBEYED: the list answers `skipped` beside
+   * `sessions`, with each file's own reason.
+   */
+  const sessionsRoute = async (req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    const url = new URL(req.url || '/', 'http://127.0.0.1')
+
+    if (method === 'GET') {
+      const listed = await listSessions(root.root)
+      send(res, 200, {
+        schema: SESSION_SCHEMA,
+        root: root.root,
+        rootKind: root.kind,
+        sessions: listed.sessions,
+        skipped: listed.skipped,
+        total: listed.total,
+      })
+      return
+    }
+
+    if (method === 'DELETE') {
+      const id = str(url.searchParams.get('id'))
+      if (id === null) {
+        send(res, 400, { error: 'missing-id', detail: 'a session id is required' })
+        return
+      }
+      const { removed } = await deleteSession(root.root, id)
+      if (!removed) {
+        send(res, 404, { error: 'no-session', detail: 'no session is named "' + id + '"' })
+        return
+      }
+      send(res, 200, { ok: true, id })
+      return
+    }
+
+    if (method !== 'POST') {
+      methodNotAllowed(res, 'GET, POST, DELETE')
+      return
+    }
+
+    const body = await readJsonBody(req)
+    if (body === undefined) {
+      send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
+      return
+    }
+    // An EMPTY object is not a session: `readJsonBody` answers `{}` for a body that was not
+    // sent at all (the library route relies on that), so a write with nothing in it would
+    // otherwise create an empty session out of an accidental POST.
+    if (Object.keys(body).length === 0) {
+      send(res, 400, { error: 'bad-request', detail: 'a session is required' })
+      return
+    }
+    const at = new Date().toISOString()
+    const id = str(url.searchParams.get('id')) || str(body.id)
+    const existing = id === null ? null : await readSession(root.root, id)
+    const normalised = normaliseSession(body, { id, at, existing })
+    if (normalised.error) {
+      send(res, 400, normalised)
+      return
+    }
+    await writeSession(root.root, normalised.session)
+    send(res, 200, normalised.session)
+  }
+
   const mount = (server) => {
     if (!server || typeof server.register !== 'function') return
     ctx.effect(() => server.register({ kind: 'exact', path: PROVIDERS_PATH, handler: list }), 'generate: providers')
     ctx.effect(() => server.register({ kind: 'prefix', path: PROVIDERS_PREFIX, handler: route }), 'generate: provider routes')
     ctx.effect(() => server.register({ kind: 'exact', path: LIBRARY_PATH, handler: libraryRoute }), 'generate: library')
+    ctx.effect(() => server.register({ kind: 'exact', path: SESSIONS_PATH, handler: sessionsRoute }), 'generate: sessions')
   }
 
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined

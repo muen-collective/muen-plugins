@@ -43,6 +43,20 @@ session"*). So a workflow's history is not on screen by default — and no histo
 fills from two directions: a run done in this visit joins it (only that run), or a tab opened to **continue** one
 arrives with its params and shows the whole series with that run selected.
 
+**A session is a piece of work, written down** (epic 64 S5). One file per session at
+`<profile>/generate/sessions/<id>.json`, holding the workflow, the values it was run with, the
+picked files (by the hash S2 kept) and the run ids those values made — the smallest honest
+version of the job session, where `values`, `uploads` and `runIds` are exactly one entry of a
+future `steps` array. **The run record stays the per-job truth**: a session is an index over run
+ids plus the form, so no payload is written twice under two spellings, and a session whose
+workflow has since been removed still lists with its runs intact — the record of the work
+outlives the tool that made it. **The per-workflow `state/<workflow>.json` snapshot is
+superseded**: a session's rows hold the values that were used, and the values a form OPENS with
+come from the adapter's authored `ui.defaults`, because keeping a snapshot would let one
+person's one-off tweak silently become everyone's default. And **a file that is not ours is
+reported, not obeyed**: a newer schema or a half-written file arrives in `skipped` with its own
+reason rather than being merged or failing the list.
+
 **That handoff carries three facts, not one** (epic 64 S7). The opener is
 `openTab('generate', { params: { run, unit, provider } })` — the run, the workflow it belongs to, and the
 provider it ran on — because this pane opens a **workflow** tab and then shows the run inside it: a bare job id
@@ -519,6 +533,7 @@ Four rules from §12 are structure here rather than style:
 | `POST /plugins/generate/providers/<id>/payload` | the gate's preview: `{ name, values }` → the exact body, what is still empty, what is refused. Free: no key, no network, nothing spent |
 | `POST /plugins/generate/providers/<id>/run` | `{ name, values, confirmed: true }` → `{ jobId, status }`; anything without the flag is refused by name |
 | `GET /plugins/generate/providers/<id>/run?job=<id>` | one poll → `{ state, status, urls, error }`, and the run's file gains the outcome on a terminal state |
+| `/plugins/generate/sessions` | **the session store** (epic 64 S5): `GET` the list (newest first, plus every file that is NOT a session, named in `skipped`), `POST` a session to create it or update it in place, `DELETE ?id=` to remove one. One file per session at `<profile>/generate/sessions/<id>.json`, schema `muen-generate-session/v1`. The id is sanitised into a plain file name, an empty body creates nothing, and a write carrying an unknown `schema` is refused rather than stored |
 | `POST /plugins/generate/providers/<id>/asset` | the upload an image door calls: the body IS the file, `X-File-Name` and `Content-Type` say what it is → `{ url, asset, kept }`. **The picked file is KEPT** (epic 64 S2) at `<provider>/uploads/<sha256>.<ext>` — content-addressed, written once however many times it is picked, the extension from the content type rather than the name, and `kept` answers `{ sha256, file, bytes, name, type, ext, existed }` beside the provider's handle. **A failed copy never fails the upload**: `kept` carries the error and the provider's answer stands, because a full disk must not stop a person from generating. Refused with `501` for a provider that declares no `upload` |
 
 One job at a time. The host posts the body with the provider's key from the credential store and answers with a

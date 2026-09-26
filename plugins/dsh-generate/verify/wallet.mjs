@@ -252,12 +252,22 @@ function mount(credentials, folders) {
 // 1. the routes themselves
 {
   const { server } = mount(fakeCredentials({}))
-  // THREE registrations, and they are three questions: the list of providers,
-  // everything one provider answers (its key, its workflows, one workflow, its run),
-  // and where finished runs save. A plugin per provider would have needed a fourth
-  // and a fifth; the provider id is in the path instead, which is why one prefix can
-  // serve them all.
-  check('exactly three routes are registered: the list, the provider prefix, and the library', server.routes.length === 3, server.routes.length + ' routes')
+  // FOUR registrations, and each is a different question: the list of providers,
+  // everything one provider answers (its key, its workflows, one workflow, its run,
+  // its upload, the strip's reads), where finished runs save, and the sessions a
+  // person can come back to (epic 64 S5). A plugin per provider would have needed one
+  // route per provider; the provider id is in the path instead, which is why one
+  // prefix serves them all. The check names the four rather than counting them, so a
+  // route added without a decision fails here instead of passing as "5 routes".
+  check(
+    'exactly four routes are registered: the list, the provider prefix, the library, and the sessions',
+    server.routes.length === 4 &&
+      server.routes.some((route) => route.kind === 'exact' && route.path === '/plugins/generate/providers') &&
+      server.routes.some((route) => route.kind === 'prefix' && route.path === '/plugins/generate/providers') &&
+      server.routes.some((route) => route.kind === 'exact' && route.path === '/plugins/generate/library') &&
+      server.routes.some((route) => route.kind === 'exact' && route.path === '/plugins/generate/sessions'),
+    JSON.stringify(server.routes.map((route) => route.kind + ' ' + route.path)),
+  )
   check(
     "the save folder answers at an exact '/plugins/generate/library' — no trailing slash, the webServer rule",
     server.routes.some((route) => route.kind === 'exact' && route.path === '/plugins/generate/library'),
