@@ -145,6 +145,32 @@ export function collect(node, predicate, out = []) {
 export const net = { fetch: () => Promise.reject(new Error('no stub installed')) }
 
 /**
+ * The sheets a client half injected, in order. A pane's `animation` needs keyframes that an
+ * inline style cannot carry, so the client appends a `<style>`; the suite reads its text back
+ * — the sibling plugin shipped a spinner whose animation name was never declared, and nothing
+ * said so until a check asked.
+ */
+export const sheets = { text: [], document: null }
+sheets.document = {
+  createElement: () => {
+    const element = {
+      textContent: '',
+      removed: false,
+      remove: () => {
+        element.removed = true
+      },
+    }
+    return element
+  },
+  head: {
+    appendChild: (element) => {
+      sheets.text.push(element.textContent)
+      return element
+    },
+  },
+}
+
+/**
  * Load the shipped browser script in a stubbed loader and return its factory.
  *
  * `stubs` is the icon set the current harness names; a client half resolves each glyph by its
@@ -164,6 +190,9 @@ export async function loadClient({ React, stubs = {} }) {
     // The client half runs in the vm, so a global it reads at call time (`fetch`) has to be
     // the sandbox's own — a `globalThis.fetch` set out here would never be seen from inside.
     fetch: (...args) => net.fetch(...args),
+    // A SHEET NEEDS A DOCUMENT: the one injected `<style>` is where the skeleton's keyframes
+    // are declared, and the sandbox keeps its text so a suite can read what was declared.
+    document: sheets.document,
     console,
   }
   vm.createContext(sandbox)
@@ -178,6 +207,7 @@ export async function loadClient({ React, stubs = {} }) {
     IconGridRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'grid', ...props }),
     IconRowsRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'rows', ...props }),
     IconWarningOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'warning', ...props }),
+    IconChevronDownOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'chevronDown', ...props }),
     ...stubs,
   }
   const factory = captured.factory((spec) => {

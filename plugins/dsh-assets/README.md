@@ -104,6 +104,33 @@ The metadata block is what the catalog job is for. With a run behind the file it
 the workflow, the app, the date it settled, **the prompt verbatim** and the values it ran with; without one it
 says so and shows the file's own facts. Both cases carry **where it is**.
 
+## The bar, and the two columns (the polish pass, 2026-09-26)
+
+The founder, after using it: *"now let's UX polish"*. Four changes, none of them to what the pane knows:
+
+- **The bar is one row** — the search, the two layouts, the two filters and the count. The two filter trees
+  used to stand open between that row and the grid, so **177px of tree came before the first picture**.
+- **A filter is one line until asked.** The trigger carries its name, the value it holds and how much is
+  behind it (`Context · All`, `1296` in the rows) and shuts itself when a row is chosen; a set filter shows a
+  `✕` that clears it in place. The counts live in the rows, so a collapsed filter is still answerable — *a
+  filter that cannot say how much is behind it is a guess, and a tree that is always open is a wall*.
+- **The picked asset sits BESIDE the grid.** It used to render after the whole grid, so reading the asset you
+  had just picked meant scrolling past every tile in the library. Now a wrapping pair — the grid `3 1 0` with a
+  260px floor, the block `2 1 0` with a 240px floor, **the same pair the workflow surface settled on** — and
+  below 512px of pane they stack, where the block goes back under the grid because that is the only place left.
+- **The count is a sentence** (`1296 assets`, or `21 of 1296` while a filter or a search is on) instead of an
+  uppercase group title.
+
+Two smaller ones: a tile **answers the pointer** (its border brightens) and the picked one wears the app's own
+accent, with the hover flag living in the pane rather than in each tile — exactly one tile is under the pointer,
+and a hook per tile would make the pane's hook count depend on how many tiles are on screen. And the loading
+state is now **six of the pane's own tiles** wearing `--dsw-alias-bg-skeleton`, so the grid does not jump into
+place when the answer lands; its pulse is the one thing here that cannot be an inline style, so it is a class
+from the single sheet the plugin injects — and `verify/mount.mjs` checks that every class it animates is
+declared in that sheet, which is the rabbit the sibling plugin's undeclared spinner came out of.
+
+**Identity only, again:** a folder stays a folder where a folder IS the thing.
+
 ## The handoff: an asset is a way back into its run (epic 64 S7)
 
 The library is the front door, not the last step (founder, 2026-09-25: *"we designed Generate first as the
@@ -224,10 +251,12 @@ them.
 
 ```
 node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room,
-                           #     and the card's own mark (not the folder)                  35
+                           #     the card's own mark (not the folder), the skeleton and
+                           #     the sheet that declares what it animates                   42
 node verify/intake.mjs     # A2: the folders, the records, the filters, the carrier       63
-node verify/views.mjs      # A3: the grid, the tile, the metadata block, and EVERY
-                           #     folder control pressed through to the host               49
+node verify/views.mjs      # A3: the grid, the tile, the metadata block, EVERY folder
+                           #     control pressed through to the host, the bar, the two
+                           #     columns, hover, and a count that is a sentence          73
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36

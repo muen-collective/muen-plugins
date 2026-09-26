@@ -160,8 +160,30 @@ async function render(passes = 4) {
 
 {
   check('the grid is `repeat(auto-fit, minmax(240px, 1fr))`', /repeat\(auto-fit, minmax\(240px, 1fr\)\)/.test(source), 'the expression the OS shipped')
-  check('with no breakpoints anywhere in the bundle', !source.includes('@media'), (source.match(/@media/g) || []).length + ' @media')
+  // THE RULE IS "NO WIDTH IS EVER A BREAKPOINT", not "no media query exists": the polish pass
+  // added a `prefers-reduced-motion` guard for the skeleton's pulse, which is an accessibility
+  // query and says nothing about the pane's width. So the check is sharpened to what it means —
+  // no `min-width`/`max-width` anywhere — and the one query the bundle does carry is named.
+  check('with no width breakpoint anywhere in the bundle', !/@media[^{]*(min-width|max-width)/.test(source), (source.match(/@media[^{]*/g) || []).join(' | '))
+  check(
+    'and the only media query it carries is the reduced-motion guard',
+    (source.match(/@media/g) || []).length === 1 && /@media \(prefers-reduced-motion: reduce\)/.test(source) && !source.includes('@media (min-width') && !source.includes('@media (max-width'),
+    (source.match(/@media[^{]*/g) || []).join(' | '),
+  )
   check('and no fixed column count', !/gridTemplateColumns: *'repeat\(\d/.test(source), 'no repeat(3, …)')
+
+  // A DUPLICATE STYLE KEY IS A DESIGN NOBODY CAN FIND AGAIN. The polish pass found `list` and
+  // `item` each declared twice — the first pair silently shadowed by the second — and, beside
+  // them, keys nothing had drawn for days. Nothing but a scan can see either: the last key in an
+  // object literal wins in silence, which is exactly how that rot hides.
+  const styleAt = source.indexOf('const S = {')
+  const styleBody = source.slice(styleAt, source.indexOf('\n    }', styleAt))
+  const styleKeys = [...styleBody.matchAll(/^      ([A-Za-z][A-Za-z0-9]*):/gm)].map((match) => match[1])
+  const twice = styleKeys.filter((key, index) => styleKeys.indexOf(key) !== index)
+  check('no style key is declared twice', twice.length === 0, twice.join(', ') || 'none')
+  const elsewhere = source.replace(styleBody, '')
+  const unread = styleKeys.filter((key) => !new RegExp(String.raw`S\.${key}\b`).test(elsewhere))
+  check('and no style key is left unread', unread.length === 0, unread.join(', ') || 'none')
 }
 
 // ── 2. a tile is a button, and draggable only with bytes ───────────────────
@@ -290,12 +312,38 @@ async function render(passes = 4) {
 {
   posted.length = 0
   view = { ...view, view: 'grid', selected: null }
-  const tree = await render()
+  let tree = await render()
+  // THE DATE TREE IS ONE PRESS AWAY (polish pass, 2026-09-26): the filter is one line in the
+  // bar and its rows — with their counts — open under it. Closed at rest, because a tree that is
+  // always open is a wall between a person and the grid; the count on the trigger keeps "how
+  // much is behind this" answerable without opening anything.
+  const trigger = collect(tree, (node) => node.props && node.props['data-assets-filter-button'] === 'date')[0]
+  check('the date filter is one line in the bar', !!trigger, trigger ? textOf(trigger).join(' ') : 'none')
+  check('and it says how much is behind it while shut', !!trigger && textOf(trigger).join(' ').includes('All'), trigger ? textOf(trigger).join(' ') : 'none')
+  check('with its rows shut', collect(tree, (node) => node.props && node.props['data-assets-filter-panel'] !== undefined).length === 0, 'a panel was open at rest')
+
+  if (!trigger) {
+    check('opening it draws the day rows, each with its own count', false, 'no filter trigger to press')
+    check('and choosing it writes the filter', false, 'no filter trigger to press')
+  } else {
+  trigger.props.onClick()
+  mini.reset()
+  tree = pane({ locale: { bind: () => t } })
   const dayRow = collect(tree, (node) => node.props && node.props['data-assets-filter-row'] === 'yes' && textOf(node).join(' ').includes('2026-09-25'))
-  check('a day row carries its own count', dayRow.length === 1 && textOf(dayRow[0]).join(' ').includes('1'), dayRow.length ? textOf(dayRow[0]).join(' ') : 'none')
-  dayRow[0].props.onClick()
-  await settle()
-  check('and choosing it writes the filter', posted.some((entry) => entry.url.includes('/view') && entry.body.date === '2026-09-25'), JSON.stringify(posted))
+  check('opening it draws the day rows, each with its own count', dayRow.length === 1 && textOf(dayRow[0]).join(' ').includes('1'), dayRow.length ? textOf(dayRow[0]).join(' ') : 'none')
+  // A WALK THAT CANNOT FIND ITS ROW REPORTS IT rather than dying on `[0].props`: a suite that
+  // throws tells the next person nothing about which claim broke.
+  if (dayRow[0]) {
+    dayRow[0].props.onClick()
+    await settle()
+    check('and choosing it writes the filter', posted.some((entry) => entry.url.includes('/view') && entry.body.date === '2026-09-25'), JSON.stringify(posted))
+  } else {
+    check('and choosing it writes the filter', false, 'no day row was drawn to press')
+  }
+  }
+  mini.reset()
+  tree = pane({ locale: { bind: () => t } })
+  check('then the panel shuts itself — choosing IS the end of that interaction', collect(tree, (node) => node.props && node.props['data-assets-filter-panel'] !== undefined).length === 0, 'still open')
 }
 
 // ── 6. the search narrows what is on screen ────────────────────────────────
@@ -438,6 +486,81 @@ async function render(passes = 4) {
   check('and it reaches the host as well', fallbackWhy === null && foldersPost().length === 1 && foldersPost()[0].body.action === 'choose', fallbackWhy || JSON.stringify(posted))
 }
 
-note('the live layer is the founder’s eyes: the grid, the badges and the metadata block on a running app')
+// ── 8. the polish pass: two columns, a bar, hover, and a count that is a sentence ─────────
+//
+// The founder, 2026-09-26: *"now let's UX polish"*. Four claims, each one something a person
+// sees: the picked asset is BESIDE the grid instead of under all of it; the filters are one line
+// each until asked; a tile answers the pointer and the selection wears the app's own accent; and
+// the bar says how much is here in words.
+
+{
+  view = { ...view, view: 'grid', context: null, date: null, selected: null }
+  let tree = await render()
+  const columns = collect(tree, (node) => node.props && node.props['data-assets-columns'] === 'yes')[0]
+  check('the pictures and the picked one are two columns', !!columns, columns ? 'drawn' : 'absent')
+  const main = collect(tree, (node) => node.props && node.props['data-assets-main'] === 'yes')[0]
+  check('the grid keeps the left, 3 parts of the free width with the family’s own 260px floor', !!main && main.props.style.flex === '3 1 0' && main.props.style.minWidth === 260, JSON.stringify(main && { flex: main.props.style.flex, minWidth: main.props.style.minWidth }))
+  check('and with nothing picked there is no empty panel waiting', collect(tree, (node) => node.props && node.props['data-assets-side'] === 'yes').length === 0, 'a side column was drawn with no selection')
+
+  view = { ...view, selected: RECORDED }
+  tree = await render()
+  const side = collect(tree, (node) => node.props && node.props['data-assets-side'] === 'yes')[0]
+  check('picking one opens the block BESIDE the grid, not under it', !!side && collect(side, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 1, side ? 'beside' : 'absent')
+  check('at 2 parts of the free width, with its own 240px floor — the breakpoint is the pane', !!side && side.props.style.flex === '2 1 0' && side.props.style.minWidth === 240, JSON.stringify(side && { flex: side.props.style.flex, minWidth: side.props.style.minWidth }))
+  check('and the block it holds is a sibling of the grid, not a child of it', !!side && collect(side, (node) => node.props && node.props['data-assets-grid'] === 'yes').length === 0, 'the grid is inside the side column')
+}
+
+{
+  // THE BAR: the filters are one line each, the count is a sentence.
+  view = { ...view, selected: null }
+  let tree = await render()
+  const bar = collect(tree, (node) => node.props && node.props['data-assets-bar'] === 'yes')[0]
+  check('the search, the layouts and the filters share one bar', !!bar, bar ? 'drawn' : 'absent')
+  const summary = collect(tree, (node) => node.props && node.props['data-assets-summary'] === 'yes')[0]
+  check('the count is a sentence, not an uppercase group title', !!summary && textOf(summary).join('') === '2 assets', summary ? textOf(summary).join('') : 'none')
+  check('and it never counts a collapsed tree in a title', !textOf(tree).join(' ').includes('CONTEXT ·'), textOf(tree).join(' ').slice(0, 60))
+
+  const input = collect(tree, (node) => node.props && node.props['data-assets-search'] === 'yes')[0]
+  input.props.onChange({ target: { value: 'job-aaa' } })
+  mini.reset()
+  tree = pane({ locale: { bind: () => t } })
+  const narrowed = collect(tree, (node) => node.props && node.props['data-assets-summary'] === 'yes')[0]
+  check('narrowing the search says how much is LEFT of how much there is', !!narrowed && textOf(narrowed).join('') === '1 of 2', narrowed ? textOf(narrowed).join('') : 'none')
+  check('and the numbers come from the catalog, not from the rendered page', source.includes("t('pane.summary.filtered')"), 'the summary is not built from the payload counts')
+}
+
+{
+  // HOVER AND SELECTION. An inline style cannot carry `:hover`, so the pane keeps the flag.
+  view = { ...view, selected: null }
+  let tree = await render()
+  const at = () => collect(tree, (node) => node.props && node.props['data-assets-tile'] === 'yes')[0]
+  const tile = at()
+  check('a tile says whether it is under the pointer, and starts not', !!tile && tile.props['data-assets-tile-hover'] === 'no', tile ? String(tile.props['data-assets-tile-hover']) : 'none')
+  // The resting tile draws the `border` shorthand (`1px solid …l2`); hover and selection override
+  // only its COLOUR, which is why those two read `borderColor` and this one reads `border`.
+  check('resting on the pane’s own border', tile.props.style.border === '1px solid var(--dsw-alias-border-l2)' && tile.props.style.borderColor === undefined, String(tile.props.style.border))
+
+  tile.props.onMouseEnter()
+  mini.reset()
+  tree = pane({ locale: { bind: () => t } })
+  check('under the pointer it brightens', at().props['data-assets-tile-hover'] === 'yes' && at().props.style.borderColor === 'var(--dsw-alias-border-l3)', String(at().props.style.borderColor))
+  at().props.onMouseLeave()
+  mini.reset()
+  tree = pane({ locale: { bind: () => t } })
+  check('and it goes back when the pointer leaves', at().props['data-assets-tile-hover'] === 'no' && at().props.style.borderColor === undefined, String(at().props.style.borderColor))
+
+  view = { ...view, selected: RECORDED }
+  tree = await render()
+  const picked = collect(tree, (node) => node.props && node.props['data-assets-tile-selected'] === 'yes')[0]
+  check('the picked tile wears the app’s own accent', !!picked && picked.props.style.borderColor === 'var(--dsw-alias-brand-primary)', picked ? String(picked.props.style.borderColor) : 'none')
+  picked.props.onMouseEnter()
+  mini.reset()
+  tree = pane({ locale: { bind: () => t } })
+  const stillPicked = collect(tree, (node) => node.props && node.props['data-assets-tile-selected'] === 'yes')[0]
+  check('and hovering a picked tile does not repaint the selection', stillPicked.props.style.borderColor === 'var(--dsw-alias-brand-primary)', String(stillPicked.props.style.borderColor))
+  view = { ...view, selected: null }
+}
+
+note('the live layer is the founder’s eyes: the bar, the two columns, the hover and the card’s own mark')
 
 finish()

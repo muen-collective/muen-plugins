@@ -19,7 +19,7 @@
  *
  *   node verify/mount.mjs
  */
-import { miniReact, textOf, collect, loadClient, recordingCtx, reporter, net, settle } from './harness.mjs'
+import { miniReact, textOf, collect, loadClient, recordingCtx, reporter, net, settle, sheets } from './harness.mjs'
 
 const PKG_NAME = '@muen/dsh-assets'
 const KIND = 'assets'
@@ -29,7 +29,7 @@ const GUIDE_ENTRY_ID = 'open'
 const { check, note, finish } = reporter('verify:mount — epic 63 A1 (the Assets card and the empty room)')
 
 const mini = miniReact()
-const { registration, exports: exports_ } = await loadClient({ React: mini.React })
+const { registration, exports: exports_, source } = await loadClient({ React: mini.React })
 check('the client half registers itself under the package name', registration && registration.id === PKG_NAME, registration && registration.id)
 check('and exposes a factory that needs only react', typeof registration.factory === 'function', typeof registration.factory)
 check('the factory answers inject + apply', typeof exports_.apply === 'function' && Array.isArray(exports_.inject), JSON.stringify(exports_.inject))
@@ -99,9 +99,52 @@ const renderPane = async (fetchImpl) => {
   }
 }
 
+/** The same render, returning the TREE: the loading state is a shape, not only a sentence. */
+const renderPaneTree = async (fetchImpl) => {
+  net.fetch = fetchImpl
+  try {
+    mini.clear()
+    let tree = null
+    for (let pass = 0; pass < 2; pass += 1) {
+      mini.reset()
+      tree = body.component({ locale: { bind: () => (key) => en[key] || key } })
+      mini.runEffects()
+      await settle()
+    }
+    mini.reset()
+    return body.component({ locale: { bind: () => (key) => en[key] || key } })
+  } finally {
+    net.fetch = () => Promise.reject(new Error('no stub installed'))
+  }
+}
+
 {
   const text = await renderPane(() => new Promise(() => {}))
   check('while the host is answering, the pane says it is reading', text.includes('Reading folders'), text.slice(0, 80))
+}
+
+{
+  // THE LOADING STATE IS THE PANE'S OWN SHAPE (polish pass, 2026-09-26): a centred spinner said
+  // "something is happening"; six of the pane's tiles wearing the app's skeleton token say what
+  // is coming, so the grid does not jump into place when the answer lands.
+  const tree = await renderPaneTree(() => new Promise(() => {}))
+  const grid = collect(tree, (node) => node.props && node.props['data-assets-skeleton'] === 'yes')[0]
+  check('while the host is answering, the pane draws its own tiles rather than a spinner', !!grid && grid.children.length === 6, grid ? grid.children.length + ' skeleton tiles' : 'no skeleton')
+  check('filled with the app’s skeleton token', source.includes("'--dsw-alias-bg-skeleton'") || source.includes('--dsw-alias-bg-skeleton'), 'the token is not used')
+  check('and no loading glyph is drawn any more', collect(tree, (node) => node.props && node.props['data-stub-icon'] === 'loading').length === 0, 'a spinner is still in the tree')
+
+  // THE SHEET DECLARES WHAT IT USES. The sibling plugin shipped a spinner whose `animation` name
+  // was never declared — it never spun and nothing said so — so this suite asks: every class the
+  // bundle animates is in the sheet, and every animation name in the sheet has its keyframes.
+  const sheet = sheets.text.join('\n')
+  check('the bundle injects exactly one sheet', sheets.text.length === 1, sheets.text.length + ' sheet(s)')
+  const animated = [...new Set([...source.matchAll(/className: '([\w-]+)'/g)].map((match) => match[1]))]
+  check('every class it animates is declared in that sheet', animated.length > 0 && animated.every((name) => sheet.includes('.' + name)), animated.join(', ') || 'none')
+  const declared = [...sheet.matchAll(/@keyframes ([\w-]+)/g)].map((match) => match[1])
+  // `animation: none` in the reduced-motion guard is a declaration, not an animation name.
+  const used = [...new Set([...sheet.matchAll(/animation: ([\w-]+)/g)].map((match) => match[1]))].filter((name) => name !== 'none')
+  check('and every animation name it uses was declared', used.length > 0 && used.every((name) => declared.includes(name)), used.join(', ') + ' ← ' + (declared.join(', ') || 'nothing declared'))
+  check('with the reduced-motion guard, so the pulse is not the price of using the pane', /prefers-reduced-motion: reduce/.test(sheet), 'no guard')
 }
 
 {

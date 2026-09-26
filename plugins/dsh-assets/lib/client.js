@@ -30,12 +30,13 @@ window.__ModuleLoader__.load({
      */
     const icon = (current, legacy) => primitives[current] ?? primitives[legacy]
     const IconFolderOpen = icon('IconFolderOpenRegular', 'IconFolderOpen16')
-    const IconLoadingOutline16 = icon('IconLoadingOutlineRegular', 'IconLoadingOutline16')
     const IconPlusOutline16 = icon('IconPlusOutlineRegular', 'IconPlusOutline16')
     const IconCloseOutline16 = icon('IconCloseOutlineRegular', 'IconCloseOutline16')
     const IconGridOutline16 = icon('IconGridRegular', 'IconGrid16')
     const IconRowsOutline16 = icon('IconRowsRegular', 'IconRows16')
     const IconWarningOutline16 = icon('IconWarningOutlineRegular', 'IconWarningOutline16')
+    // The bar's filters wear the app's own disclosure chevron (polish pass, 2026-09-26).
+    const IconChevronDownOutline16 = icon('IconChevronDownOutlineRegular', 'IconChevronDown16')
     // The Generate surface's own glyph, which is what tells a person where this control goes
     // (epic 64 S7).
     const IconSparkle16 = icon('IconSparkleRegular', 'IconSparkle16')
@@ -77,7 +78,11 @@ window.__ModuleLoader__.load({
       'pane.filter.context': 'Context',
       'pane.filter.date': 'Date',
       'pane.filter.all': 'All',
+      'pane.filter.clear': 'Clear this filter',
       'pane.assets': 'assets',
+      // THE SUMMARY IS A SENTENCE ABOUT HOW MUCH IS HERE, and how much of it is on screen.
+      'pane.summary': '{n} assets',
+      'pane.summary.filtered': '{shown} of {total}',
       'pane.none': 'Nothing here yet',
       'pane.none.match': 'No asset matches this filter.',
       'pane.recorded': 'Run',
@@ -149,7 +154,10 @@ window.__ModuleLoader__.load({
       'pane.filter.context': '情境',
       'pane.filter.date': '日期',
       'pane.filter.all': '全部',
+      'pane.filter.clear': '清除此筛选',
       'pane.assets': '项资产',
+      'pane.summary': '{n} 项资产',
+      'pane.summary.filtered': '显示 {shown} / {total}',
       'pane.none': '这里还没有内容',
       'pane.none.match': '没有符合当前筛选的资产。',
       'pane.recorded': '运行',
@@ -205,7 +213,6 @@ window.__ModuleLoader__.load({
       muted: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11.5, lineHeight: '17px' },
       facts: { display: 'flex', flexDirection: 'column', gap: 2, width: '100%', paddingTop: 4 },
       row: { display: 'flex', justifyContent: 'space-between', gap: 12, minWidth: 0 },
-      path: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, overflowWrap: 'anywhere', textAlign: 'right' },
       glyph: { color: 'var(--dsw-alias-label-tertiary)', display: 'flex' },
       head: { display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' },
       folderRow: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 },
@@ -213,14 +220,15 @@ window.__ModuleLoader__.load({
       // it is, the name is the button, and Finder opens it (`pane.reveal`).
       folderButton: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: '1 1 auto', padding: '2px 4px', background: 'transparent', border: 0, borderRadius: 6, cursor: 'pointer', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5, textAlign: 'left' },
       folderName: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-      group: { display: 'flex', flexDirection: 'column', gap: 2, borderTop: '1px solid var(--dsw-alias-border-l2)', paddingTop: 8 },
-      groupTitle: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' },
+      // (Six style keys were deleted in the 2026-09-26 polish pass because nothing drew them:
+      //  `path`, `indent` and `thumbEmpty` had been dead since the system-path and nested-date
+      //  designs left, and `group`, `groupTitle` and `head2` died with the always-open filters.)
       filterRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', padding: '3px 6px', background: 'transparent', border: 0, borderRadius: 6, cursor: 'pointer', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5, textAlign: 'left' },
       filterRowOn: { background: 'var(--dsw-alias-bg-layer-2)' },
       count: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, fontVariantNumeric: 'tabular-nums' },
-      indent: { paddingLeft: 14 },
-      list: { display: 'flex', flexDirection: 'column', gap: 4 },
-      item: { display: 'flex', flexDirection: 'column', gap: 1, padding: '6px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)', minWidth: 0 },
+      // (`list` and `item` used to be declared HERE too — a column-shaped row from an earlier
+      // layout, silently shadowed by the pair near the bottom of this object. Removed in the
+      // 2026-09-26 polish pass: a duplicate key is a design nobody can find again.)
       itemName: { color: 'var(--dsw-alias-label-primary)', fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
       itemMeta: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, display: 'flex', gap: 8, minWidth: 0 },
       input: { width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l3)', background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5 },
@@ -229,22 +237,55 @@ window.__ModuleLoader__.load({
       // breakpoints — the pane's own width is the only input (`repeat(auto-fit, minmax(240px, 1fr))`).
       grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignContent: 'start' },
       tile: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, padding: 0, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, background: 'var(--dsw-alias-bg-layer-2)', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' },
-      tileOn: { borderColor: 'var(--dsw-alias-label-tertiary)' },
+      // HOVER IS STATE, NOT A SHEET: every style in this pane is inline, so there is no `:hover`
+      // to write — the tile carries the flag and swaps its own border (founder, 2026-09-23, on
+      // the sibling's account arrow: *"add onhover on the website link arrow to theme primary
+      // token color"*). SELECTED TAKES THE BRAND ACCENT, which is the app's own "this one".
+      tileHover: { borderColor: 'var(--dsw-alias-border-l3)' },
+      tileOn: { borderColor: 'var(--dsw-alias-brand-primary)' },
       // ONE RATIO FOR EVERY TILE, so a grid stays a grid.
       thumb: { position: 'relative', width: '100%', aspectRatio: '3 / 4', background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))', overflow: 'hidden' },
       thumbImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
-      thumbEmpty: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: 'var(--dsw-alias-label-tertiary)' },
       badgeRow: { position: 'absolute', left: 6, bottom: 6, display: 'flex', alignItems: 'center', gap: 4, maxWidth: 'calc(100% - 12px)' },
       // THE TWO BADGES ARE DIFFERENT KINDS OF FACT: the context is FILLED (where it belongs),
       // the size is OUTLINED (how big it is). They must not read as the same statement.
       badgeFill: { background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-primary)', fontSize: 10.5, lineHeight: '15px', padding: '0 5px', borderRadius: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.94 },
       badgeLine: { border: '1px solid var(--dsw-alias-border-l3)', color: 'var(--dsw-alias-label-secondary)', fontSize: 10.5, lineHeight: '15px', padding: '0 4px', borderRadius: 4, whiteSpace: 'nowrap', letterSpacing: '0.02em' },
       tileText: { padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 },
-      head2: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
       toggle: { display: 'inline-flex', gap: 2, background: 'var(--dsw-alias-bg-layer-2)', borderRadius: 8, padding: 2 },
       toggleOn: { background: 'var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-layer-2))', color: 'var(--dsw-alias-label-primary)' },
       toggleOff: { background: 'transparent', color: 'var(--dsw-alias-label-tertiary)' },
       toggleButton: { display: 'inline-flex', alignItems: 'center', gap: 4, border: 0, borderRadius: 6, padding: '3px 7px', cursor: 'pointer', font: 'inherit', fontSize: 11.5 },
+
+      // ── the polish pass (founder, 2026-09-26: *"now let's UX polish"*) ─────
+      //
+      // THE BAR IS ONE ROW: the search, the two layouts, the two filters and the count. The
+      // grid then starts high, and a filter no longer owns the screen before the pictures do.
+      bar: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+      // THE COUNT IS A SUMMARY, not an uppercase group title: how much is here, and how much of
+      // it the filters are showing.
+      summary: { color: 'var(--dsw-alias-label-caption)', fontSize: 11, fontVariantNumeric: 'tabular-nums', marginLeft: 'auto', whiteSpace: 'nowrap' },
+      // A FILTER IS ONE LINE AT REST — its name and the value it holds. The rows with their
+      // counts are one press away, because a filter that cannot say how much is behind it is a
+      // guess and a tree that is always open is a wall.
+      filterWrap: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
+      filterButton: { display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 190, padding: '3px 7px', borderRadius: 7, border: '1px solid var(--dsw-alias-border-l2)', background: 'transparent', color: 'var(--dsw-alias-label-secondary)', font: 'inherit', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' },
+      filterOn: { borderColor: 'var(--dsw-alias-border-l3)', color: 'var(--dsw-alias-label-primary)' },
+      filterValue: { overflow: 'hidden', textOverflow: 'ellipsis' },
+      filterPanel: { display: 'flex', flexDirection: 'column', gap: 2, padding: 4, borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)', border: '1px solid var(--dsw-alias-border-l2)' },
+      clearButton: { border: 0, background: 'transparent', color: 'var(--dsw-alias-label-tertiary)', display: 'flex', cursor: 'pointer', padding: 0 },
+      // THE TWO COLUMNS. The breakpoint is the pane's own width, because the pane is what
+      // resizes: the grid keeps a 320px floor and the block a 280px one, and below that they
+      // stack — the same rule the workflow surface already uses.
+      columns: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start', minWidth: 0 },
+      // The floors are the SAME PAIR the workflow surface settled on (260 + 240 + the 12px gap):
+      // one number for the whole family, so a pane that shows two columns there shows them here.
+      columnMain: { flex: '3 1 0', minWidth: 260, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 },
+      columnSide: { flex: '2 1 0', minWidth: 240, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 },
+      // THE SKELETON wears the app's own token and the pane's own shape, so the library looks
+      // like itself while it loads instead of throwing a spinner into the middle of nothing.
+      skeletonTile: { border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, overflow: 'hidden', background: 'var(--dsw-alias-bg-layer-2)' },
+      skeletonBlock: { background: 'var(--dsw-alias-bg-skeleton)' },
       meta: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l2)', paddingTop: 10 },
       metaHead: { color: 'var(--dsw-alias-label-primary)', fontSize: 12.5, fontWeight: 600 },
       // THE INSPECT STAGE (epic 63 A4): the picture in a frame of its own, above the facts.
@@ -269,7 +310,8 @@ window.__ModuleLoader__.load({
       sectionLabel: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' },
       list: { display: 'flex', flexDirection: 'column', gap: 4 },
       item: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)', minWidth: 0, border: '1px solid transparent', cursor: 'pointer', textAlign: 'left', width: '100%', font: 'inherit' },
-      itemOn: { borderColor: 'var(--dsw-alias-label-tertiary)' },
+      itemHover: { background: 'var(--dsw-alias-interactive-bg-hover)' },
+      itemOn: { borderColor: 'var(--dsw-alias-brand-primary)' },
       swatch: { width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0, background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))' },
       grow: { display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, flex: '1 1 auto' },
     }
@@ -406,6 +448,114 @@ window.__ModuleLoader__.load({
     }
 
     /** One filter row: a label, and the number of assets behind it. */
+    /**
+     * HOVER, AS STATE. Every style in this pane is inline, so an inline style carries no
+     * `:hover` — a control that must answer the pointer keeps the flag itself. Same shape the
+     * sibling plugin gave its account arrow.
+     *
+     * THE FLAG LIVES IN THE PANE, NOT IN EACH TILE: exactly one tile is under the pointer, so one
+     * `hovered` path is the whole state — and a hook per tile would make the number of hooks in
+     * the tree depend on how many tiles are on screen, which is a shape the verify shim (hooks
+     * keyed by call order) cannot survive.
+     */
+    function useHover() {
+      const [hover, setHover] = React.useState(false)
+      return [hover, { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) }]
+    }
+
+    /**
+     * THE LIBRARY'S OWN SHAPE WHILE IT LOADS (polish pass, 2026-09-26). A centred spinner says
+     * "something is happening"; six of the pane's own tiles wearing the app's skeleton token say
+     * what is coming, so the grid does not jump into place afterwards.
+     *
+     * The pulse is a class, not an inline `animation`, because the keyframes have to be declared
+     * somewhere — the sibling plugin's spinner set an `animation` name it never declared and
+     * spun nothing for a week. `verify/mount.mjs` checks that every name this bundle animates is
+     * declared in the sheet it injects.
+     */
+    function SkeletonGrid({ count = 6 }) {
+      return h(
+        'div',
+        { style: S.grid, 'data-assets-skeleton': 'yes', 'aria-hidden': 'true' },
+        ...Array.from({ length: count }, (_, index) =>
+          h(
+            'div',
+            { key: 'sk:' + index, style: S.skeletonTile },
+            h('div', { className: 'dsh-assets-skeleton', style: { width: '100%', aspectRatio: '3 / 4', ...S.skeletonBlock } }),
+            h(
+              'div',
+              { style: { ...S.tileText, paddingTop: 8, paddingBottom: 10, gap: 5 } },
+              h('span', { className: 'dsh-assets-skeleton', style: { ...S.skeletonBlock, height: 10, width: '72%', borderRadius: 4 } }),
+              h('span', { className: 'dsh-assets-skeleton', style: { ...S.skeletonBlock, height: 9, width: '46%', borderRadius: 4 } }),
+            ),
+          ),
+        ),
+      )
+    }
+
+    /**
+     * ONE FILTER, AS ONE LINE: its name and the value it holds, with the rows and their counts
+     * one press away. Closed at rest so the pictures come first — a tree that is always open is
+     * a wall between a person and the grid (founder, 2026-09-26: *"now let's UX polish"*).
+     *
+     * THE COUNT SURVIVES THE COLLAPSE: `all` is on the trigger line, so "how much is behind
+     * this" is answerable without opening anything.
+     */
+    function FilterGroup({ id, name, value, all, rows, onPick, onClear, t }) {
+      const [open, setOpen] = React.useState(false)
+      const [hover, hoverProps] = useHover()
+      const isSet = value !== null && value !== undefined
+      return h(
+        'div',
+        { style: S.filterWrap, 'data-assets-filter': id },
+        h(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', gap: 2 } },
+          h(
+            'button',
+            {
+              type: 'button',
+              'aria-expanded': open ? 'true' : 'false',
+              'data-assets-filter-button': id,
+              disabled: all === 0,
+              onClick: () => setOpen((was) => !was),
+              ...hoverProps,
+              style: { ...S.filterButton, ...(hover ? S.tileHover : null), ...(open || isSet ? S.filterOn : null) },
+            },
+            h('span', null, name),
+            h('span', { style: { ...S.muted, ...S.filterValue } }, isSet ? value : t('pane.filter.all')),
+            IconChevronDownOutline16 ? h(IconChevronDownOutline16, { size: 12 }) : null,
+          ),
+          isSet
+            ? h(
+                'button',
+                { type: 'button', title: t('pane.filter.clear'), 'aria-label': t('pane.filter.clear'), 'data-assets-filter-clear': id, onClick: onClear, style: S.clearButton },
+                IconCloseOutline16 ? h(IconCloseOutline16, { size: 12 }) : null,
+              )
+            : null,
+        ),
+        open
+          ? h(
+              'div',
+              { style: S.filterPanel, 'data-assets-filter-panel': id, role: 'group', 'aria-label': name },
+              ...rows.map((row) =>
+                h(FilterRow, {
+                  key: id + ':' + String(row.value),
+                  label: row.label,
+                  count: row.count,
+                  depth: row.depth,
+                  on: value === row.value,
+                  onClick: () => {
+                    onPick(value === row.value ? null : row.value)
+                    setOpen(false)
+                  },
+                }),
+              ),
+            )
+          : null,
+      )
+    }
+
     function FilterRow({ label, count, on, depth = 0, onClick }) {
       return h(
         'button',
@@ -430,7 +580,7 @@ window.__ModuleLoader__.load({
      * DRAGGABLE ONLY WHEN THERE ARE BYTES: an entry with a name and no file is listed (so a
      * person can see the library knows about it) but nothing invents a file to carry.
      */
-    function Tile({ asset, selected, onSelect, t }) {
+    function Tile({ asset, selected, onSelect, t, hovered = false, onHover = null }) {
       const carry = typeof asset.bytes === 'number' && asset.bytes > 0
       return h(
         'div',
@@ -440,6 +590,9 @@ window.__ModuleLoader__.load({
           'aria-label': t('pane.selected') + ': ' + stemOf(asset.name),
           'data-assets-tile': 'yes',
           'data-assets-tile-selected': selected ? 'yes' : 'no',
+          'data-assets-tile-hover': hovered ? 'yes' : 'no',
+          onMouseEnter: () => onHover && onHover(asset.path),
+          onMouseLeave: () => onHover && onHover(null),
           draggable: carry,
           onDragStart: (event) => {
             if (!carry) {
@@ -462,7 +615,7 @@ window.__ModuleLoader__.load({
               onSelect(asset.path)
             }
           },
-          style: { ...S.tile, ...(selected ? S.tileOn : null) },
+          style: { ...S.tile, ...(hovered && !selected ? S.tileHover : null), ...(selected ? S.tileOn : null) },
         },
         h(
           'div',
@@ -492,15 +645,18 @@ window.__ModuleLoader__.load({
     }
 
     /** One row of the list view: the same facts, read across. */
-    function Row({ asset, selected, onSelect, t }) {
+    function Row({ asset, selected, onSelect, t, hovered = false, onHover = null }) {
       return h(
         'button',
         {
           type: 'button',
           'data-assets-item': 'yes',
           'data-assets-tile-selected': selected ? 'yes' : 'no',
+          'data-assets-item-hover': hovered ? 'yes' : 'no',
           onClick: () => onSelect(asset.path),
-          style: { ...S.item, ...(selected ? S.itemOn : null) },
+          onMouseEnter: () => onHover && onHover(asset.path),
+          onMouseLeave: () => onHover && onHover(null),
+          style: { ...S.item, ...(hovered && !selected ? S.itemHover : null), ...(selected ? S.itemOn : null) },
         },
         h('img', { style: S.swatch, src: '/plugins/assets/file?path=' + encodeURIComponent(asset.path) + '&w=64', alt: '', loading: 'lazy' }),
         h(
@@ -797,6 +953,8 @@ window.__ModuleLoader__.load({
       const [search, setSearch] = React.useState('')
       const [busy, setBusy] = React.useState(false)
       const [failed, setFailed] = React.useState(null)
+      // ONE HOVERED PATH FOR THE WHOLE PANE — see `useHover` below for why it is not per tile.
+      const [hoveredPath, setHoveredPath] = React.useState(null)
 
       const chosen = view.data || { view: 'grid', context: null, date: null, selected: null }
       const layout = chosen.view === 'list' ? 'list' : 'grid'
@@ -868,7 +1026,11 @@ window.__ModuleLoader__.load({
         return h(
           'div',
           { style: S.pane, 'data-assets-pane': 'loading' },
-          h('div', { style: S.centre }, IconLoadingOutline16 ? h(IconLoadingOutline16, { size: 16, style: S.glyph }) : null, h('span', { style: S.muted }, t('pane.loading'))),
+          // The sentence stays (it is what a screen reader and a person both read); the spinner
+          // became the pane's own shape, so the grid does not jump into place when the answer
+          // lands (polish pass, 2026-09-26).
+          h('div', { style: S.bar }, h('span', { style: S.muted, 'data-assets-loading': 'yes' }, t('pane.loading'))),
+          h(SkeletonGrid, null),
         )
       }
 
@@ -955,6 +1117,23 @@ window.__ModuleLoader__.load({
               .includes(needle),
           )
 
+      // THE BAR'S OWN DATA. Each filter is a list of rows with their counts — the count is the
+      // fact that keeps a collapsed filter honest — and the summary says how much is here.
+      const rowFor = (value) => (value === '' ? '—' : value)
+      const contextRows = [
+        { value: null, label: t('pane.filter.all'), count: total, depth: 0 },
+        ...counts.context.map((row) => ({ value: row.value, label: rowFor(row.value), count: row.count, depth: 1 })),
+      ]
+      const dateRows = [
+        { value: null, label: t('pane.filter.all'), count: total, depth: 0 },
+        ...counts.date.flatMap((year) =>
+          year.months.flatMap((month) => month.days.map((day) => ({ value: day.day, label: day.day, count: day.count, depth: 1 }))),
+        ),
+      ]
+      const summaryText = shownAssets.length === total
+        ? t('pane.summary').replace('{n}', String(total))
+        : t('pane.summary.filtered').replace('{shown}', String(shownAssets.length)).replace('{total}', String(total))
+
       return h(
         'div',
         { style: S.pane, 'data-assets-pane': 'ready' },
@@ -1005,12 +1184,16 @@ window.__ModuleLoader__.load({
             ),
         failed ? h('span', { style: S.error }, t('pane.add.failed') + ' ' + failed) : null,
 
-        // ── the search, and the two layouts ──────────────────────────────────
+        // ── the bar: the search, the two layouts, the two filters, the count ──
+        //
+        // ONE ROW, and the pictures start high. The filters used to be two always-open trees
+        // between this row and the grid; at `~/Desktop`'s 1,296 assets the date list alone could
+        // own the screen (founder, 2026-09-26: *"now let's UX polish"*).
         h(
           'div',
-          { style: S.head2 },
+          { style: S.bar, 'data-assets-bar': 'yes' },
           h('input', {
-            style: { ...S.input, flex: '1 1 auto' },
+            style: { ...S.input, flex: '1 1 200px', width: 'auto', maxWidth: 340 },
             value: search,
             placeholder: t('pane.search.placeholder'),
             'aria-label': t('pane.search.placeholder'),
@@ -1018,64 +1201,64 @@ window.__ModuleLoader__.load({
             onChange: (event) => setSearch(event.target.value),
           }),
           h(ViewToggle, { view: layout, onView: (next) => patchView({ view: next }), t }),
+          h(FilterGroup, {
+            id: 'context',
+            name: t('pane.filter.context'),
+            value: context,
+            all: total,
+            rows: contextRows,
+            onPick: (next) => patchView({ context: next }),
+            onClear: () => patchView({ context: null }),
+            t,
+          }),
+          h(FilterGroup, {
+            id: 'date',
+            name: t('pane.filter.date'),
+            value: date,
+            all: total,
+            rows: dateRows,
+            onPick: (next) => patchView({ date: next }),
+            onClear: () => patchView({ date: null }),
+            t,
+          }),
+          h('span', { style: S.summary, 'data-assets-summary': 'yes' }, summaryText),
         ),
 
-        // ── the two filter groups, each row carrying its count ────────────────
+        // ── the two columns: the pictures, and the one you picked ─────────────
+        //
+        // THE BLOCK USED TO SIT UNDER THE WHOLE GRID, so reading the asset you had just picked
+        // meant scrolling past every tile in the library. Now the grid keeps the left and the
+        // block takes the right while there is width for both; below their minima they stack, and
+        // the block goes back under the grid where it is the only place left to be.
         h(
           'div',
-          { style: S.group, 'data-assets-filters': 'yes' },
-          h('span', { style: S.groupTitle }, t('pane.filter.context') + ' · ' + total + ' ' + t('pane.assets')),
-          h(FilterRow, { label: t('pane.filter.all'), count: total, on: context === null, onClick: () => patchView({ context: null }) }),
-          ...counts.context.map((row) =>
-            h(FilterRow, {
-              key: 'ctx:' + row.value,
-              label: row.value === '' ? '—' : row.value,
-              count: row.count,
-              depth: 1,
-              on: context === row.value,
-              onClick: () => patchView({ context: context === row.value ? null : row.value }),
-            }),
+          { style: S.columns, 'data-assets-columns': 'yes' },
+          h(
+            'div',
+            { style: S.columnMain, 'data-assets-main': 'yes' },
+            shownAssets.length === 0
+              ? h('span', { style: S.muted, 'data-assets-none': 'yes' }, total === 0 ? t('pane.none') : t('pane.none.match'))
+              : layout === 'grid'
+                ? h(
+                    'div',
+                    { style: S.grid, 'data-assets-grid': 'yes' },
+                    ...shownAssets.map((asset) => h(Tile, { key: asset.path, asset, selected: selectedPath === asset.path, onSelect: select, t, hovered: hoveredPath === asset.path, onHover: setHoveredPath })),
+                  )
+                : h(
+                    'div',
+                    { style: S.list, 'data-assets-list': 'yes' },
+                    ...shownAssets.map((asset) => h(Row, { key: asset.path, asset, selected: selectedPath === asset.path, onSelect: select, t, hovered: hoveredPath === asset.path, onHover: setHoveredPath })),
+                  ),
+            catalog.data && catalog.data.truncated ? h('span', { style: S.muted }, t('pane.truncated')) : null,
           ),
-        ),
-        h(
-          'div',
-          { style: S.group },
-          h('span', { style: S.groupTitle }, t('pane.filter.date')),
-          h(FilterRow, { label: t('pane.filter.all'), count: total, on: date === null, onClick: () => patchView({ date: null }) }),
-          ...counts.date.flatMap((year) => [
-            ...year.months.flatMap((month) => [
-              ...month.days.map((day) =>
-                h(FilterRow, {
-                  key: 'd:' + day.day,
-                  label: day.day,
-                  count: day.count,
-                  depth: 1,
-                  on: date === day.day,
-                  onClick: () => patchView({ date: date === day.day ? null : day.day }),
-                }),
-              ),
-            ]),
-          ]),
-        ),
-
-        // ── the grid, or the list ────────────────────────────────────────────
-        shownAssets.length === 0
-          ? h('span', { style: S.muted, 'data-assets-none': 'yes' }, total === 0 ? t('pane.none') : t('pane.none.match'))
-          : layout === 'grid'
+          selectedPath
             ? h(
                 'div',
-                { style: S.grid, 'data-assets-grid': 'yes' },
-                ...shownAssets.map((asset) => h(Tile, { key: asset.path, asset, selected: selectedPath === asset.path, onSelect: select, t })),
+                { style: S.columnSide, 'data-assets-side': 'yes' },
+                h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t, openGenerate, generateReady }),
               )
-            : h(
-                'div',
-                { style: S.list, 'data-assets-list': 'yes' },
-                ...shownAssets.map((asset) => h(Row, { key: asset.path, asset, selected: selectedPath === asset.path, onSelect: select, t })),
-              ),
-        catalog.data && catalog.data.truncated ? h('span', { style: S.muted }, t('pane.truncated')) : null,
-
-        // ── the metadata block for the selected tile ─────────────────────────
-        selectedPath ? h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t, openGenerate, generateReady }) : null,
+            : null,
+        ),
       )
     }
 
@@ -1174,6 +1357,23 @@ window.__ModuleLoader__.load({
         const types = ctx.sidebarRightTabs
         return !!types && typeof types.get === 'function' && types.get(GENERATE_KIND) !== undefined
       }
+      ctx.effect(() => {
+        // ONE SHEET, AND IT DECLARES WHAT IT USES. The skeleton's pulse is the only thing in
+        // this pane that cannot be an inline style: `animation` needs keyframes that live
+        // somewhere, and an inline style has nowhere to put them. The sibling plugin shipped a
+        // spinner whose `animation` name was never declared — it never spun, and nothing said so
+        // — so the rule and its keyframes are written together here and `verify/mount.mjs`
+        // checks that every class this bundle animates is declared in this text.
+        const style = document.createElement('style')
+        style.textContent =
+          '@keyframes dsh-assets-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }\n' +
+          '.dsh-assets-skeleton { animation: dsh-assets-skeleton 1.4s ease-in-out infinite; }\n' +
+          '@media (prefers-reduced-motion: reduce) { .dsh-assets-skeleton { animation: none; } }\n'
+        document.head.appendChild(style)
+        return () => {
+          style.remove()
+        }
+      }, 'assets.style')
       ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'assets.copy')
       ctx.effect(() => ctx.sidebarRightTabs.register(assetsDefinition(t)), 'assets.type')
       ctx.effect(
