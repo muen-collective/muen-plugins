@@ -104,16 +104,35 @@ The metadata block is what the catalog job is for. With a run behind the file it
 the workflow, the app, the date it settled, **the prompt verbatim** and the values it ran with; without one it
 says so and shows the file's own facts. Both cases carry **where it is**.
 
+## Finder's switch, the dropdowns, and the three views (2026-09-26)
+
+*"Can you copy finder switch view w segmented control using icon buttons: grid, list, filmstrip … also
+use dropdown select menu primitives"* — the founder, with Finder's toolbar on screen. Both controls are the
+**app's own primitives**, which is also what the design system means here: this bundle declares exactly one
+peer (`@deepseek-ai/dsh-client-ui-primitives`) and cannot require `@muen/eva`'s React sources, which are a
+Tailwind package the shell does not ship to plugins. So the switch is `SegmentedControl` — a `tablist` whose
+white pill **slides** under the selected segment (placed arithmetically from `--dsh-segment-count` /
+`--dsh-segment-index`, `transition: transform 160ms ease`) with each segment an icon button whose word is its
+`title` — and each filter is `Menu`, the anchored list Settings uses for a choice, which takes its own
+`anchor`, closes on a choice or an outside press, and hands the keyboard back to the trigger that opened it.
+
+**THE THIRD VIEW IS THE ONE THE STAGE WAS BUILT FOR.** `filmstrip` draws the selected asset in A4's
+`InspectStage` at the pane's width, with the catalog's frames in a one-row strip under it and the facts in
+the side column — which is told `withStage: false` there, because the big picture already is the stage and
+two would be silly. Nothing selected says so rather than auto-selecting the first frame (that would write to
+the view file from inside a render). Finder's own filmstrip glyph is hand-drawn beside the card's mark: the
+harness ships no such glyph and its nearest neighbour, `IconFlatListOutline`, is a bulleted list.
+
 ## The bar, and the two columns (the polish pass, 2026-09-26)
 
 The founder, after using it: *"now let's UX polish"*. Four changes, none of them to what the pane knows:
 
 - **The bar is one row** — the search, the two layouts, the two filters and the count. The two filter trees
   used to stand open between that row and the grid, so **177px of tree came before the first picture**.
-- **A filter is one line until asked.** The trigger carries its name, the value it holds and how much is
-  behind it (`Context · All`, `1296` in the rows) and shuts itself when a row is chosen; a set filter shows a
-  `✕` that clears it in place. The counts live in the rows, so a collapsed filter is still answerable — *a
-  filter that cannot say how much is behind it is a guess, and a tree that is always open is a wall*.
+- **A filter is one line until asked.** The trigger carries its name and the value it holds (`Context · All`)
+  and a set filter shows a `✕` that clears it in place; the rows — with every count — are the first thing in
+  the menu, because *a filter that cannot say how much is behind it is a guess, and a tree that is always open
+  is a wall*.
 - **The picked asset sits BESIDE the grid.** It used to render after the whole grid, so reading the asset you
   had just picked meant scrolling past every tile in the library. Now a wrapping pair — the grid `3 1 0` with a
   260px floor, the block `2 1 0` with a 240px floor, **the same pair the workflow surface settled on** — and
@@ -256,7 +275,8 @@ node verify/mount.mjs      # A1: the card, the registrations, the copy, the empt
 node verify/intake.mjs     # A2: the folders, the records, the filters, the carrier       63
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, EVERY folder
                            #     control pressed through to the host, the bar, the two
-                           #     columns, hover, and a count that is a sentence          73
+                           #     columns, hover, a count in words, the segmented view
+                           #     switch, the dropdown filters and the filmstrip            94
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36
@@ -264,8 +284,13 @@ node verify/sync.mjs       # A5: off by default, content-addressed, failure-safe
 ```
 
 The suites share `verify/harness.mjs`: a reporter, the server fakes, and enough React to render a
-component twice (hooks in call order, effects honoured with their dependencies) — so "what does a person see"
-is checked as text and props rather than in dialects.
+component twice (effects honoured with their dependencies) — so "what does a person see" is checked as text
+and props rather than in dialects. **Its hooks are keyed by component instance** (`FilterMenu#0`), not by a
+position in one flat list: a flat cursor means every hook a child adds shifts every later component's slots,
+so `InspectStage` read the pane's `busy` flag as its frame and a working pane failed a suite with
+`Cannot read properties of undefined`. That bit this plugin twice in one session — a `useState` per tile, then
+one per filter — and each time the temptation was to bend the pane instead of the shim. It also means a
+double-visited node reads its own slots again rather than corrupting a neighbour's.
 
 A control that DRAWS is not a control that WORKS, and the suites had only ever checked the first
 half: A3 deleted the `post` helper every folder action calls and left its call sites, so `+ Folder`,

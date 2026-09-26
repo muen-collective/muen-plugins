@@ -41,6 +41,17 @@ window.__ModuleLoader__.load({
     // (epic 64 S7).
     const IconSparkle16 = icon('IconSparkleRegular', 'IconSparkle16')
     const Button = primitives.Button
+    // THE APP'S OWN CONTROLS, NOT HAND-ROLLED ONES (founder, 2026-09-26: *"can you copy finder switch
+    // view w segmented control using icon buttons: grid, list, filmstrip. there is segmented tab
+    // control in eva design system w animated state change. also use dropdown select menu primitives
+    // from EVA design system"*). `SegmentedControl` is the tablist whose white pill SLIDES under the
+    // selected segment (`transition: transform 160ms ease`, placed arithmetically from
+    // `--dsh-segment-count`/`--dsh-segment-index`), and `Menu` is the anchored list Settings uses for
+    // a choice — it takes its own `anchor` and hands the keyboard back to the trigger that opened it.
+    // Both are the same primitives the app's own Settings pages draw; `@muen/eva`'s React sources are
+    // a Tailwind package the shell does not ship to plugins, and this bundle declares exactly one peer.
+    const SegmentedControl = primitives.SegmentedControl
+    const Menu = primitives.Menu
     const h = React.createElement
 
     const ASSETS_ID = '@muen/dsh-assets'
@@ -90,8 +101,11 @@ window.__ModuleLoader__.load({
       'pane.truncated': 'This folder list is longer than the library scans; the rest is not shown.',
       'pane.add.failed': 'The folder could not be added.',
       'pane.inLibrary': 'already in the library',
+      'pane.view': 'View',
       'pane.view.grid': 'Grid',
       'pane.view.list': 'List',
+      'pane.view.filmstrip': 'Filmstrip',
+      'pane.filmstrip.pick': 'Pick a frame below to look at it closely',
       'pane.search.placeholder': 'Search by name or prompt',
       'pane.selected': 'Selected',
       'meta.title': 'Metadata',
@@ -165,8 +179,11 @@ window.__ModuleLoader__.load({
       'pane.truncated': '文件夹内容超出资产库的扫描范围，其余未显示。',
       'pane.add.failed': '无法添加该文件夹。',
       'pane.inLibrary': '已在资产库中',
+      'pane.view': '视图',
       'pane.view.grid': '网格',
       'pane.view.list': '列表',
+      'pane.view.filmstrip': '胶片',
+      'pane.filmstrip.pick': '在下方选择一帧以便细看',
       'pane.search.placeholder': '按名称或提示词搜索',
       'pane.selected': '已选择',
       'meta.title': '元数据',
@@ -223,9 +240,6 @@ window.__ModuleLoader__.load({
       // (Six style keys were deleted in the 2026-09-26 polish pass because nothing drew them:
       //  `path`, `indent` and `thumbEmpty` had been dead since the system-path and nested-date
       //  designs left, and `group`, `groupTitle` and `head2` died with the always-open filters.)
-      filterRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', padding: '3px 6px', background: 'transparent', border: 0, borderRadius: 6, cursor: 'pointer', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5, textAlign: 'left' },
-      filterRowOn: { background: 'var(--dsw-alias-bg-layer-2)' },
-      count: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, fontVariantNumeric: 'tabular-nums' },
       // (`list` and `item` used to be declared HERE too — a column-shaped row from an earlier
       // layout, silently shadowed by the pair near the bottom of this object. Removed in the
       // 2026-09-26 polish pass: a duplicate key is a design nobody can find again.)
@@ -252,10 +266,6 @@ window.__ModuleLoader__.load({
       badgeFill: { background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-primary)', fontSize: 10.5, lineHeight: '15px', padding: '0 5px', borderRadius: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.94 },
       badgeLine: { border: '1px solid var(--dsw-alias-border-l3)', color: 'var(--dsw-alias-label-secondary)', fontSize: 10.5, lineHeight: '15px', padding: '0 4px', borderRadius: 4, whiteSpace: 'nowrap', letterSpacing: '0.02em' },
       tileText: { padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 },
-      toggle: { display: 'inline-flex', gap: 2, background: 'var(--dsw-alias-bg-layer-2)', borderRadius: 8, padding: 2 },
-      toggleOn: { background: 'var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-layer-2))', color: 'var(--dsw-alias-label-primary)' },
-      toggleOff: { background: 'transparent', color: 'var(--dsw-alias-label-tertiary)' },
-      toggleButton: { display: 'inline-flex', alignItems: 'center', gap: 4, border: 0, borderRadius: 6, padding: '3px 7px', cursor: 'pointer', font: 'inherit', fontSize: 11.5 },
 
       // ── the polish pass (founder, 2026-09-26: *"now let's UX polish"*) ─────
       //
@@ -270,9 +280,12 @@ window.__ModuleLoader__.load({
       // guess and a tree that is always open is a wall.
       filterWrap: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
       filterButton: { display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 190, padding: '3px 7px', borderRadius: 7, border: '1px solid var(--dsw-alias-border-l2)', background: 'transparent', color: 'var(--dsw-alias-label-secondary)', font: 'inherit', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' },
-      filterOn: { borderColor: 'var(--dsw-alias-border-l3)', color: 'var(--dsw-alias-label-primary)' },
       filterValue: { overflow: 'hidden', textOverflow: 'ellipsis' },
-      filterPanel: { display: 'flex', flexDirection: 'column', gap: 2, padding: 4, borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)', border: '1px solid var(--dsw-alias-border-l2)' },
+      // A MENU ROW: the choice on the left, its count on the right — the count is why the row is
+      // there, so it is not a footnote.
+      menuRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minWidth: 150 },
+      menuRowLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+      menuRowCount: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, fontVariantNumeric: 'tabular-nums' },
       clearButton: { border: 0, background: 'transparent', color: 'var(--dsw-alias-label-tertiary)', display: 'flex', cursor: 'pointer', padding: 0 },
       // THE TWO COLUMNS. The breakpoint is the pane's own width, because the pane is what
       // resizes: the grid keeps a 320px floor and the block a 280px one, and below that they
@@ -286,6 +299,19 @@ window.__ModuleLoader__.load({
       // like itself while it loads instead of throwing a spinner into the middle of nothing.
       skeletonTile: { border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, overflow: 'hidden', background: 'var(--dsw-alias-bg-layer-2)' },
       skeletonBlock: { background: 'var(--dsw-alias-bg-skeleton)' },
+
+      // ── the filmstrip (founder, 2026-09-26, from Finder) ─────────────────
+      //
+      // THE FRAME IS THE PANE'S WIDTH and the strip is one row of 56×74 cells under it: the stage
+      // A4 already draws, with the catalog's own thumbnails beneath.
+      film: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, flex: '1 1 auto' },
+      filmStage: { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 200, borderRadius: 10, background: 'var(--dsw-alias-bg-layer-2)', overflow: 'hidden' },
+      filmPreview: { maxWidth: '100%', maxHeight: 420, objectFit: 'contain', display: 'block' },
+      filmHint: { padding: 24, textAlign: 'center' },
+      filmStrip: { display: 'flex', gap: 6, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4 },
+      frame: { flex: '0 0 auto', width: 56, height: 74, padding: 0, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-2)', cursor: 'pointer', overflow: 'hidden' },
+      frameOn: { borderColor: 'var(--dsw-alias-brand-primary)' },
+      frameImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
       meta: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l2)', paddingTop: 10 },
       metaHead: { color: 'var(--dsw-alias-label-primary)', fontSize: 12.5, fontWeight: 600 },
       // THE INSPECT STAGE (epic 63 A4): the picture in a frame of its own, above the facts.
@@ -449,21 +475,6 @@ window.__ModuleLoader__.load({
 
     /** One filter row: a label, and the number of assets behind it. */
     /**
-     * HOVER, AS STATE. Every style in this pane is inline, so an inline style carries no
-     * `:hover` — a control that must answer the pointer keeps the flag itself. Same shape the
-     * sibling plugin gave its account arrow.
-     *
-     * THE FLAG LIVES IN THE PANE, NOT IN EACH TILE: exactly one tile is under the pointer, so one
-     * `hovered` path is the whole state — and a hook per tile would make the number of hooks in
-     * the tree depend on how many tiles are on screen, which is a shape the verify shim (hooks
-     * keyed by call order) cannot survive.
-     */
-    function useHover() {
-      const [hover, setHover] = React.useState(false)
-      return [hover, { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) }]
-    }
-
-    /**
      * THE LIBRARY'S OWN SHAPE WHILE IT LOADS (polish pass, 2026-09-26). A centred spinner says
      * "something is happening"; six of the pane's own tiles wearing the app's skeleton token say
      * what is coming, so the grid does not jump into place afterwards.
@@ -494,38 +505,61 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * ONE FILTER, AS ONE LINE: its name and the value it holds, with the rows and their counts
-     * one press away. Closed at rest so the pictures come first — a tree that is always open is
-     * a wall between a person and the grid (founder, 2026-09-26: *"now let's UX polish"*).
+     * ONE FILTER, AS THE APP'S OWN DROPDOWN (founder, 2026-09-26: *"use dropdown select menu
+     * primitives"*). `Menu` takes its own `anchor` — the trigger IS the anchor — closes itself on a
+     * choice or a press outside, and hands the keyboard back to the trigger, so the pane owns
+     * nothing but "which one is open".
      *
-     * THE COUNT SURVIVES THE COLLAPSE: `all` is on the trigger line, so "how much is behind
-     * this" is answerable without opening anything.
+     * THE COUNTS ARE THE FIRST THING IN THE LIST, because a filter that cannot say how much is
+     * behind it is a guess. The trigger carries the value the library is filtered by; a set filter
+     * wears a `✕` that clears it in place.
      */
-    function FilterGroup({ id, name, value, all, rows, onPick, onClear, t }) {
+    function FilterMenu({ id, name, value, rows, onPick, onClear, t }) {
       const [open, setOpen] = React.useState(false)
-      const [hover, hoverProps] = useHover()
       const isSet = value !== null && value !== undefined
+      const ALL = '__all__'
+      const items = rows.map((row) => ({
+        id: row.value === null ? ALL : String(row.value),
+        label: h(
+          'div',
+          { style: S.menuRow, 'data-assets-filter-row': row.value === null ? ALL : String(row.value) },
+          h('span', { style: S.menuRowLabel }, row.label),
+          h('span', { style: S.menuRowCount }, String(row.count)),
+        ),
+      }))
+      const triggerProps = {
+        'data-assets-filter-button': id,
+        'aria-haspopup': 'true',
+        'aria-expanded': open ? 'true' : 'false',
+        disabled: rows.length === 0,
+        onClick: () => setOpen((was) => !was),
+      }
+      const children = [
+        h('span', { key: 'name' }, name),
+        h('span', { key: 'value', style: S.filterValue }, isSet ? String(value) : t('pane.filter.all')),
+        IconChevronDownOutline16 ? h(IconChevronDownOutline16, { key: 'chev', size: 12 }) : null,
+      ]
       return h(
         'div',
         { style: S.filterWrap, 'data-assets-filter': id },
         h(
           'div',
           { style: { display: 'flex', alignItems: 'center', gap: 2 } },
-          h(
-            'button',
-            {
-              type: 'button',
-              'aria-expanded': open ? 'true' : 'false',
-              'data-assets-filter-button': id,
-              disabled: all === 0,
-              onClick: () => setOpen((was) => !was),
-              ...hoverProps,
-              style: { ...S.filterButton, ...(hover ? S.tileHover : null), ...(open || isSet ? S.filterOn : null) },
+          h(Menu, {
+            open,
+            side: 'bottom',
+            align: 'start',
+            items,
+            selectedId: isSet ? String(value) : ALL,
+            onSelect: (picked) => {
+              setOpen(false)
+              onPick(picked === ALL ? null : picked)
             },
-            h('span', null, name),
-            h('span', { style: { ...S.muted, ...S.filterValue } }, isSet ? value : t('pane.filter.all')),
-            IconChevronDownOutline16 ? h(IconChevronDownOutline16, { size: 12 }) : null,
-          ),
+            onClose: () => setOpen(false),
+            anchor: Button
+              ? h(Button, { variant: 'outline', size: 'sm', ...triggerProps }, children)
+              : h('button', { type: 'button', ...triggerProps, style: S.filterButton }, children),
+          }),
           isSet
             ? h(
                 'button',
@@ -534,40 +568,6 @@ window.__ModuleLoader__.load({
               )
             : null,
         ),
-        open
-          ? h(
-              'div',
-              { style: S.filterPanel, 'data-assets-filter-panel': id, role: 'group', 'aria-label': name },
-              ...rows.map((row) =>
-                h(FilterRow, {
-                  key: id + ':' + String(row.value),
-                  label: row.label,
-                  count: row.count,
-                  depth: row.depth,
-                  on: value === row.value,
-                  onClick: () => {
-                    onPick(value === row.value ? null : row.value)
-                    setOpen(false)
-                  },
-                }),
-              ),
-            )
-          : null,
-      )
-    }
-
-    function FilterRow({ label, count, on, depth = 0, onClick }) {
-      return h(
-        'button',
-        {
-          type: 'button',
-          onClick,
-          style: { ...S.filterRow, ...(on ? S.filterRowOn : null), ...(depth > 0 ? { paddingLeft: 6 + depth * 14 } : null) },
-          'data-assets-filter-row': 'yes',
-          'data-assets-filter-on': on ? 'yes' : 'no',
-        },
-        h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, label),
-        h('span', { style: S.count }, String(count)),
       )
     }
 
@@ -675,30 +675,24 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** The two layouts, as one control that says which is on. */
+    /**
+     * THE THREE VIEWS, AS THE APP'S OWN SEGMENTED CONTROL (founder, 2026-09-26, reading Finder's
+     * toolbar: *"can you copy finder switch view w segmented control using icon buttons: grid, list,
+     * filmstrip"*). A `tablist` whose white pill SLIDES under the selected segment — the primitive
+     * places it arithmetically from `--dsh-segment-count`/`--dsh-segment-index` with a 160ms
+     * transform, so the state change is animated without a line of animation here — and each segment
+     * is an icon button whose word lives in its `title`, which keeps the control three glyphs wide.
+     */
     function ViewToggle({ view, onView, t }) {
       const options = [
-        { id: 'grid', label: t('pane.view.grid'), Icon: IconGridOutline16 },
-        { id: 'list', label: t('pane.view.list'), Icon: IconRowsOutline16 },
+        { value: 'grid', title: t('pane.view.grid'), label: IconGridOutline16 ? h(IconGridOutline16, { size: 14 }) : t('pane.view.grid') },
+        { value: 'list', title: t('pane.view.list'), label: IconRowsOutline16 ? h(IconRowsOutline16, { size: 14 }) : t('pane.view.list') },
+        { value: 'filmstrip', title: t('pane.view.filmstrip'), label: h(IconFilmstrip, { size: 14 }) },
       ]
       return h(
         'span',
-        { style: S.toggle, 'data-assets-view': view },
-        ...options.map((option) =>
-          h(
-            'button',
-            {
-              key: option.id,
-              type: 'button',
-              'aria-pressed': view === option.id ? 'true' : 'false',
-              'data-assets-view-button': option.id,
-              onClick: () => onView(option.id),
-              style: { ...S.toggleButton, ...(view === option.id ? S.toggleOn : S.toggleOff) },
-            },
-            option.Icon ? h(option.Icon, { size: 13 }) : null,
-            option.label,
-          ),
-        ),
+        { style: { display: 'inline-flex', flex: '0 0 auto' }, 'data-assets-view': view },
+        h(SegmentedControl, { id: 'assets-view', value: view, options, onChange: onView, label: t('pane.view') }),
       )
     }
 
@@ -863,7 +857,55 @@ window.__ModuleLoader__.load({
      * WHEN NOTHING DID. `where it is` is on both, because "find the original" is the job. A
      * file a run made also carries the way back into that run's own pane (S7).
      */
-    function MetadataBlock({ detail, loading, t, openGenerate, generateReady }) {
+    /**
+     * THE THIRD VIEW (founder, 2026-09-26, reading Finder: *"grid, list, filmstrip"*): one picture
+     * big, the frames in a strip under it, the facts beside it. It is the view A4's inspect stage was
+     * built for — the stage is the SAME component the metadata block draws, at the pane's width, so
+     * the zoom, the pan and the 1:1 control arrive with it and nothing is written twice.
+     *
+     * THE STRIP IS THE CATALOG, not a second fetch: each frame asks the file route for a 128px
+     * preview, the way every other tile does. Nothing selected yet says so and waits — auto-selecting
+     * the first frame would write to the view file from inside a render.
+     */
+    function FilmstripView({ assets, selected, onSelect, detail, t }) {
+      const ready = detail && detail.path === selected
+      return h(
+        'div',
+        { style: S.film, 'data-assets-filmstrip': 'yes' },
+        h(
+          'div',
+          { style: S.filmStage, 'data-assets-film-stage': 'yes' },
+          selected === null || selected === undefined
+            ? h('span', { style: { ...S.muted, ...S.filmHint }, 'data-assets-film-empty': 'yes' }, t('pane.filmstrip.pick'))
+            : ready
+              ? h(InspectStage, { detail, t })
+              : h('img', { style: S.filmPreview, src: '/plugins/assets/file?path=' + encodeURIComponent(selected) + '&w=1024', alt: '', 'data-assets-film-preview': 'yes' }),
+        ),
+        h(
+          'div',
+          { style: S.filmStrip, 'data-assets-film-strip': 'yes', role: 'listbox', 'aria-label': t('pane.view.filmstrip') },
+          ...assets.map((asset) =>
+            h(
+              'button',
+              {
+                key: asset.path,
+                type: 'button',
+                role: 'option',
+                title: stemOf(asset.name),
+                'aria-selected': asset.path === selected ? 'true' : 'false',
+                'data-assets-frame': asset.path,
+                'data-assets-frame-on': asset.path === selected ? 'yes' : 'no',
+                onClick: () => onSelect(asset.path),
+                style: { ...S.frame, ...(asset.path === selected ? S.frameOn : null) },
+              },
+              h('img', { style: S.frameImage, src: '/plugins/assets/file?path=' + encodeURIComponent(asset.path) + '&w=128', alt: '', loading: 'lazy', draggable: false }),
+            ),
+          ),
+        ),
+      )
+    }
+
+    function MetadataBlock({ detail, loading, t, openGenerate, generateReady, withStage = true }) {
       if (loading) return h('div', { style: S.meta, 'data-assets-meta': 'loading' }, h('span', { style: S.muted }, t('pane.loading')))
       if (!detail) return null
       const provenance = detail.provenance || null
@@ -908,7 +950,9 @@ window.__ModuleLoader__.load({
         { style: S.meta, 'data-assets-meta': 'yes' },
         h('span', { style: S.metaHead }, t('meta.title')),
         // The stage first: the facts describe the picture, so the picture leads.
-        picture ? h(InspectStage, { detail, t }) : null,
+        // In the filmstrip the stage is already the pane's main column, so the block draws its
+        // facts only — one picture, not two (`withStage`).
+        withStage && picture ? h(InspectStage, { detail, t }) : null,
         ...rows.map(([key, value]) => h('div', { key: 'f:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
         provenance
           ? h(
@@ -953,11 +997,13 @@ window.__ModuleLoader__.load({
       const [search, setSearch] = React.useState('')
       const [busy, setBusy] = React.useState(false)
       const [failed, setFailed] = React.useState(null)
-      // ONE HOVERED PATH FOR THE WHOLE PANE — see `useHover` below for why it is not per tile.
+      // ONE HOVERED PATH FOR THE WHOLE PANE: exactly one tile is under the pointer, and a hook per
+      // tile would make the pane's hook count depend on how many tiles are on screen — a shape the
+      // verify shim (hooks keyed by call order) cannot survive.
       const [hoveredPath, setHoveredPath] = React.useState(null)
 
       const chosen = view.data || { view: 'grid', context: null, date: null, selected: null }
-      const layout = chosen.view === 'list' ? 'list' : 'grid'
+      const layout = chosen.view === 'list' ? 'list' : chosen.view === 'filmstrip' ? 'filmstrip' : 'grid'
       const context = chosen.context
       const date = chosen.date
       const selectedPath = chosen.selected
@@ -1201,21 +1247,19 @@ window.__ModuleLoader__.load({
             onChange: (event) => setSearch(event.target.value),
           }),
           h(ViewToggle, { view: layout, onView: (next) => patchView({ view: next }), t }),
-          h(FilterGroup, {
+          h(FilterMenu, {
             id: 'context',
             name: t('pane.filter.context'),
             value: context,
-            all: total,
             rows: contextRows,
             onPick: (next) => patchView({ context: next }),
             onClear: () => patchView({ context: null }),
             t,
           }),
-          h(FilterGroup, {
+          h(FilterMenu, {
             id: 'date',
             name: t('pane.filter.date'),
             value: date,
-            all: total,
             rows: dateRows,
             onPick: (next) => patchView({ date: next }),
             onClear: () => patchView({ date: null }),
@@ -1238,7 +1282,9 @@ window.__ModuleLoader__.load({
             { style: S.columnMain, 'data-assets-main': 'yes' },
             shownAssets.length === 0
               ? h('span', { style: S.muted, 'data-assets-none': 'yes' }, total === 0 ? t('pane.none') : t('pane.none.match'))
-              : layout === 'grid'
+              : layout === 'filmstrip'
+                ? h(FilmstripView, { assets: shownAssets, selected: selectedPath, onSelect: select, detail: detail.data, t })
+                : layout === 'grid'
                 ? h(
                     'div',
                     { style: S.grid, 'data-assets-grid': 'yes' },
@@ -1255,7 +1301,7 @@ window.__ModuleLoader__.load({
             ? h(
                 'div',
                 { style: S.columnSide, 'data-assets-side': 'yes' },
-                h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t, openGenerate, generateReady }),
+                h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t, openGenerate, generateReady, withStage: layout !== 'filmstrip' }),
               )
             : null,
         ),
@@ -1298,6 +1344,35 @@ window.__ModuleLoader__.load({
         h('path', { d: 'M15.41 2.49a.6.6 0 011.18 0l.63 3.334a1.2 1.2 0 00.956.955l3.334.631a.6.6 0 010 1.18l-3.334.63a1.2 1.2 0 00-.955.956l-.631 3.334a.6.6 0 01-1.18 0l-.63-3.334a1.2 1.2 0 00-.956-.955L10.49 8.59a.6.6 0 010-1.18l3.334-.63a1.2 1.2 0 00.955-.956z' }),
         h('path', { d: 'M21 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h6' }),
         h('path', { d: 'M9 13v4' }),
+      )
+    }
+
+    /**
+     * THE THIRD VIEW'S MARK (founder, 2026-09-26, reading Finder's toolbar: grid, list, filmstrip).
+     * The harness ships no filmstrip glyph — its nearest neighbour, `IconFlatListOutline`, is a
+     * bulleted list — so this is hand-drawn like the card's mark: a frame with a strip along its
+     * bottom, which is Finder's own shape. 24-unit geometry at stroke 1.5 so it weighs the same as
+     * the app's Regular icons once drawn at 16px.
+     */
+    function IconFilmstrip({ size = 16, className, ...rest }) {
+      return h(
+        'svg',
+        {
+          width: size,
+          height: size,
+          className,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.5,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': 'true',
+          ...rest,
+        },
+        h('rect', { x: 3, y: 3.5, width: 18, height: 17, rx: 2.4 }),
+        h('path', { d: 'M3 15h18' }),
+        h('path', { d: 'M9 15v5.5M15 15v5.5' }),
       )
     }
 

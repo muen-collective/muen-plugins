@@ -47,21 +47,61 @@ export function reporter(title) {
 // ── enough React to render a component twice ────────────────────────────────
 
 /**
- * Hooks are read in call order, so a render pass counts from zero (`reset`) and reads the
- * values the previous pass left behind. An effect runs after the first pass, and the second
- * pass is what makes the state it set observable — which is how a claim about what a person
- * sees on screen becomes checkable without a browser.
+ * HOOKS BELONG TO THE COMPONENT THAT CALLED THEM, not to a position in a flat list. That is the
+ * whole difference between this and a queue: a flat cursor means every hook a child adds shifts
+ * every later component's slots, so `InspectStage` reads the pane's `busy` flag as its frame and
+ * a working pane fails a suite with `Cannot read properties of undefined`. It bit this plugin
+ * twice in one session — a `useState` per tile, then a `useState` per filter — and each time the
+ * fix was to bend the pane instead of the shim.
+ *
+ * So `createElement` names each component instance (`FilterMenu#0`, `Tile#3`), and the wrapper it
+ * installs sets that name while the body runs. Slots are keyed `instance.hookIndex`, which makes
+ * a hook's identity independent of every component around it — closer to what React actually
+ * does. A render pass still counts from zero (`reset`) and reads what the previous pass left
+ * behind, and a double visit of one node now simply reads its own slots again instead of
+ * corrupting a neighbour's.
  */
 export function miniReact() {
-  let slots = []
-  let cursor = 0
+  let slots = new Map()
+  let instances = new Map()
+  let current = 'root'
+  let hookIndex = 0
+  const take = () => {
+    const index = hookIndex
+    hookIndex += 1
+    const key = current + '.' + index
+    if (slots.get(key) === undefined) slots.set(key, {})
+    return { key, slot: slots.get(key) }
+  }
   const React = {
-    createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
+    createElement: (type, props, ...children) => {
+      const node = { type, props: props || {}, children }
+      if (typeof type === 'function' && type.name) {
+        // The name is fixed at creation, so the same element re-visited in the same pass (or the
+        // same tree rendered again) maps to the same slots.
+        const ordinal = instances.get(type.name) || 0
+        instances.set(type.name, ordinal + 1)
+        const key = type.name + '#' + ordinal
+        node.type = function instance(bodyProps) {
+          const outerName = current
+          const outerIndex = hookIndex
+          current = key
+          hookIndex = 0
+          try {
+            return type(bodyProps)
+          } finally {
+            current = outerName
+            hookIndex = outerIndex
+          }
+        }
+        node.type.componentName = type.name
+      }
+      return node
+    },
     useState: (initial) => {
-      const index = cursor
-      cursor += 1
-      if (slots[index] === undefined) slots[index] = { value: typeof initial === 'function' ? initial() : initial }
-      return [slots[index].value, (next) => { slots[index].value = typeof next === 'function' ? next(slots[index].value) : next }]
+      const { slot } = take()
+      if (slot.value === undefined) slot.value = typeof initial === 'function' ? initial() : initial
+      return [slot.value, (next) => { slot.value = typeof next === 'function' ? next(slot.value) : next }]
     },
     /**
      * DEPENDENCIES ARE HONOURED, because a real `useEffect` re-runs only when they change —
@@ -69,11 +109,11 @@ export function miniReact() {
      * the suite would prove something the browser never does.
      */
     useEffect: (fn, deps) => {
-      const index = cursor
-      cursor += 1
-      const previous = slots[index] || {}
-      const changed = previous.deps === undefined || !sameDeps(previous.deps, deps)
-      slots[index] = { ...previous, effect: fn, deps: Array.isArray(deps) ? [...deps] : deps, pending: changed || previous.pending === true }
+      const { slot } = take()
+      const changed = slot.deps === undefined || !sameDeps(slot.deps, deps)
+      slot.effect = fn
+      slot.deps = Array.isArray(deps) ? [...deps] : deps
+      slot.pending = changed || slot.pending === true
     },
     useMemo: (fn) => fn(),
     useCallback: (fn) => fn,
@@ -81,11 +121,23 @@ export function miniReact() {
   }
   return {
     React,
-    reset: () => { cursor = 0 },
-    clear: () => { slots = []; cursor = 0 },
-    peek: () => (slots[0] ? slots[0].value : null),
+    reset: () => {
+      current = 'root'
+      hookIndex = 0
+      instances = new Map()
+    },
+    clear: () => {
+      slots = new Map()
+      instances = new Map()
+      current = 'root'
+      hookIndex = 0
+    },
+    peek: () => {
+      const first = slots.get('root.0')
+      return first ? first.value : null
+    },
     runEffects: () => {
-      for (const slot of [...slots]) {
+      for (const slot of [...slots.values()]) {
         if (!slot || typeof slot.effect !== 'function' || slot.pending !== true) continue
         slot.pending = false
         slot.effect()
@@ -208,6 +260,61 @@ export async function loadClient({ React, stubs = {} }) {
     IconRowsRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'rows', ...props }),
     IconWarningOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'warning', ...props }),
     IconChevronDownOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'chevronDown', ...props }),
+    // THE APP'S OWN CONTROLS, stubbed to the contract the primitives document — not to mine:
+    // `SegmentedControl` is a tablist with one `role="tab"` per option (the real one slides a white
+    // pill arithmetically from `--dsh-segment-count`/`--dsh-segment-index`), and `Menu` renders its
+    // anchor plus, while open, one `role="menuitem"` button per item that hands its id back.
+    SegmentedControl: ({ id, value, options = [], onChange, label, className }) =>
+      React.createElement(
+        'div',
+        { role: 'tablist', 'aria-label': label, className, 'data-segment-count': options.length, 'data-segment-value': value },
+        ...options.map((option) =>
+          React.createElement(
+            'button',
+            {
+              key: option.value,
+              id: id + '-' + option.value,
+              type: 'button',
+              role: 'tab',
+              title: option.title,
+              disabled: option.disabled === true,
+              'aria-selected': option.value === value ? 'true' : 'false',
+              'data-segment': option.value,
+              onClick: () => {
+                if (option.value !== value) onChange(option.value)
+              },
+            },
+            option.label,
+          ),
+        ),
+      ),
+    Menu: ({ open, anchor, items = [], selectedId, onSelect }) =>
+      React.createElement(
+        'div',
+        { 'data-menu-open': open ? 'yes' : 'no', 'data-menu-selected': selectedId === undefined ? '' : String(selectedId) },
+        anchor,
+        open
+          ? React.createElement(
+              'div',
+              { role: 'menu' },
+              ...items.map((item) =>
+                React.createElement(
+                  'button',
+                  {
+                    key: item.id,
+                    type: 'button',
+                    role: 'menuitem',
+                    disabled: item.disabled === true,
+                    'data-menu-item': item.id,
+                    'data-menu-item-selected': item.id === selectedId ? 'yes' : 'no',
+                    onClick: () => onSelect(item.id),
+                  },
+                  item.label,
+                ),
+              ),
+            )
+          : null,
+      ),
     ...stubs,
   }
   const factory = captured.factory((spec) => {

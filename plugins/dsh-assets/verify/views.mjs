@@ -290,13 +290,26 @@ async function render(passes = 4) {
 {
   posted.length = 0
   const tree = await render()
-  const buttons = collect(tree, (node) => node.props && node.props['data-assets-view-button'] !== undefined)
-  check('the layout control offers two layouts', buttons.length === 2, buttons.map((node) => node.props['data-assets-view-button']).join(','))
-  check('and says which one is on', buttons.every((node) => node.props['aria-pressed'] !== undefined), '')
-  const listButton = buttons.find((node) => node.props['data-assets-view-button'] === 'list')
-  listButton.props.onClick()
-  await settle()
-  check('choosing one writes it to the view file', posted.some((entry) => entry.url.includes('/view') && entry.body.view === 'list'), JSON.stringify(posted))
+  // THE SWITCH IS THE APP'S OWN SEGMENTED CONTROL (founder, 2026-09-26: *"copy finder switch view w
+  // segmented control using icon buttons: grid, list, filmstrip"*). Its contract is a `tablist` with
+  // one `role="tab"` per view, so that is what is read here — not three buttons written by hand.
+  const list = collect(tree, (node) => node.props && node.props.role === 'tablist')[0]
+  check('the view switch is the app’s segmented tablist, labelled', !!list && typeof list.props['aria-label'] === 'string' && list.props['aria-label'].length > 0, list ? String(list.props['aria-label']) : 'none')
+  const tabs = collect(tree, (node) => node.props && node.props.role === 'tab' && node.props['data-segment'] !== undefined)
+  check('offering exactly grid, list and filmstrip', tabs.map((node) => node.props['data-segment']).join(',') === 'grid,list,filmstrip', tabs.map((node) => node.props['data-segment']).join(','))
+  check('as icon buttons whose word is the title', tabs.every((node) => typeof node.props.title === 'string' && node.props.title.length > 0), tabs.map((node) => String(node.props.title)).join(' / '))
+  // A WALK THAT CANNOT FIND ITS TAB REPORTS IT: a suite that throws on `[0].props` says nothing
+  // about which claim broke (learned on the date filter, then again here).
+  const gridTab = tabs.find((node) => node.props['data-segment'] === 'grid')
+  const listTab = tabs.find((node) => node.props['data-segment'] === 'list')
+  check('with the current view marked selected, and only it', !!gridTab && tabs.filter((node) => node.props['aria-selected'] === 'true').length === 1 && gridTab.props['aria-selected'] === 'true', tabs.map((node) => node.props['data-segment'] + '=' + node.props['aria-selected']).join(' '))
+  if (listTab) {
+    listTab.props.onClick()
+    await settle()
+    check('choosing one writes it to the view file', posted.some((entry) => entry.url.includes('/view') && entry.body.view === 'list'), JSON.stringify(posted))
+  } else {
+    check('choosing one writes it to the view file', false, 'no list tab was drawn to press')
+  }
 }
 
 {
@@ -304,9 +317,13 @@ async function render(passes = 4) {
   const tree = await render()
   const row = collect(tree, (node) => node.props && node.props['data-assets-item'] === 'yes')
   check('the list layout draws rows instead of tiles', row.length === 2, row.length + ' rows')
-  row[0].props.onClick()
-  await settle()
-  check('selecting a row writes the selection', posted.some((entry) => entry.url.includes('/view') && entry.body.selected === RECORDED), JSON.stringify(posted))
+  if (row[0]) {
+    row[0].props.onClick()
+    await settle()
+    check('selecting a row writes the selection', posted.some((entry) => entry.url.includes('/view') && entry.body.selected === RECORDED), JSON.stringify(posted))
+  } else {
+    check('selecting a row writes the selection', false, 'the list layout drew no row to press')
+  }
 }
 
 {
@@ -318,9 +335,9 @@ async function render(passes = 4) {
   // always open is a wall between a person and the grid; the count on the trigger keeps "how
   // much is behind this" answerable without opening anything.
   const trigger = collect(tree, (node) => node.props && node.props['data-assets-filter-button'] === 'date')[0]
-  check('the date filter is one line in the bar', !!trigger, trigger ? textOf(trigger).join(' ') : 'none')
-  check('and it says how much is behind it while shut', !!trigger && textOf(trigger).join(' ').includes('All'), trigger ? textOf(trigger).join(' ') : 'none')
-  check('with its rows shut', collect(tree, (node) => node.props && node.props['data-assets-filter-panel'] !== undefined).length === 0, 'a panel was open at rest')
+  check('the date filter is one control in the bar', !!trigger, trigger ? textOf(trigger).join(' ') : 'none')
+  check('and it shows the value the library is filtered by while shut', !!trigger && textOf(trigger).join(' ').includes('All'), trigger ? textOf(trigger).join(' ') : 'none')
+  check('with no menu open at rest', collect(tree, (node) => node.props && node.props['data-menu-open'] === 'yes').length === 0, 'a menu was open at rest')
 
   if (!trigger) {
     check('opening it draws the day rows, each with its own count', false, 'no filter trigger to press')
@@ -329,8 +346,10 @@ async function render(passes = 4) {
   trigger.props.onClick()
   mini.reset()
   tree = pane({ locale: { bind: () => t } })
-  const dayRow = collect(tree, (node) => node.props && node.props['data-assets-filter-row'] === 'yes' && textOf(node).join(' ').includes('2026-09-25'))
-  check('opening it draws the day rows, each with its own count', dayRow.length === 1 && textOf(dayRow[0]).join(' ').includes('1'), dayRow.length ? textOf(dayRow[0]).join(' ') : 'none')
+  check('opening it draws the menu', collect(tree, (node) => node.props && node.props['data-menu-open'] === 'yes').length === 1, 'no menu opened')
+  const dayRow = collect(tree, (node) => node.props && node.props['data-menu-item'] === '2026-09-25')
+  check('with the days in it, each carrying its own count', dayRow.length === 1 && textOf(dayRow[0]).join(' ').includes('1'), dayRow.length ? textOf(dayRow[0]).join(' ') : 'none')
+  check('and the row the library is filtered by is the marked one', !!dayRow[0] && collect(tree, (node) => node.props && node.props['data-menu-item-selected'] === 'yes').length === 1, '')
   // A WALK THAT CANNOT FIND ITS ROW REPORTS IT rather than dying on `[0].props`: a suite that
   // throws tells the next person nothing about which claim broke.
   if (dayRow[0]) {
@@ -343,7 +362,7 @@ async function render(passes = 4) {
   }
   mini.reset()
   tree = pane({ locale: { bind: () => t } })
-  check('then the panel shuts itself — choosing IS the end of that interaction', collect(tree, (node) => node.props && node.props['data-assets-filter-panel'] !== undefined).length === 0, 'still open')
+  check('then the menu shuts itself — choosing IS the end of that interaction', collect(tree, (node) => node.props && node.props['data-menu-open'] === 'yes').length === 0, 'still open')
 }
 
 // ── 6. the search narrows what is on screen ────────────────────────────────
@@ -559,6 +578,92 @@ async function render(passes = 4) {
   const stillPicked = collect(tree, (node) => node.props && node.props['data-assets-tile-selected'] === 'yes')[0]
   check('and hovering a picked tile does not repaint the selection', stillPicked.props.style.borderColor === 'var(--dsw-alias-brand-primary)', String(stillPicked.props.style.borderColor))
   view = { ...view, selected: null }
+}
+
+// ── 9. Finder's switch, the dropdowns, and the filmstrip ───────────────────────────────────
+//
+// The founder, 2026-09-26, from Finder's own toolbar: *"can you copy finder switch view w segmented
+// control using icon buttons: grid, list, filmstrip … also use dropdown select menu primitives"*.
+// The switch and the filters are the APP'S primitives — a `tablist` whose pill slides, and an
+// anchored `Menu` — so what is checked here is the contract this pane hands them, and the third
+// view they made room for.
+
+{
+  view = { ...view, view: 'grid', context: null, date: null, selected: null }
+  /**
+   * RE-READ WITHOUT REMOUNTING. `mini.reset()` no longer clears the hooks, so this re-runs the
+   * pane's effects — a written view file is fetched again — while a component's own state (a menu
+   * being open, say) survives, which is what the browser does after a POST.
+   */
+  const refresh = async () => {
+    mini.reset()
+    let next = pane({ locale: { bind: () => t } })
+    mini.runEffects()
+    await settle()
+    mini.reset()
+    return pane({ locale: { bind: () => t } })
+  }
+  let tree = await render()
+  const trigger = collect(tree, (node) => node.props && node.props['data-assets-filter-button'] === 'context')[0]
+  check('a filter is announced as a menu trigger', !!trigger && trigger.props['aria-haspopup'] === 'true' && trigger.props['aria-expanded'] === 'false', trigger ? JSON.stringify({ haspopup: trigger.props['aria-haspopup'], expanded: trigger.props['aria-expanded'] }) : 'none')
+
+  trigger.props.onClick()
+  mini.reset()
+  tree = pane({ locale: { bind: () => t } })
+  const menu = collect(tree, (node) => node.props && node.props.role === 'menu')[0]
+  const rows = collect(tree, (node) => node.props && node.props.role === 'menuitem')
+  // `All` plus the one context in the fixture, and `All` plus the two days: the rows are the catalog's own counts.
+  check('it opens the app’s menu, not a panel written here', !!menu && rows.length === 2, rows.length + ' rows')
+  check('every choice carries its own count', rows.every((node) => /\d/.test(textOf(node).join(' '))), rows.map((node) => textOf(node).join(' ')).join(' / '))
+  check('and the one in force is the one the menu marks', collect(tree, (node) => node.props && node.props['data-menu-item-selected'] === 'yes').length === 1, 'the menu marked no row')
+
+  rows.find((node) => node.props['data-menu-item'] === 'yammaman').props.onClick()
+  await settle()
+  check('choosing a row writes that filter', posted.some((entry) => entry.url.includes('/view') && entry.body.context === 'yammaman'), JSON.stringify(posted.slice(-2)))
+  tree = await refresh()
+  const afterTrigger = collect(tree, (node) => node.props && node.props['data-assets-filter-button'] === 'context')[0]
+  check('and the menu is gone, with the trigger saying so', collect(tree, (node) => node.props && node.props.role === 'menu').length === 0 && !!afterTrigger && afterTrigger.props['aria-expanded'] === 'false', 'still open')
+  check('while the trigger now reads the value it holds', !!afterTrigger && textOf(afterTrigger).join(' ').includes('yammaman'), 'the trigger still says All')
+
+  // THE CLEAR IS ITS OWN CONTROL, in place: a filter that is on can be taken off without opening
+  // the menu again.
+  const clear = collect(tree, (node) => node.props && node.props['data-assets-filter-clear'] === 'context')[0]
+  check('a filter that is on offers a clear beside it', !!clear, clear ? 'drawn' : 'none')
+  clear.props.onClick()
+  await settle()
+  check('and clearing it writes the filter off', posted.some((entry) => entry.url.includes('/view') && entry.body.context === null), JSON.stringify(posted.slice(-2)))
+  view = { ...view, context: null, date: null, selected: null }
+}
+
+{
+  // THE FILMSTRIP: one picture big, the frames in a strip under it — and the facts beside it
+  // WITHOUT a second stage, because the big one already is the stage.
+  view = { ...view, view: 'filmstrip', context: null, date: null, selected: null }
+  let tree = await render()
+  check('the filmstrip view is drawn when the view file says so', collect(tree, (node) => node.props && node.props['data-assets-filmstrip'] === 'yes').length === 1, 'no filmstrip')
+  check('with nothing picked it says so rather than guessing a frame', collect(tree, (node) => node.props && node.props['data-assets-film-empty'] === 'yes').length === 1, 'no hint')
+  const frames = collect(tree, (node) => node.props && node.props['data-assets-frame'] !== undefined)
+  check('and the strip holds every asset in the catalog', frames.length === 2, frames.length + ' frames')
+  check('each one a selectable option, with none selected', frames.every((node) => node.props.role === 'option') && frames.every((node) => node.props['aria-selected'] === 'false'), frames.map((node) => node.props['aria-selected']).join(','))
+
+  posted.length = 0
+  if (frames[0]) {
+    frames[0].props.onClick()
+    await settle()
+    check('pressing a frame selects it, like any other tile', posted.some((entry) => entry.url.includes('/view') && entry.body.selected === RECORDED), JSON.stringify(posted.slice(-2)))
+  } else {
+    check('pressing a frame selects it, like any other tile', false, 'the strip drew no frame to press')
+  }
+
+  view = { ...view, selected: RECORDED }
+  tree = await render()
+  const stage = collect(tree, (node) => node.props && node.props['data-assets-stage'] === 'yes')
+  check('a picked frame is drawn big, in the stage A4 built', stage.length === 1, stage.length + ' stages')
+  const marked = collect(tree, (node) => node.props && node.props['data-assets-frame-on'] === 'yes')
+  check('and its frame is the marked one in the strip', marked.length === 1 && marked[0].props['data-assets-frame'] === RECORDED, marked.length ? String(marked[0].props['data-assets-frame']) : 'none')
+  const meta = collect(tree, (node) => node.props && node.props['data-assets-meta'] === 'yes')[0]
+  check('the block beside it draws the facts and NOT a second picture', !!meta && collect(meta, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 0, meta ? 'facts only' : 'no block')
+  view = { ...view, view: 'grid', selected: null }
 }
 
 note('the live layer is the founder’s eyes: the bar, the two columns, the hover and the card’s own mark')
