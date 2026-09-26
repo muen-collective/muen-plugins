@@ -21,6 +21,13 @@
  * plugin paid for on 2026-09-23): the prefix is registered without a trailing slash, so
  * `/providers/<id>/result` is inside it.
  *
+ * S3'S HALF IS HERE TOO (the strip reads what this file can build): `?name=` filters the
+ * records to one workflow, newest first; the rows carry the values a form can take back,
+ * keyed by the API's own field name for both providers' body shapes; a file that has GONE
+ * keeps its row and says so, a file that has moved to `_trash/` loses its output, and a run
+ * whose outputs are all trashed leaves the strip. A live case reads this machine's real
+ * records through the same handler.
+ *
  *   node verify/result.mjs
  */
 import { createHash } from 'node:crypto'
@@ -89,6 +96,62 @@ writeRecord('job-one', {
       { file: fileTwo, bytes: 64, type: 'webp', url: 'https://example.invalid/two.webp' },
     ],
   },
+})
+
+// THE STRIP'S OWN FIXTURES (S3): two runs of one workflow, one of another, and the trash.
+// A REAL DELETE IS A MOVE: the record keeps the path it wrote, and the file has been moved into
+// `_trash/` beside it. So the record names `<libraryDir>/trashed.png` — which no longer exists —
+// and the bytes are at `<libraryDir>/_trash/trashed.png`.
+const otherFile = join(libraryDir, 'trashed.png')
+const kreaFile = join(libraryDir, '20260926-job-krea.png')
+writeFileSync(kreaFile, Buffer.alloc(48, 9))
+const trashDir = join(libraryDir, '_trash')
+mkdirSync(trashDir, { recursive: true })
+writeFileSync(join(trashDir, 'trashed.png'), Buffer.alloc(32))
+writeRecord('job-rh-new', {
+  schema: 'muen-rh-run/v1',
+  jobId: 'job-rh-new',
+  at: '2026-09-26T02:00:00.000Z',
+  adapter: 'qwen-2-1-image-edit',
+  title: 'Qwen 2.1 Edit Duo',
+  status: 'done',
+  body: { webappId: '1', nodeInfoList: [{ nodeId: '76', fieldName: 'prompt', fieldValue: 'the woman wears the outfit' }, { nodeId: '19', fieldName: 'steps', fieldValue: 40 }] },
+  outcome: { state: 'done', status: 'SUCCESS', at: '2026-09-26T02:01:00.000Z', saved: [{ file: fileOne, bytes: PNG.length, type: 'png', url: 'https://example.invalid/one.png' }] },
+})
+writeRecord('job-rh-old', {
+  schema: 'muen-rh-run/v1',
+  jobId: 'job-rh-old',
+  at: '2026-09-26T01:00:00.000Z',
+  adapter: 'qwen-2-1-image-edit',
+  body: { webappId: '1', nodeInfoList: [{ nodeId: '76', fieldName: 'prompt', fieldValue: 'an older prompt' }] },
+  outcome: { state: 'done', status: 'SUCCESS', at: '2026-09-26T01:01:00.000Z', saved: [{ file: join(libraryDir, 'gone-now.png'), bytes: 5, type: 'png' }] },
+})
+const kreaRuns = join(dataRoot, 'krea', 'runs')
+mkdirSync(kreaRuns, { recursive: true })
+writeFileSync(join(kreaRuns, 'job-krea.json'), JSON.stringify({
+  schema: 'muen-krea-run/v1',
+  jobId: 'job-krea',
+  at: '2026-09-26T03:00:00.000Z',
+  adapter: 'krea2-raw-turbo-claire',
+  body: { prompt: 'a candid 35mm photograph', aspect_ratio: '1:1', creativity: 'raw' },
+  outcome: { state: 'done', status: 'COMPLETED', at: '2026-09-26T03:01:00.000Z', saved: [{ file: kreaFile, bytes: 48, type: 'png' }] },
+}, null, 2))
+writeRecord('job-trashed', {
+  schema: 'muen-rh-run/v1',
+  jobId: 'job-trashed',
+  at: '2026-09-26T00:30:00.000Z',
+  adapter: 'qwen-2-1-image-edit',
+  body: { nodeInfoList: [] },
+  outcome: { state: 'done', status: 'SUCCESS', at: '2026-09-26T00:31:00.000Z', saved: [{ file: otherFile, bytes: 32, type: 'png' }] },
+})
+// A mixed run: one output trashed, one here. The row stays with the one that is here.
+writeRecord('job-mixed', {
+  schema: 'muen-rh-run/v1',
+  jobId: 'job-mixed',
+  at: '2026-09-26T00:00:00.000Z',
+  adapter: 'qwen-2-1-image-edit',
+  body: { nodeInfoList: [] },
+  outcome: { state: 'done', status: 'SUCCESS', saved: [{ file: otherFile, bytes: 32, type: 'png' }, { file: fileTwo, bytes: 64, type: 'webp' }] },
 })
 
 // A run that produced nothing, and one whose file has since gone.
@@ -295,7 +358,52 @@ function waitForEnd(res) {
   check('and a trailing-slash prefix would have matched nothing below it', matches(PROVIDERS_PATH + '/', PROVIDERS_PATH + '/runninghub/result') === false, 'the failure this rule exists for')
 }
 
-// ── 10. the running install's own records ────────────────────────────────────
+// ── 10. the strip's own read (S3) ───────────────────────────────────────────
+
+{
+  const res = await get(RESULT('runninghub') + 's?name=qwen-2-1-image-edit')
+  const body = res.json()
+  check('the results route answers a workflow\'s runs', res.statusCode === 200 && Array.isArray(body.rows), res.statusCode + ' ' + res.text().slice(0, 80))
+  check('a call with no limit is not a bad request (the default is 60)', res.statusCode === 200, res.statusCode + ' ' + JSON.stringify(body.error))
+  const ids = body.rows.map((row) => row.jobId)
+  check('only that workflow\'s runs come back', !ids.includes('job-krea') && ids.includes('job-rh-new') && ids.includes('job-rh-old'), ids.join(','))
+  check('newest first, by the run\'s own clock', ids.indexOf('job-rh-new') < ids.indexOf('job-rh-old'), ids.join(','))
+  check('the total says how many records the install holds', typeof body.total === 'number' && body.total >= 6, String(body.total))
+}
+
+{
+  const res = await get(RESULT('runninghub') + 's?name=qwen-2-1-image-edit')
+  const rows = res.json().rows
+  const newest = rows.find((row) => row.jobId === 'job-rh-new')
+  const oldest = rows.find((row) => row.jobId === 'job-rh-old')
+  check('a row carries the values a form can take back', !!newest && newest.values.prompt === 'the woman wears the outfit' && String(newest.values.steps) === '40', JSON.stringify(newest && newest.values))
+  check('a file that has GONE keeps its row and says which absence it is', !!oldest && oldest.files.length === 1 && oldest.files[0].where === 'missing', JSON.stringify(oldest && oldest.files))
+  check('a file that is here says so, with its index and type', !!newest && newest.files[0].where === 'present' && newest.files[0].i === 0 && newest.files[0].type === 'png', JSON.stringify(newest && newest.files[0]))
+  check('the run\'s own settled time travels with the row', !!newest && newest.settledAt === '2026-09-26T02:01:00.000Z', newest && newest.settledAt)
+}
+
+{
+  const res = await get(RESULT('runninghub') + 's?name=qwen-2-1-image-edit')
+  const ids = res.json().rows.map((row) => row.jobId)
+  check('a run whose every output is in the trash LEAVES the strip', !ids.includes('job-trashed'), ids.join(','))
+  check('a run with one output trashed and one here stays, carrying the one that is here', ids.includes('job-mixed'), ids.join(','))
+  const mixed = res.json().rows.find((row) => row.jobId === 'job-mixed')
+  check('and its trashed output is not among the files', !!mixed && mixed.files.every((file) => file.where !== 'trashed'), JSON.stringify(mixed && mixed.files))
+}
+
+{
+  const res = await get(RESULT('krea') + 's?name=krea2-raw-turbo-claire')
+  const row = res.json().rows[0]
+  check('the other provider\'s shape comes back the same way', res.statusCode === 200 && !!row && row.values.prompt === 'a candid 35mm photograph' && row.values.aspect_ratio === '1:1', res.statusCode + ' ' + JSON.stringify(row && row.values))
+  const missingName = await get(RESULT('krea') + 's')
+  check('a request with no workflow name is refused by name', missingName.statusCode === 400 && missingName.json().error === 'missing-name', missingName.statusCode)
+  const badLimit = await get(RESULT('krea') + 's?name=krea2-raw-turbo-claire&limit=0')
+  check('and a limit out of range is refused', badLimit.statusCode === 400 && badLimit.json().error === 'bad-limit', badLimit.statusCode)
+  const posted = await get(RESULT('krea') + 's?name=krea2-raw-turbo-claire', 'POST')
+  check('the strip\'s read is GET only', posted.statusCode === 405, posted.statusCode)
+}
+
+// ── 11. the running install's own records ────────────────────────────────────
 
 {
   // Read-only, and only when this machine has records: the real profile's own first saved
@@ -346,6 +454,18 @@ function waitForEnd(res) {
     // "where is it" state exists to say, so the number is reported rather than hidden.
     const present = records.filter((record) => record.present).length
     check('live: and the machine reports which records still have bytes', present > 0, present + ' of ' + records.length + ' recorded files are present')
+
+    // The strip's own read, against whatever this machine really holds: the rows must come
+    // back with their values, and none of them may be a trashed output.
+    const liveResults = fakeRes()
+    await liveHandler(fakeReq('GET', RESULT('runninghub') + 's?name=' + encodeURIComponent('qwen-2-1-image-edit')), liveResults)
+    const listing = liveResults.json()
+    const liveRows = listing && Array.isArray(listing.rows) ? listing.rows : []
+    const withValues = liveRows.filter((row) => row.values && Object.keys(row.values).length > 0)
+    const anyTrashed = liveRows.some((row) => (row.files || []).some((file) => file.where === 'trashed'))
+    check('live: the strip reads this install\'s runs of one workflow', liveResults.statusCode === 200 && liveRows.length > 0, liveRows.length + ' rows of ' + (listing && listing.total) + ' records')
+    check('live: and they carry the values a form can take back', withValues.length > 0, withValues.length + ' of ' + liveRows.length + ' rows carry values')
+    check('live: and no trashed output is offered', anyTrashed === false, anyTrashed ? 'a trashed output appeared' : 'none')
     process.env.RH_DATA_DIR = dataRoot
   }
 }

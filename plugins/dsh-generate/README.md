@@ -23,11 +23,19 @@ and the run are not faked here.
 | `/plugins/generate/providers/<id>/key` | one provider's key: `GET` its state, `POST` to link or replace, `DELETE` to unlink |
 | `/plugins/generate/providers/<id>/workflows` | one provider's installed workflows — one disk read, no key, no network |
 | `/plugins/generate/providers/<id>/workflow?name=` | one workflow, whole: the doors, labels, bounds and `ui.order` a surface renders |
+| `/plugins/generate/providers/<id>/results?name=&limit=` | **the session's own read** (epic 64 S3): that workflow's runs, newest first, each carrying the values it was asked for (keyed by the API's own field name, so a form can take them back) and the state of every file it saved. A run whose outputs are ALL in `_trash/` **leaves the strip** — a delete is a decision about the series — while a file that has merely gone, or is on an unmounted volume, keeps its row and reads Missing or Offline, because a gap in a series is information |
 | `/plugins/generate/providers/<id>/result?job=&i=` | **the bytes of a finished run's own file** (epic 64 S1): the path comes from that run's record (`outcome.saved[i].file`), never from the query, so a caller names *which* output and cannot ask for a file this host never wrote. `404 no-result` (the run saved nothing) and `404 missing-file` (it saved it and the file has since moved) are different answers, because the asset library draws them apart |
-| `/plugins/generate/providers/<id>/state?name=` | the per-workflow values the surface saves as a person edits: `GET` them back (or `{}`), `POST { name, values }` to store. **Broken until 2026-09-26** — see the note under the table |
+| `/plugins/generate/providers/<id>/state?name=` | the per-workflow values the surface saves as a person edits: `GET` them back (or `{}`), `POST { name, values }` to store. **Nothing reads it back into a form any more**: the surface writes (it is a cheap record of what was on screen) and opens CLEAN at the authored defaults, because a measured optimum belongs in the skill, in the adapter's `ui.defaults` and in a handoff — and a one-off tweak belongs to the run's own strip row. **Broken until 2026-09-26** — see the note under the table |
 | `settings.section` | exactly ONE settings page, id `generate`, listing every provider in the Models → Providers shape: a row per provider with a credential dot and its key state, one open editor card at a time, the API key as the primary field, and the install prompt where Models puts a model list |
 | the client locale registry | namespace `generate`, en + zh |
 | `ctx.tools` | `rh_workflow_graph` (read an app's doors) and `rh_adapter_validate` (check a written adapter) |
+
+**The strip under the canvas is the session** (epic 64 §6, founder: *"in RH the filmstrip below the main preview
+keeps it contained as a 'session'"*). One row per run of the open workflow, newest first, drawn in the preview
+card under the picture; a row's file that has gone keeps its place and says **Missing** rather than vanishing; and
+**clicking a row is regenerate** — that run's values go back into the form and its picture onto the canvas, while
+nothing runs and no gate is bypassed, because the press that spends is still the person's own. The strip is why
+the per-workflow restore was retired: the row is where a one-off tweak lives.
 
 **The state route was dead, and its failure looked like a decision.** Two faults stacked: it read
 `provider.root`, which no provider has (a provider's own directory is `provider.data(root.root).root`), and it

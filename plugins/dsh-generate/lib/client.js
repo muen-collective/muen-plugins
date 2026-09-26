@@ -191,6 +191,13 @@ window.__ModuleLoader__.load({
       // so this only says what the host reported — never a path the browser guessed.
       'run.saved': 'Saved to',
       'surface.loading': 'Reading the workflow…',
+      'strip.title': 'Session',
+      'strip.loading': 'Reading the session…',
+      'strip.none': 'No results yet',
+      'strip.missing': 'Missing',
+      'strip.offline': 'Offline',
+      'strip.row.title': 'Use this result\'s values',
+      'strip.row.alt': 'A result in this session',
       'surface.failed': 'That workflow could not be read.',
       'surface.advanced': 'Advanced',
       'surface.advanced.hide': 'Hide advanced',
@@ -448,6 +455,13 @@ window.__ModuleLoader__.load({
       'run.mode': '运行模式',
       'run.saved': '已保存到',
       'surface.loading': '正在读取工作流…',
+      'strip.title': '本次',
+      'strip.loading': '正在读取本次结果…',
+      'strip.none': '还没有结果',
+      'strip.missing': '已丢失',
+      'strip.offline': '离线',
+      'strip.row.title': '用这条结果的参数',
+      'strip.row.alt': '本次的一个结果',
       'surface.failed': '无法读取该工作流。',
       'surface.advanced': '高级',
       'surface.advanced.hide': '收起高级选项',
@@ -632,6 +646,18 @@ window.__ModuleLoader__.load({
      * carries its own light and dark value.
      */
     const S = {
+      // THE STRIP UNDER THE CANVAS (epic 64 S3): the session contained below the picture it
+      // belongs to, exactly as RunningHub draws it. Forty thumbs scroll sideways; the pane
+      // never grows a second page for them.
+      strip: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 },
+      stripHead: { display: 'flex', alignItems: 'baseline', gap: 6 },
+      stripRows: { display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 },
+      stripCount: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11 },
+      stripLabel: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11.5 },
+      thumb: { flex: '0 0 auto', width: 56, height: 56, padding: 0, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-2)', overflow: 'hidden', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+      thumbOn: { borderColor: 'var(--dsw-alias-label-tertiary)' },
+      thumbImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
+      thumbMissing: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 10, textAlign: 'center', padding: 2, lineHeight: '12px' },
       root: {
         display: 'flex',
         flexDirection: 'column',
@@ -3464,27 +3490,118 @@ window.__ModuleLoader__.load({
      * Krea array field is an array of objects, so a row carries the object's own doors and
      * `advanced` decides whether the whole list sits behind the disclosure.
      */
+    /**
+     * The session's own read (epic 64 S3): the runs of this workflow, newest first.
+     *
+     * It re-reads when a run settles — `refreshKey` is that run's job id — because the strip
+     * is where a result appears, and a strip that only filled in on the next open would make
+     * a person doubt the run had happened at all.
+     */
+    function useResults(provider, name, refreshKey) {
+      const [state, setState] = React.useState({ phase: 'loading', rows: [], truncated: false })
+      React.useEffect(() => {
+        if (!name) return () => {}
+        let live = true
+        fetch('/plugins/generate/providers/' + provider + '/results?name=' + encodeURIComponent(name))
+          .then((answer) => (answer.ok ? answer.json() : Promise.reject(new Error('http-' + answer.status))))
+          .then((body) => {
+            if (live) setState({ phase: 'ready', rows: Array.isArray(body.rows) ? body.rows : [], truncated: body.truncated === true })
+          })
+          .catch(() => {
+            // A failed read must not shout in the middle of a form: the strip draws nothing
+            // and the run controls keep working.
+            if (live) setState({ phase: 'failed', rows: [], truncated: false })
+          })
+        return () => {
+          live = false
+        }
+      }, [provider, name, refreshKey])
+      return state
+    }
+
+    /**
+     * THE FILMSTRIP (epic 64 S3): one row per run, older ones scrolling off to the right, the
+     * one whose picture is on the canvas marked.
+     *
+     * A row whose file is gone, or on a volume that is not mounted, STAYS and says so — a gap
+     * in a series is information (the founder's rule). A row whose file moved to `_trash/`
+     * never arrives here at all: the host drops it, because a delete is a decision about the
+     * series.
+     */
+    function Filmstrip({ t, provider, results, selected, onUse }) {
+      const rows = results.rows || []
+      if (results.phase === 'loading') {
+        return h('div', { style: S.strip, 'data-generate-strip': 'loading' }, h('span', { style: S.stripLabel }, t('strip.loading')))
+      }
+      if (results.phase === 'failed') return null
+      return h(
+        'div',
+        { style: S.strip, 'data-generate-strip': rows.length === 0 ? 'empty' : 'yes' },
+        h(
+          'div',
+          { style: S.stripHead },
+          h('span', { style: S.stripCount }, t('strip.title')),
+          rows.length > 0 ? h('span', { style: S.stripCount }, String(rows.length)) : null,
+        ),
+        rows.length === 0
+          ? h('span', { style: S.stripLabel, 'data-generate-strip-none': 'yes' }, t('strip.none'))
+          : h(
+              'div',
+              { style: S.stripRows },
+              ...rows.map((row) => {
+                const file = (row.files || [])[0] || null
+                const state = file ? file.where : 'missing'
+                const gone = state === 'missing' || state === 'offline'
+                return h(
+                  'button',
+                  {
+                    key: row.jobId,
+                    type: 'button',
+                    title: t('strip.row.title'),
+                    'aria-label': t('strip.row.alt') + ' ' + row.jobId,
+                    'data-generate-strip-row': row.jobId,
+                    'data-generate-strip-state': gone ? state : 'present',
+                    onClick: onUse(row),
+                    style: { ...S.thumb, ...(selected === row.jobId ? S.thumbOn : null) },
+                  },
+                  gone
+                    ? h('span', { style: S.thumbMissing, 'data-generate-strip-gone': state }, state === 'offline' ? t('strip.offline') : t('strip.missing'))
+                    : h('img', {
+                        style: S.thumbImage,
+                        src: '/plugins/generate/providers/' + provider + '/result?job=' + encodeURIComponent(row.jobId) + '&i=' + file.i,
+                        alt: '',
+                        loading: 'lazy',
+                        draggable: false,
+                      }),
+                )
+              }),
+            ),
+      )
+    }
+
     function WorkflowSurface({ t, provider, name, canUpload = false, runOption = null }) {
       const { phase, adapter } = useWorkflow(provider, name)
       const [values, setValues] = React.useState({})
       const [showAdvanced, setShowAdvanced] = React.useState(false)
+      // WHICH RESULT'S PICTURE IS ON THE CANVAS (epic 64 S3), and the values that came with it.
+      const [selectedRow, setSelectedRow] = React.useState(null)
 
-      // Depends on the adapter arriving: the doors are what the starting values come from.
-      // The saved state is merged on top, so a person who switched the aspect ratio once
-      // keeps it the next time they open the same workflow.
+      /**
+       * DEPENDS ON THE ADAPTER ARRIVING: the doors are what the starting values come from.
+       *
+       * THE FORM OPENS CLEAN AT THE AUTHORED DEFAULTS. It used to merge whatever was last
+       * typed on top of them, which is the behaviour the founder superseded (2026-09-25):
+       * *"after finding the optimal settings that should be written to md as skill
+       * instructions … they should not need to find optimal parameters by doing knob turning
+       * again"* — so a measured optimum lives in the skill, in the adapter's `ui.defaults` and
+       * in a handoff, and a one-off tweak lives in that run's own row, which is what clicking a
+       * strip row brings back. The state route still exists and still writes (the host was
+       * fixed for it), but nothing reads it back into a new form.
+       */
       React.useEffect(() => {
         if (phase !== 'ready' || !adapter) return
         const start = {}
         for (const key of Object.keys(adapter.doors)) start[key] = startFor(key, adapter.doors[key], adapter.defaults)
-        // Load saved state, if any. Errors are silent — the defaults are enough.
-        fetch(`/plugins/generate/providers/${provider}/state?name=${encodeURIComponent(adapter.name)}`)
-          .then((r) => r.json())
-          .then((saved) => {
-            if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
-              setValues((current) => ({ ...current, ...saved }))
-            }
-          })
-          .catch(() => {})
         setValues(start)
       }, [phase])
 
@@ -3524,6 +3641,32 @@ window.__ModuleLoader__.load({
       // called conditionally: the run outlives the loading phase, and a person who
       // started one keeps it while the surface re-renders around them.
       const run = useRun({ t, provider, adapter, values, runOption })
+      // Re-read when a run settles: the strip is where a result appears.
+      const results = useResults(provider, adapter ? adapter.name : null, run.phase === 'done' ? run.jobId : '')
+      const selected = selectedRow ? (results.rows || []).find((row) => row.jobId === selectedRow) || null : null
+
+      /**
+       * REGENERATE (epic 64 S4): a row's own values go back into the form. NOTHING RUNS — the
+       * gate is not bypassed, the press that spends is still the person's own — and the
+       * picture on the canvas becomes that row's, so the values and the result they made are
+       * read together.
+       *
+       * The values are keyed by the API's field name, which is the one string both providers'
+       * bodies carry; a door whose value the record does not have keeps what is on the form.
+       */
+      const useRow = (row) => () => {
+        setSelectedRow((current) => (current === row.jobId ? null : row.jobId))
+        if (!adapter) return
+        const next = {}
+        for (const key of Object.keys(adapter.doors)) {
+          const door = adapter.doors[key]
+          const byField = door && door.fieldName !== undefined ? row.values[String(door.fieldName)] : undefined
+          const byKey = row.values[key]
+          if (byField !== undefined) next[key] = byField
+          else if (byKey !== undefined) next[key] = byKey
+        }
+        if (Object.keys(next).length > 0) setValues((current) => ({ ...current, ...next }))
+      }
 
       if (phase !== 'ready' || !adapter) {
         return h(
@@ -3548,6 +3691,15 @@ window.__ModuleLoader__.load({
       // same door that decides what the provider is asked for decides what the person sees.
       const shape = previewShape(adapter, values)
       const hasResult = run.phase === 'done' && Array.isArray(run.urls) && run.urls.length > 0
+      // THE CANVAS FOLLOWS THE SELECTION (epic 64 S3): picking a row shows what that run
+      // made, and picking it again goes back to the latest run's own picture.
+      const selectedFile = selected && Array.isArray(selected.files) && selected.files.length > 0 ? selected.files[0] : null
+      const selectedGone = !!selected && (!selectedFile || selectedFile.where === 'missing' || selectedFile.where === 'offline')
+      const canvasSrc = selectedFile
+        ? '/plugins/generate/providers/' + provider + '/result?job=' + encodeURIComponent(selected.jobId) + '&i=' + selectedFile.i
+        : adapter.runnable === true && hasResult
+          ? run.urls[0]
+          : null
 
       /** One row of a list door, at the values the row's own doors declare. */
       const addRow = (key, door) => () =>
@@ -3860,13 +4012,20 @@ window.__ModuleLoader__.load({
                 'data-generate-preview-shape': shape.w + ':' + shape.h,
                 ...(adapter.runnable === true && hasResult ? { 'data-generate-result': run.urls[0] } : {}),
               },
-              adapter.runnable === true && hasResult
-                ? h('img', { style: S.previewImage, src: run.urls[0], alt: t('run.result.alt') })
+              canvasSrc !== null && !selectedGone
+                ? h('img', { style: S.previewImage, src: canvasSrc, alt: t('run.result.alt'), 'data-generate-canvas': selected ? 'selected' : 'latest' })
+                : null,
+              // A row whose file is gone keeps its place on the canvas as a sentence rather
+              // than as a broken image box.
+              selectedGone
+                ? h('span', { style: S.stripMissing, 'data-generate-canvas-gone': selectedFile ? selectedFile.where : 'missing' }, selectedFile && selectedFile.where === 'offline' ? t('strip.offline') : t('strip.missing'))
                 : null,
             ),
             adapter.runnable === true
               ? h(RunOutput, { key: adapter.name + '-out', t, adapter, run })
               : h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
+            // THE STRIP IS THE SESSION (epic 64 §6): under the picture, in the same card.
+            h(Filmstrip, { t, provider, results, selected: selectedRow, onUse: useRow }),
             h(RunQueue, { t, run }),
           ),
         ),

@@ -83,7 +83,7 @@ import { readHidden, withHidden, writeHidden } from './hidden.js'
 import { readChosenFolder, writeChosenFolder } from './library-path.js'
 import { CAN_CHOOSE, chooseFolder, revealFile, revealFolder } from './folder-actions.js'
 import { resolveDataRoot } from './paths.js'
-import { readRunRecord } from './run-record.js'
+import { listRunRecords, readRunRecord, valuesOf, whereIs } from './run-record.js'
 
 /** Matches the row id in cordis.patch.yml. */
 export const name = 'generate'
@@ -1213,6 +1213,74 @@ export function apply(ctx, config = {}) {
   }
 
   /**
+   * The strip's own read (epic 64 S3): the runs of ONE workflow, newest first, each carrying
+   * the values it was asked for and the state of the files it saved.
+   *
+   * THE RECORD IS THE INDEX. Nothing else is consulted and nothing is written: a directory
+   * read and one parse per record is the whole cost, which is what "fine into the
+   * thousands" means in practice.
+   *
+   * TWO STATES DROP AN OUTPUT, ONE KEEPS IT. A file that has moved to `_trash/` takes its
+   * OUTPUT out of the row — a delete is a decision about the series, and the library shows
+   * the same asset as Trashed. A file that is merely gone, or on a volume that is not
+   * mounted, keeps both the row and the output, reading Missing or Offline, because a gap in
+   * a series is information a person needs. A row whose outputs are ALL trashed leaves the
+   * strip entirely.
+   *
+   * `values` is keyed by the API's own field name, which is the one string that survives both
+   * providers' bodies and the one a form can take back (see `valuesOf`).
+   */
+  const providerResults = async (provider, url, res) => {
+    const name = str(url.searchParams.get('name'))
+    if (!name) {
+      send(res, 400, { error: 'missing-name', detail: 'a workflow name is required' })
+      return
+    }
+    // `str` answers null for an absent or empty value — the default is the ABSENT case, which
+    // is exactly what a first call sends. (A missing limit used to be refused as `bad-limit`,
+    // which the live probe in verify/result.mjs caught.)
+    const limitRaw = str(url.searchParams.get('limit'))
+    const limit = limitRaw === null ? 60 : Number.isFinite(Number(limitRaw)) && limitRaw !== '' ? Number(limitRaw) : Number.NaN
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+      send(res, 400, { error: 'bad-limit', detail: 'limit is 1..500' })
+      return
+    }
+    const listed = await listRunRecords(provider.data(root.root).root, { limit })
+    const rows = []
+    for (const record of listed.records) {
+      if (str(record.adapter) !== name) continue
+      const outcome = record.outcome && typeof record.outcome === 'object' ? record.outcome : {}
+      const saved = Array.isArray(outcome.saved) ? outcome.saved : []
+      const files = []
+      for (const [index, entry] of saved.entries()) {
+        if (!entry || typeof entry.file !== 'string' || entry.file === '') continue
+        files.push({
+          i: index,
+          where: await whereIs(entry.file),
+          type: str(entry.type) || null,
+          bytes: typeof entry.bytes === 'number' ? entry.bytes : null,
+          path: entry.file,
+          url: str(entry.url) || null,
+        })
+      }
+      const visible = files.filter((file) => file.where !== 'trashed')
+      // Every output trashed: the row leaves the strip, because that is what a delete means.
+      if (files.length > 0 && visible.length === 0) continue
+      rows.push({
+        jobId: String(record.jobId || ''),
+        at: str(record.at) || null,
+        settledAt: str(outcome.at) || null,
+        status: str(outcome.status || record.status) || null,
+        state: str(outcome.state) || null,
+        values: valuesOf(record),
+        files: visible,
+        error: str(outcome.error) || null,
+      })
+    }
+    send(res, 200, { name, rows, total: listed.total, truncated: listed.truncated })
+  }
+
+  /**
    * The bytes of a finished run's own file (epic 64 S1) — the one route the asset library
    * and the session strip both draw from.
    *
@@ -1351,6 +1419,16 @@ export function apply(ctx, config = {}) {
     // time they open the same workflow.
     if (action === 'state') {
       await providerState(provider, req, res)
+      return
+    }
+
+    // The strip's own read (epic 64 S3): one workflow's runs, newest first.
+    if (action === 'results') {
+      if ((req.method || 'GET').toUpperCase() !== 'GET') {
+        methodNotAllowed(res, 'GET')
+        return
+      }
+      await providerResults(provider, url, res)
       return
     }
 

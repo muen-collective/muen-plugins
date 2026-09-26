@@ -742,6 +742,12 @@ function stubHost({
    * reopened RunningHub workflow is in, where the door carries an opaque `api/…` handle.
    */
   savedValues = {},
+  /**
+   * The session the strip reads (epic 64 S3): the rows `/results` answers with, verbatim. A
+   * case sets them to two runs — one whose file is here, one whose file is gone — because
+   * those two must draw differently.
+   */
+  resultRows = [],
 } = {}) {
   const calls = []
   // The runs this stub was asked to start, and how many times a job was polled: the two
@@ -778,6 +784,9 @@ function stubHost({
       calls.push({ url, method: (init.method || 'GET').toUpperCase(), body: init.body })
       // The upload an image door calls: the file goes to this plugin's own host route, the
       // host answers the provider's asset URL, and that URL is the value the door carries.
+      if (String(url).includes('/results?')) {
+        return ok({ name: 'stub', rows: resultRows, total: resultRows.length, truncated: false })
+      }
       if (String(url).endsWith('/asset')) {
         assets.push({
           url: String(url),
@@ -3358,18 +3367,46 @@ check(
     // A HANDLE WITH NO PICKED BYTES. A surface that remounts while its door already holds one has
     // no blob to draw, and RunningHub's `api/…` handle is not addressable — so the door says a
     // picture is set and draws the neutral mark. Never an `<img>` with a src no browser can open.
-    // The state comes from the host (the values on file), which is the only way a door holds a
-    // value with nothing picked: the URL dialog refuses a shape that is not a URL.
+    // A HANDLE WITH NO PICKED BYTES, driven the way it now really happens: a strip row carries
+    // RunningHub's opaque `api/…` fileName, and clicking it (regenerate, S4) puts that value on
+    // the door. There is no blob behind it and no address a browser can open, so the door says a
+    // picture is set and draws the NEUTRAL MARK — never an `<img>` with a src that cannot load.
+    //
+    // This used to be reached by reopening a workflow whose saved state held a handle. That
+    // restore is superseded (a form opens clean at the authored defaults), and the strip's own
+    // row is what replaces it — which is why this case reads the way it does now.
     {
-      const savedStub = {
-        ...stubWithUpload,
-        fetch: async (url, init) => {
-          if (String(url).includes('/state?name=')) return { ok: true, status: 200, json: async () => ({ person: OPAQUE_HANDLE }) }
-          return stubWithUpload.fetch(url, init)
-        },
+      const rowStub = stubHost({
+        units: [RH_RUNNER_FILE],
+        file: RH_RUNNER_FILE,
+        runOption: RUN_OPTION,
+        resultRows: [
+          {
+            jobId: 'job-handle',
+            at: '2026-09-26T03:00:00.000Z',
+            settledAt: '2026-09-26T03:01:00.000Z',
+            status: 'SUCCESS',
+            state: 'done',
+            values: { person: OPAQUE_HANDLE },
+            files: [{ i: 0, where: 'present', type: 'png', bytes: 24, path: '/tmp/x.png', url: 'https://gen.example/out.png' }],
+            error: null,
+          },
+        ],
+      })
+      const innerRow = rowStub.fetch
+      globalThis.fetch = async (url, init) => {
+        if (url === PROVIDERS_API) {
+          const answer = await innerRow(url, init)
+          const body = await answer.json()
+          return { ok: true, status: 200, json: async () => ({ providers: body.providers.map((row) => (row.id === PROVIDER ? { ...row, upload: true, runOption: RUN_OPTION } : row)) }) }
+        }
+        return innerRow(url, init)
       }
-      globalThis.fetch = savedStub.fetch
-      const saved = await settle(paneSlot.component, props, 'pane-rh-saved')
+      let rerun = await settle(paneSlot.component, props, 'pane-rh-handle')
+      const row = byAttr(rerun, 'data-generate-strip-row', 'job-handle')
+      if (row) row.props.onClick()
+      rerun = await settle(paneSlot.component, props, 'pane-rh-handle')
+      const saved = rerun
       check(
         'a handle with no picked bytes draws the neutral mark, never a broken image',
         !byAttr(saved, 'data-generate-thumb', 'person') &&
@@ -3382,19 +3419,40 @@ check(
         }),
       )
     }
-    // THE GUARD LOOKS ONLY AT EMPTY DOORS. This is the reason it cannot trap a value: a second door
-    // that already holds an image stays interactive while the first is empty, so a person can
-    // always clear or replace what is there.
+    // THE GUARD LOOKS ONLY AT EMPTY DOORS, and this is the state it exists not to trap: a result
+    // brings back a value for the SECOND image while the first is empty. The guard is about the
+    // empty state, so a filled door keeps its picker and its clear control.
     {
-      const heldStub = {
-        ...stubWithUpload,
-        fetch: async (url, init) => {
-          if (String(url).includes('/state?name=')) return { ok: true, status: 200, json: async () => ({ garment: OPAQUE_HANDLE }) }
-          return stubWithUpload.fetch(url, init)
-        },
+      const rowStub = stubHost({
+        units: [RH_RUNNER_FILE],
+        file: RH_RUNNER_FILE,
+        runOption: RUN_OPTION,
+        resultRows: [
+          {
+            jobId: 'job-garment',
+            at: '2026-09-26T03:00:00.000Z',
+            settledAt: '2026-09-26T03:01:00.000Z',
+            status: 'SUCCESS',
+            state: 'done',
+            values: { garment: OPAQUE_HANDLE },
+            files: [{ i: 0, where: 'present', type: 'png', bytes: 24, path: '/tmp/y.png', url: 'https://gen.example/out.png' }],
+            error: null,
+          },
+        ],
+      })
+      const innerRow = rowStub.fetch
+      globalThis.fetch = async (url, init) => {
+        if (url === PROVIDERS_API) {
+          const answer = await innerRow(url, init)
+          const body = await answer.json()
+          return { ok: true, status: 200, json: async () => ({ providers: body.providers.map((row) => (row.id === PROVIDER ? { ...row, upload: true, runOption: RUN_OPTION } : row)) }) }
+        }
+        return innerRow(url, init)
       }
-      globalThis.fetch = heldStub.fetch
-      const held = await settle(paneSlot.component, props, 'pane-rh-held')
+      let held = await settle(paneSlot.component, props, 'pane-rh-held')
+      const row = byAttr(held, 'data-generate-strip-row', 'job-garment')
+      if (row) row.props.onClick()
+      held = await settle(paneSlot.component, props, 'pane-rh-held')
       check(
         'a door that already holds an image is never held back, even with the first one empty',
         !byAttr(held, 'data-generate-drop-wait', 'garment') &&
@@ -4222,6 +4280,153 @@ if (installed === null || installed.entries.length === 0) {
     JSON.stringify(installed.entries.map((entry) => entry.name + ' → ' + entry.title)),
   )
   check('every installed adapter is one the pane can open', installed.skipped.length === 0, JSON.stringify(installed.skipped))
+}
+
+// ── S3/S4: the strip, and regenerate ────────────────────────────────────────
+//
+// THE STRIP UNDER THE CANVAS IS THE SESSION (epic 64 §6), in the founder's own words:
+// *"in the RH sense it's clicking on 'regenerate' and continuing where previously left off …
+// in RH the filmstrip below the main preview keeps it contained as a 'session'."* So: one row
+// per run, newest first, the row whose picture is on the canvas marked; a file that has gone
+// KEEPS its row and says Missing, because a gap in a series is information; and CLICKING a row
+// brings that run's values back into the form — which is regenerate — while nothing runs and
+// the gate is not bypassed, because the press that spends is still the person's own.
+{
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: MODEL_UNIT.name, provider: 'krea' }, revision: 1 } } }),
+  }
+  const rows = [
+    {
+      jobId: 'job-new',
+      at: '2026-09-26T02:00:00.000Z',
+      settledAt: '2026-09-26T02:01:00.000Z',
+      status: 'SUCCESS',
+      state: 'done',
+      values: { prompt: 'the woman in image 1 wears the outfit from image 2', aspect_ratio: '16:9' },
+      files: [{ i: 0, where: 'present', type: 'png', bytes: 24, path: '/tmp/generate/library/krea/' + MODEL_UNIT.name + '/20260926-job-new.png', url: 'https://gen.krea.ai/out.png' }],
+      error: null,
+    },
+    {
+      jobId: 'job-old',
+      at: '2026-09-26T01:00:00.000Z',
+      settledAt: '2026-09-26T01:01:00.000Z',
+      status: 'SUCCESS',
+      state: 'done',
+      values: { prompt: 'an older prompt' },
+      files: [{ i: 0, where: 'missing', type: 'png', bytes: 24, path: '/tmp/gone/20260926-job-old.png', url: null }],
+      error: null,
+    },
+  ]
+
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: rows })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    const tree = await settle(paneSlot.component, props, 'pane-run-strip')
+    const strip = byAttr(tree, 'data-generate-strip', 'yes')
+    check('the session strip is drawn, with a row per run', !!strip, strip ? 'yes' : 'no strip')
+    const newest = byAttr(tree, 'data-generate-strip-row', 'job-new')
+    const oldest = byAttr(tree, 'data-generate-strip-row', 'job-old')
+    check(
+      'both runs are in it, newest first',
+      !!newest && !!oldest && nodesOf(strip).indexOf(newest) < nodesOf(strip).indexOf(oldest),
+      JSON.stringify([!!newest, !!oldest]),
+    )
+    check(
+      'a row with its file here draws a thumbnail from the bytes route',
+      !!newest && nodesOf(newest).some((node) => node.type === 'img' && String(node.props.src).includes('/result?job=job-new')),
+      newest ? nodesOf(newest).filter((node) => node.type === 'img').map((node) => node.props.src).join(',') : 'no row',
+    )
+    check(
+      'a row whose file has gone KEEPS its place and says Missing',
+      !!oldest && oldest.props['data-generate-strip-state'] === 'missing' && textIn(oldest).includes(EN['strip.missing']),
+      oldest ? oldest.props['data-generate-strip-state'] + ' ' + textIn(oldest) : 'no row',
+    )
+    check(
+      'and it is not drawn as a broken image',
+      !!oldest && !nodesOf(oldest).some((node) => node.type === 'img'),
+      'the gone row carries no <img>',
+    )
+
+    // ── S4: regenerate ────────────────────────────────────────────────────
+    const callsBefore = stub.calls.length
+    const runsBefore = stub.runs.length
+    if (newest) newest.props.onClick()
+    const after = await settle(paneSlot.component, props, 'pane-run-strip')
+    const promptDoor = byAttr(after, 'data-generate-door', 'prompt')
+    check(
+      "clicking a row brings that run's values back into the form",
+      !!promptDoor && promptDoor.props.value === 'the woman in image 1 wears the outfit from image 2',
+      promptDoor ? String(promptDoor.props.value).slice(0, 60) : 'no prompt door',
+    )
+    const aspectDoor = byAttr(after, 'data-generate-door', 'aspect_ratio')
+    check(
+      'every value the record carried comes back, not just the first',
+      !!aspectDoor && aspectDoor.props.value === '16:9',
+      aspectDoor ? String(aspectDoor.props.value) : 'no aspect door',
+    )
+    check(
+      'NOTHING RUNS: no run was started by clicking a row',
+      stub.runs.length === runsBefore,
+      runsBefore + ' -> ' + stub.runs.length,
+    )
+    check(
+      'and no request at all was posted, so no gate could have been bypassed',
+      !stub.calls.slice(callsBefore).some((call) => (call.method || 'GET').toUpperCase() === 'POST'),
+      JSON.stringify(stub.calls.slice(callsBefore).map((call) => ({ url: call.url, method: call.method }))),
+    )
+    const selectedCanvas = byAttr(after, 'data-generate-canvas', 'selected')
+    check(
+      "the canvas shows the selected row's own picture",
+      !!selectedCanvas && String(selectedCanvas.props.src).includes('/result?job=job-new'),
+      selectedCanvas ? String(selectedCanvas.props.src) : 'no canvas',
+    )
+
+    // The gone row on the canvas: a sentence, not a frame that failed to load.
+    const oldestAgain = byAttr(after, 'data-generate-strip-row', 'job-old')
+    if (oldestAgain) oldestAgain.props.onClick()
+    const gone = await settle(paneSlot.component, props, 'pane-run-strip')
+    check(
+      'selecting a gone result puts the word on the canvas instead of a broken frame',
+      !!byAttr(gone, 'data-generate-canvas-gone', 'missing') && !byAttr(gone, 'data-generate-canvas', 'selected'),
+      byAttr(gone, 'data-generate-canvas-gone', 'missing') ? 'says Missing' : 'no word',
+    )
+
+    // Clicking the SELECTED row again lets it go: the canvas stops showing that run's picture.
+    const oldestTwice = byAttr(gone, 'data-generate-strip-row', 'job-old')
+    if (oldestTwice) oldestTwice.props.onClick()
+    const back = await settle(paneSlot.component, props, 'pane-run-strip')
+    check(
+      'and clicking the selected row again lets it go',
+      !byAttr(back, 'data-generate-canvas', 'selected') && !byAttr(back, 'data-generate-canvas-gone'),
+      byAttr(back, 'data-generate-canvas', 'selected') ? 'still selected' : 'cleared',
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// A workflow with no history: the strip is there, empty, and says so rather than vanishing —
+// the preview card must not change height the moment the first run finishes.
+{
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: MODEL_UNIT.name, provider: 'krea' }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: [] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    const tree = await settle(paneSlot.component, props, 'pane-run-empty-strip')
+    check(
+      'a session with no results says so, in place',
+      !!byAttr(tree, 'data-generate-strip-none', 'yes') && textIn(byAttr(tree, 'data-generate-strip-none', 'yes')) === EN['strip.none'],
+      byAttr(tree, 'data-generate-strip-none', 'yes') ? textIn(byAttr(tree, 'data-generate-strip-none', 'yes')) : 'nothing drawn',
+    )
+  } finally {
+    globalThis.fetch = real
+  }
 }
 
 finish()
