@@ -789,7 +789,13 @@ function stubHost({
   const sessionRoute = (url, init) => {
     const method = (init.method || 'GET').toUpperCase()
     if (method === 'GET') {
-      const id = decodeURIComponent(String(url).split('?id=')[1] || '')
+      const raw = String(url).split('?')[1] || ''
+      if (!raw.includes('id=')) {
+        // The row's own read at launch: every session, newest first (epic 64 S6).
+        const all = [...sessions.values()].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+        return ok({ schema: 'muen-generate-session/v1', sessions: all, total: all.length })
+      }
+      const id = decodeURIComponent(raw.split('id=')[1] || '')
       const found = sessions.get(id)
       return found ? ok(found) : { ok: false, status: 404, json: async () => ({ error: 'no-session' }) }
     }
@@ -4824,6 +4830,115 @@ const bodyOf = (call) => JSON.parse(String(call.body))
       'and its image door comes back EMPTY rather than holding a handle nobody can check',
       !!byAttr(tree, 'data-generate-upload', 'image_url') && !byAttr(tree, 'data-generate-thumb', 'image_url'),
       JSON.stringify({ empty: !!byAttr(tree, 'data-generate-upload', 'image_url'), thumb: !!byAttr(tree, 'data-generate-thumb', 'image_url') }),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// ── THE ROW IS THE SESSIONS (epic 64 S6, the founder's D12 call) ─────────────
+//
+// A tab is a PIECE OF WORK, not a workflow: two sessions of one workflow are two tabs, a
+// session already open is REVEALED rather than opened again (which is what makes the Assets'
+// Regenerate idempotent), the row comes back at launch from the session files, and a tab wears
+// the session's own name once it has one.
+
+const tabsOf = (tree) => nodesOf(tree).filter((node) => node.props && node.props['data-generate-tab']).map((node) => node.props['data-generate-tab'])
+const tabSessions = (tree) => nodesOf(tree).filter((node) => node.props && node.props['data-generate-tab-session']).map((node) => node.props['data-generate-tab-session'])
+
+function sessionFixture(id, at) {
+  return {
+    schema: 'muen-generate-session/v1',
+    id,
+    provider: 'krea',
+    adapter: MODEL_UNIT.name,
+    title: MODEL_UNIT.title,
+    name: MODEL_UNIT.title + ' · ' + at,
+    createdAt: '2026-09-26T0' + at + ':00.000Z',
+    updatedAt: '2026-09-26T0' + at + ':00.000Z',
+    open: true,
+    values: { prompt: 'the prompt of ' + id },
+    uploads: {},
+    runIds: [],
+  }
+}
+
+{
+  // A card press makes a tab that has no session yet; the first change gives it one, and the
+  // tab is renamed after the work.
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: [] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let tree = await settle(paneSlot.component, cardProps, 'pane-row-session')
+    check('a workflow opened from the card is one tab that has no session yet', tabSessions(tree).length === 1 && tabSessions(tree)[0] === 'new', JSON.stringify(tabSessions(tree)))
+    const door = byAttr(tree, 'data-generate-door', 'prompt')
+    check('and the door that starts the work is on screen', !!door, door ? 'drawn' : 'no door')
+    if (door) door.props.onChange({ target: { value: 'a session of my own' } })
+    const pending = timeouts.at(-1)
+    if (typeof pending === 'function') pending()
+    tree = await settle(paneSlot.component, cardProps, 'pane-row-session')
+    check(
+      'the first change gives the tab a SESSION, and the tab is renamed after it',
+      tabSessions(tree).length === 1 && tabSessions(tree)[0] === 's-001',
+      JSON.stringify(tabSessions(tree)),
+    )
+    check(
+      "and the name reads as the workflow plus when it started",
+      textIn(byAttr(tree, 'data-generate-tab-pill', MODEL_UNIT.name)).includes('·') && textIn(byAttr(tree, 'data-generate-tab-pill', MODEL_UNIT.name)).includes(MODEL_UNIT.title),
+      textIn(byAttr(tree, 'data-generate-tab-pill', MODEL_UNIT.name)),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+{
+  // TWO SESSIONS OF ONE WORKFLOW ARE TWO TABS — the reason sessions exist at all.
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: [] })
+  stub.seedSession(sessionFixture('s-early', '1:10'))
+  stub.seedSession(sessionFixture('s-late', '2:20'))
+  const props = { t, useTabInfo: () => ({ tab: { navigation: { params: null, revision: 1 } } }) }
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    const tree = await settle(paneSlot.component, props, 'pane-row-two-sessions')
+    check(
+      'the row comes back at launch, one tab per OPEN session, newest first',
+      tabsOf(tree).length === 2 && tabSessions(tree).join(',') === 's-late,s-early',
+      JSON.stringify({ tabs: tabsOf(tree), sessions: tabSessions(tree) }),
+    )
+    check(
+      'and a closed session is not restored',
+      tabSessions(tree).every((id) => id !== 's-closed'),
+      JSON.stringify(tabSessions(tree)),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+{
+  // THE ASSETS' REGENERATE IS IDEMPOTENT: the same session twice is ONE tab, revealed.
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: [] })
+  stub.seedSession(sessionFixture('s-claire', '3:30'))
+  const props = { t, useTabInfo: () => ({ tab: { navigation: { params: { session: 's-claire' }, revision: 1 } } }) }
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let tree = await settle(paneSlot.component, props, 'pane-row-reveal')
+    const first = tabSessions(tree)
+    tree = await settle(paneSlot.component, props, 'pane-row-reveal')
+    const again = tabSessions(tree)
+    check(
+      'a tab opened by session REVEALS the tab that session already has, rather than opening another',
+      first.length === 1 && first[0] === 's-claire' && again.length === 1 && again[0] === 's-claire',
+      JSON.stringify({ first, again }),
+    )
+    check(
+      'and it wears the session\'s own name',
+      textIn(byAttr(tree, 'data-generate-tab-pill', MODEL_UNIT.name)).includes('· 3:30'),
+      textIn(byAttr(tree, 'data-generate-tab-pill', MODEL_UNIT.name)),
     )
   } finally {
     globalThis.fetch = real

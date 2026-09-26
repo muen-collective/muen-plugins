@@ -164,6 +164,22 @@ window.__ModuleLoader__.load({
      */
     const SESSIONS_API = '/plugins/generate/sessions'
 
+    /**
+     * Every session this install holds, newest first — the row's own read at launch (epic 64 S6).
+     * `null` when the list cannot be read, which is "nothing to restore" rather than an error
+     * screen over an empty pane.
+     */
+    async function listSessions() {
+      try {
+        const answer = await fetch(SESSIONS_API, { headers: { accept: 'application/json' } })
+        if (!answer || !answer.ok) return null
+        const body = await answer.json()
+        return body && Array.isArray(body.sessions) ? body.sessions : null
+      } catch {
+        return null
+      }
+    }
+
     /** One session by id, or `null`. A session that cannot be read is a form at its defaults. */
     async function readSession(id) {
       try {
@@ -3675,7 +3691,20 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function WorkflowSurface({ t, provider, name, canUpload = false, runOption = null, continueRun = null, session = null }) {
+    /**
+     * A SESSION'S OPENING NAME (epic 64 S6): the workflow's own title and the minute the work
+     * started — `Qwen 2.1 Edit Duo · 09:41`. A person runs the same workflow again and again with
+     * different parameters (the founder's own words when this was designed), so two sessions of one
+     * workflow must be tellable apart on the row; a name is the only thing that does that, and a
+     * name nobody typed has to come from somewhere honest. It is a starting point, not a promise:
+     * the field is the person's to change.
+     */
+    function defaultSessionName(adapter, at = new Date()) {
+      const clock = String(at.getHours()).padStart(2, '0') + ':' + String(at.getMinutes()).padStart(2, '0')
+      return (adapter && typeof adapter.title === 'string' && adapter.title !== '' ? adapter.title : 'Session') + ' · ' + clock
+    }
+
+    function WorkflowSurface({ t, provider, name, canUpload = false, runOption = null, continueRun = null, session = null, onSession = null }) {
       const { phase, adapter } = useWorkflow(provider, name)
       const [values, setValues] = React.useState({})
       const [showAdvanced, setShowAdvanced] = React.useState(false)
@@ -3751,6 +3780,7 @@ window.__ModuleLoader__.load({
         // fine — those cases are about the UI, not about persistence.
         if (typeof setTimeout !== 'function') return
         const write = async () => {
+          if (sessionName.current === null && adapter) sessionName.current = defaultSessionName(adapter)
           const body = {
             provider,
             adapter: adapter ? adapter.name : name,
@@ -3767,6 +3797,9 @@ window.__ModuleLoader__.load({
             sessionId.current = stored.id
             setKeptSession(stored.id)
             if (typeof stored.name === 'string' && stored.name !== '') sessionName.current = stored.name
+            // THE TAB LEARNS ITS NAME (epic 64 S6): the row IS the sessions, so a session the
+            // surface has just made is what its tab is called from here on.
+            if (onSession) onSession(stored.id, sessionName.current)
           }
         }
         if (sessionTimer.current) clearTimeout(sessionTimer.current)
@@ -5034,7 +5067,7 @@ window.__ModuleLoader__.load({
      * are the two things inline styles cannot express. The close keeps its box either way (the
      * rule hides it, it does not remove it), so a tab never changes width when it is selected.
      */
-    function WorkflowTab({ t, label, selected, name, onOpen, onClose }) {
+    function WorkflowTab({ t, label, selected, name, sessionId = null, onOpen, onClose }) {
       const [hover, hoverProps] = useHover()
       return h(
         'div',
@@ -5045,6 +5078,9 @@ window.__ModuleLoader__.load({
             ...(hover && !selected ? S.tabHover : null),
           },
           'data-generate-tab-pill': name,
+          // A tab is a SESSION (epic 64 S6): this says which, so a second session of one workflow
+          // is a second tab rather than the same one twice.
+          'data-generate-tab-session': sessionId === null ? 'new' : String(sessionId),
           'data-generate-tab-selected': selected ? 'yes' : 'no',
           ...hoverProps,
         },
@@ -5127,22 +5163,87 @@ window.__ModuleLoader__.load({
         if (openedSession === null) return
         if (typeof openedSession.adapter !== 'string' || openedSession.adapter === '') return
         const providerId = typeof openedSession.provider === 'string' && openedSession.provider !== '' ? openedSession.provider : askedProvider
-        openWorkflow(providerId || '', openedSession.adapter)
+        openWorkflow(providerId || '', openedSession.adapter, { sessionId: openedSession.id, label: openedSession.name, session: openedSession })
       }, [openedSession && openedSession.id])
 
-      // Open a workflow tab: add it to the list if not already there, activate it.
-      const openWorkflow = React.useCallback((providerId, name) => {
-        setOpenTabs((prev) => {
-          const exists = prev.some((t) => t.provider === providerId && t.name === name)
-          return exists ? prev : [...prev, { provider: providerId, name }]
+      /**
+       * THE ROW COMES BACK AT LAUNCH (epic 64 S6). The harness restores nothing in this shell
+       * (its layout lives in `localStorage` under an origin the app randomises with `--port 0`),
+       * so the sessions themselves are what a person comes back to: every session still marked
+       * open gets its tab, newest first, and a cap keeps a long history from becoming a wall of
+       * tabs.
+       */
+      const restored = React.useRef(false)
+      React.useEffect(() => {
+        if (restored.current) return
+        restored.current = true
+        listSessions().then((sessions) => {
+          if (sessions === null) return
+          for (const session of sessions.slice(0, 6)) {
+            if (session.open === false) continue
+            if (typeof session.adapter !== 'string' || session.adapter === '') continue
+            openWorkflow(session.provider || '', session.adapter, { sessionId: session.id, label: session.name, session })
+          }
         })
-        setActiveTab(name)
       }, [])
 
-      // Close a workflow tab: remove it and switch to the card grid.
-      const closeTab = React.useCallback((name) => {
-        setOpenTabs((prev) => prev.filter((t) => t.name !== name))
-        setActiveTab((current) => (current === name ? null : current))
+      // Open a workflow tab: add it to the list if not already there, activate it.
+      /**
+       * ONE TAB PER SESSION (epic 64 S6, the founder's D12 call: *"the row IS the sessions"*).
+       *
+       * A tab is a piece of work, not a workflow: two sessions of the same workflow are two
+       * tabs, because that is the whole point of keeping sessions. A session already open is
+       * REVEALED rather than opened again — which is what makes the Assets' Regenerate idempotent
+       * (its `params.session` finds the tab it belongs to) — while a plain card press still gets
+       * its own tab, exactly as it always had.
+       *
+       * `activeTab` is the TAB's id, not the workflow's name: the name stopped being unique the
+       * moment two sessions of one workflow could sit side by side.
+       */
+      const tabSeq = React.useRef(0)
+      const openWorkflow = React.useCallback((providerId, name, options = {}) => {
+        /**
+         * THE DECISION IS MADE INSIDE THE UPDATE, not from the render's copy of `openTabs`. Two
+         * effects can ask for the same session in the same pass — `params.session` (the Assets'
+         * Regenerate) and the launch restore, which reads EVERY open session — and a decision
+         * made from a stale array lets both push, so the same piece of work gets two tabs and its
+         * inputs get re-uploaded twice. Reading `prev` is what makes "reveal, never duplicate"
+         * true no matter who asks first.
+         */
+        setOpenTabs((prev) => {
+          const found = options.sessionId
+            ? prev.find((tab) => tab.sessionId === options.sessionId)
+            : prev.find((tab) => tab.provider === providerId && tab.name === name && tab.sessionId === null)
+          if (found) {
+            setActiveTab(found.id)
+            return prev
+          }
+          tabSeq.current += 1
+          const id = 'tab-' + tabSeq.current
+          setActiveTab(id)
+          return [
+            ...prev,
+            {
+              id,
+              provider: providerId,
+              name,
+              sessionId: options.sessionId || null,
+              label: options.label || null,
+              session: options.session || null,
+            },
+          ]
+        })
+      }, [])
+
+      // Close a tab: remove it, and fall back to the start screen when it was the one showing.
+      const closeTab = React.useCallback((id) => {
+        setOpenTabs((prev) => prev.filter((tab) => tab.id !== id))
+        setActiveTab((current) => (current === id ? null : current))
+      }, [])
+
+      /** A tab's own surface learned its session: adopt the id and the name it will be known by. */
+      const labelSession = React.useCallback((id, sessionId, label) => {
+        setOpenTabs((prev) => prev.map((tab) => (tab.id === id ? { ...tab, sessionId: sessionId || tab.sessionId, label: label || tab.label } : tab)))
       }, [])
 
       // Handle external opener (params.unit from a guide card). Runs synchronously
@@ -5150,9 +5251,11 @@ window.__ModuleLoader__.load({
       if (asked !== null && openTabs.every((t) => t.name !== asked)) {
         const unit = units.units.find((u) => u.name === asked && (askedProvider === null || u.provider === askedProvider))
         if (unit) {
-          openTabs.push({ provider: unit.provider, name: unit.name })
+          tabSeq.current += 1
+          const entry = { id: 'tab-' + tabSeq.current, provider: unit.provider, name: unit.name, sessionId: null, label: null, session: null }
+          openTabs.push(entry)
           // Sync the active tab without a state update (we are in render).
-          setActiveTab(unit.name)
+          setActiveTab(entry.id)
         }
       }
 
@@ -5228,6 +5331,10 @@ window.__ModuleLoader__.load({
        * authors one, falling back to that same title.
        */
       const labelOf = (open) => {
+        // A SESSION'S OWN NAME FIRST (epic 64 S6): the tab is the piece of work, so once it has a
+        // name that is what it is called. Until then it wears the workflow's tab name, which is
+        // what a card press has always shown.
+        if (typeof open.label === 'string' && open.label !== '') return open.label
         const unit = units.units.find((candidate) => candidate.provider === open.provider && candidate.name === open.name)
         if (!unit) return open.name
         return unit.tabLabel || unit.title
@@ -5319,13 +5426,14 @@ window.__ModuleLoader__.load({
               // One tab per opened workflow, named by its title (see `labelOf`).
               ...openTabs.map((wt) =>
                 h(WorkflowTab, {
-                  key: wt.name,
+                  key: wt.id,
                   t,
                   label: labelOf(wt),
-                  selected: activeTab === wt.name,
+                  selected: activeTab === wt.id,
                   name: wt.name,
-                  onOpen: () => setActiveTab(wt.name),
-                  onClose: () => closeTab(wt.name),
+                  sessionId: wt.sessionId,
+                  onOpen: () => setActiveTab(wt.id),
+                  onClose: () => closeTab(wt.id),
                 }),
               ),
               // THE ADD BUTTON, the DSH pattern: the plus that leads to the start screen, and
@@ -5404,9 +5512,12 @@ window.__ModuleLoader__.load({
         // one is visible. This preserves form values and run state when switching tabs.
         ...openTabs.map((wt) =>
           h('div', {
-            key: 'surface-' + wt.name,
-            style: { display: activeTab === wt.name ? 'block' : 'none' },
+            key: 'surface-' + wt.id,
+            style: { display: activeTab === wt.id ? 'block' : 'none' },
+            // The WORKFLOW's name, because that is what the attribute has always carried; the
+            // tab's own identity is the session, and it is on the tab (`data-generate-tab-session`).
             'data-generate-surface-wrapper': wt.name,
+            'data-generate-surface-tab': wt.id,
           },
             h(WorkflowSurface, {
               t,
@@ -5417,7 +5528,10 @@ window.__ModuleLoader__.load({
               // The tab's own `params.run` travels down as the run to continue.
               continueRun: askedRun,
               // ...and `params.session` as the piece of work, to the surface it belongs to.
-              session: openedSession && openedSession.adapter === wt.name && (!openedSession.provider || openedSession.provider === wt.provider) ? openedSession : null,
+              session: wt.session || (openedSession && openedSession.adapter === wt.name && (!openedSession.provider || openedSession.provider === wt.provider) ? openedSession : null),
+              // A surface that creates or adopts a session tells its tab, which is how a tab
+              // becomes named after the work rather than after the workflow.
+              onSession: (sessionId, label) => labelSession(wt.id, sessionId, label),
             }),
           ),
         ),

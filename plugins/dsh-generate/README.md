@@ -70,6 +70,16 @@ used, and **a run that settles is written at once**: its job id is the one thing
 session, and the strip already reads that id live. The id the store answers with travels on every later write,
 so an autosaving pane never has to know whether this is the first one.
 
+**The pane's row IS the sessions** (epic 64 S6, the founder's D12 call). A tab is a **piece of work**, not a
+workflow: two sessions of the same workflow are two tabs (which is the whole reason sessions exist), a session
+already open is **revealed rather than opened again** — that is what makes the Assets' Regenerate idempotent,
+since its `params.session` finds the tab it belongs to — and the row is restored **at launch** from
+`<profile>/generate/sessions/`, newest first, capped at six, because the harness restores no tabs in this shell
+(`--port 0` randomises the origin its layout lives under). `activeTab` is the tab's own id, not the workflow's
+name, because the name stopped being unique the moment two sessions of one workflow could sit side by side.
+A session is **named when it is created** — the workflow's title and the minute (`Qwen 2.1 Edit Duo · 09:41`) —
+so a row of same-workflow sessions is tellable apart; the name is the person's to change.
+
 **And its picked files come back through the provider** (epic 64 S6): a door's recorded value is a provider
 handle, and that handle may be dead by the time a session is resumed, so the surface records each image door's
 **kept copy** (the sha256 the host stored it under) in the session and, on resume, asks
