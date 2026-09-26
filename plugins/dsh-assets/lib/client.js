@@ -112,7 +112,6 @@ window.__ModuleLoader__.load({
       'pane.gallery.pick': 'Pick a thumbnail below to look at it closely',
       'pane.search.placeholder': 'Search by name or prompt',
       'pane.selected': 'Selected',
-      'meta.title': 'Metadata',
       'meta.file': 'File',
       'meta.dimensions': 'Dimensions',
       'meta.format': 'Format',
@@ -190,7 +189,6 @@ window.__ModuleLoader__.load({
       'pane.gallery.pick': '在下方选择缩略图以便细看',
       'pane.search.placeholder': '按名称或提示词搜索',
       'pane.selected': '已选择',
-      'meta.title': '元数据',
       'meta.file': '文件',
       'meta.dimensions': '尺寸',
       'meta.format': '格式',
@@ -316,10 +314,18 @@ window.__ModuleLoader__.load({
       frame: { flex: '0 0 auto', width: 56, height: 74, padding: 0, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-2)', cursor: 'pointer', overflow: 'hidden' },
       frameOn: { borderColor: 'var(--dsw-alias-brand-primary)' },
       frameImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
-      meta: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l2)', paddingTop: 10 },
-      metaHead: { color: 'var(--dsw-alias-label-primary)', fontSize: 12.5, fontWeight: 600 },
+      // No separator and no heading (founder, 2026-09-26: *"remove separator and Metadata label"*). The
+      // block already sits in its own column of the bar's own layout, so a hairline between them drew a
+      // line where the layout had already drawn one, and a word naming a list of a file's facts is the
+      // list's least informative line.
+      meta: { display: 'flex', flexDirection: 'column', gap: 6 },
       // THE INSPECT STAGE (epic 63 A4): the picture in a frame of its own, above the facts.
-      stage: { position: 'relative', width: '100%', height: 280, overflow: 'hidden', borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))', cursor: 'grab', touchAction: 'none' },
+      // THE FRAME IS THE PICTURE'S SHAPE (founder, 2026-09-26: *"fix the main preview it should be same
+      // aspect as the image or we can lock view as 3:4 as default"*). It was a fixed 280px-tall box, so a
+      // 3:4 portrait sat in a wide short letterbox; the ratio, the ceiling and the width cap are set per
+      // picture in `InspectStage` (`aspectRatio` + `maxHeight`, with `maxWidth` keeping the box the
+      // picture's own shape when the pane is wide rather than letting the ratio run past 60vh).
+      stage: { position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))', cursor: 'grab', touchAction: 'none' },
       stageImage: { position: 'absolute', top: 0, left: 0, transformOrigin: '0 0', maxWidth: 'none', maxHeight: 'none', display: 'block', userSelect: 'none' },
       stageControls: { position: 'absolute', right: 6, bottom: 6, display: 'flex', alignItems: 'center', gap: 4, padding: '3px 5px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)', border: '1px solid var(--dsw-alias-border-l2)' },
       stageHint: { position: 'absolute', left: 8, bottom: 8, color: 'var(--dsw-alias-label-tertiary)', fontSize: 10.5, pointerEvents: 'none' },
@@ -768,7 +774,16 @@ window.__ModuleLoader__.load({
       const [frame, setFrame] = React.useState({ width: 0, height: 0 })
       const [full, setFull] = React.useState(false)
       const drag = React.useRef(null)
-      const natural = detail && detail.dimensions && detail.dimensions.width > 0 ? detail.dimensions : null
+      // THE SCALE IS A FRACTION OF THE PICTURE, SO THE PICTURE'S BOX HAS TO BE THE PICTURE. The `<img>`
+      // was laid out at the PREVIEW BITMAP's size (the route serves `?w=1024`) while `fitScale` divided
+      // the FILE's real width, so a 1888-pixel file drawn from a 1024-pixel bitmap came out at 54% of the
+      // fit — an 11% label on a picture that filled a third of the stage. The declared dimensions are the
+      // box; a file that declares none adopts the bitmap's own size when it loads, so an unreadable
+      // header still fits instead of guessing.
+      const [bitmap, setBitmap] = React.useState(null)
+      const declared = detail && detail.dimensions && detail.dimensions.width > 0 && detail.dimensions.height > 0 ? detail.dimensions : null
+      const natural = declared || bitmap
+      const ratio = natural && natural.height > 0 ? natural.width / natural.height : 3 / 4
       const [view, setView] = React.useState(() => fitView(natural, { width: 0, height: 0 }))
 
       // The frame is MEASURED: the pane resizes (docked, split, fullscreen) and the fit follows
@@ -787,6 +802,7 @@ window.__ModuleLoader__.load({
 
       // A new picture, a new frame, or the full-resolution swap: back to the fit.
       React.useEffect(() => {
+        setBitmap(null)
         setView(fitView(natural, frame))
       }, [detail && detail.path, frame.width, frame.height])
 
@@ -818,7 +834,7 @@ window.__ModuleLoader__.load({
         'div',
         {
           ref: frameRef,
-          style: S.stage,
+          style: { ...S.stage, aspectRatio: natural ? natural.width + ' / ' + natural.height : '3 / 4', maxHeight: '60vh', maxWidth: 'calc(60vh * ' + ratio + ')', margin: '0 auto' },
           'data-assets-stage': 'yes',
           'data-assets-stage-scale': String(scale),
           'data-assets-stage-full': full ? 'yes' : 'no',
@@ -829,11 +845,22 @@ window.__ModuleLoader__.load({
           onPointerLeave: onPointerUp,
         },
         h('img', {
-          style: { ...S.stageImage, transform: 'translate(' + offset.x + 'px, ' + offset.y + 'px) scale(' + scale + ')' },
+          style: {
+            ...S.stageImage,
+            width: natural ? natural.width : undefined,
+            height: natural ? natural.height : undefined,
+            transform: 'translate(' + offset.x + 'px, ' + offset.y + 'px) scale(' + scale + ')',
+          },
           src: src(full ? null : 1024),
           alt: '',
           draggable: false,
           'data-assets-stage-image': 'yes',
+          onLoad: (event) => {
+            if (declared) return
+            const el = event && event.target ? event.target : null
+            if (!el || !(el.naturalWidth > 0) || !(el.naturalHeight > 0)) return
+            setBitmap({ width: el.naturalWidth, height: el.naturalHeight })
+          },
         }),
         h('span', { style: S.stageHint }, t('stage.hint')),
         h(
@@ -959,7 +986,6 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { style: S.meta, 'data-assets-meta': 'yes' },
-        h('span', { style: S.metaHead }, t('meta.title')),
         // The stage first: the facts describe the picture, so the picture leads.
         // In the gallery the stage is already the pane's main column, so the block draws its
         // facts only — one picture, not two (`withStage`).

@@ -166,6 +166,9 @@ const near = (a, b, epsilon = 1e-6) => Math.abs(a - b) < epsilon
 
 const RECORDED = '/Users/someone/Desktop/yammaman/output/20260926-job-aaa.png'
 const CLIP = '/Users/someone/Desktop/yammaman/output/20260926-job-clip.mp4'
+// A picture whose bytes declare no dimensions: the block falls back to the 3:4 lock and takes the size
+// from the bitmap the moment it loads, so "fit" still means fit.
+const LOOSE = '/Users/someone/Desktop/yammaman/output/20260926-job-loose.png'
 
 const foldersBody = { folders: [{ path: '/Users/someone/Desktop/yammaman', label: 'yammaman' }], canChoose: true, root: '/p/assets', recordsRoot: '/p/generate' }
 const catalogBody = {
@@ -182,8 +185,8 @@ const catalogBody = {
 const detailOf = (which) => ({
   path: which,
   name: which === RECORDED ? 'a.png' : 'a.mp4',
-  ext: which === RECORDED ? 'png' : 'mp4',
-  type: which === RECORDED ? 'png' : 'mp4',
+  ext: which === CLIP ? 'mp4' : 'png',
+  type: which === CLIP ? 'mp4' : 'png',
   bytes: 1000,
   date: '2026-09-26',
   context: 'yammaman',
@@ -227,6 +230,20 @@ async function render() {
   check('drawn from the file route, at a PREVIEW width rather than the original', !!image && image.props.src.includes('&w=1024'), image ? String(image.props.src).slice(-40) : 'no image')
   check('with a transform driven by the scale the math produced', !!image && /scale\(1\)/.test(String(image.props.style.transform)), image ? String(image.props.style.transform) : 'no image')
   check('and a scale label a person can read', !!find(tree, 'data-assets-stage-label', 'yes') && textIn(tree).includes('100%'), textIn(tree).slice(0, 60))
+
+  // THE FRAME IS THE PICTURE'S SHAPE, AND THE PICTURE'S BOX IS ITS OWN PIXELS (founder, 2026-09-26:
+  // *"fix the main preview it should be same aspect as the image or we can lock view as 3:4 as default"*).
+  // The stage was a fixed 280px box, and the `<img>` was laid out at the PREVIEW bitmap's size while the
+  // fit divided the FILE's width — so a 1440-pixel file drawn from a 1024-pixel bitmap opened at 54% of
+  // the fit, which is the "11%" on a picture that filled a third of the stage. Both halves are asserted:
+  // the box's shape and the box's size.
+  check('the stage takes the picture’s own shape, not a fixed box', stage.props.style.aspectRatio === '1440 / 1920', String(stage.props.style.aspectRatio))
+  check(
+    'and the picture is laid out at its own pixel size, so the fit scale means what the label says',
+    image.props.style.width === 1440 && image.props.style.height === 1920,
+    image.props.style.width + '×' + image.props.style.height,
+  )
+  check('with the ceiling and the width cap the ratio needs', stage.props.style.maxHeight === '60vh' && String(stage.props.style.maxWidth).startsWith('calc(60vh * '), String(stage.props.style.maxHeight) + ' / ' + String(stage.props.style.maxWidth))
 
   const before = String(image.props.style.transform)
   stage.props.onWheel({ deltaY: -1, clientX: 200, clientY: 150, currentTarget: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } })
@@ -273,6 +290,32 @@ async function render() {
   view = { ...view, selected: CLIP }
   const tree = await render()
   check('a clip gets no stage at all', allOf(tree, 'data-assets-stage').length === 0, textIn(tree).slice(0, 60))
+  view = { ...view, selected: RECORDED }
+}
+
+{
+  // NO DECLARED DIMENSIONS: the lock, then the bitmap's own size.
+  view = { ...view, selected: LOOSE }
+  let tree = await render()
+  const stage = find(tree, 'data-assets-stage', 'yes')
+  check('a picture that declares no size falls back to the 3:4 lock', !!stage && stage.props.style.aspectRatio === '3 / 4', stage ? String(stage.props.style.aspectRatio) : 'no stage')
+  let image = find(tree, 'data-assets-stage-image', 'yes')
+  check('and is laid out by the bitmap rather than by a guess', !!image && image.props.style.width === undefined, image ? String(image.props.style.width) : 'no image')
+
+  image.props.onLoad({ target: { naturalWidth: 800, naturalHeight: 600 } })
+  // `again()`, not `render()`: render clears every hook slot, which is exactly the state this asserts.
+  tree = again()
+  image = find(tree, 'data-assets-stage-image', 'yes')
+  const landed = find(tree, 'data-assets-stage', 'yes')
+  check(
+    'when the bitmap lands, the box becomes its size and the frame follows its shape',
+    image.props.style.width === 800 && image.props.style.height === 600 && landed.props.style.aspectRatio === '800 / 600',
+    image.props.style.width + '×' + image.props.style.height + ' in a ' + String(landed.props.style.aspectRatio),
+  )
+
+  image.props.onLoad({ target: { naturalWidth: 0, naturalHeight: 0 } })
+  tree = again()
+  check('and a bitmap that says nothing leaves it alone', find(tree, 'data-assets-stage-image', 'yes').props.style.width === 800, 'kept')
   view = { ...view, selected: RECORDED }
 }
 

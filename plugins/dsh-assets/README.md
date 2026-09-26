@@ -254,7 +254,25 @@ The stage sits in the metadata block, above the facts: the picture is **fitted a
 the wheel zooms about the cursor, a drag pans, and **1:1 asks for the original file** — the stage
 draws the `&w=1024` preview until you ask, because a grid of tiles should never cost originals.
 The frame is measured with a `ResizeObserver`, so the fit follows the pane as it resizes (docked,
-split, fullscreen). Compare is deliberately **not** in this slice — the OS cut it on purpose and
+split, fullscreen).
+
+**THE FRAME IS THE PICTURE'S SHAPE, AND THE PICTURE'S BOX IS ITS OWN PIXELS** (founder, 2026-09-26:
+*"fix the main preview it should be same aspect as the image or we can lock view as 3:4 as default"*). Two
+faults, one symptom — an 11% label on a picture filling a third of the stage:
+
+- the frame was a **fixed 280px-tall box**, so a 3:4 portrait sat in a wide short letterbox. It now takes
+  the file's own `aspectRatio` (with a `maxHeight: 60vh` ceiling and a `maxWidth` cap so the ratio cannot
+  run past the window), and a file that declares **no** dimensions gets the **3:4 lock** this document's
+  founder asked for as the alternative;
+- the `<img>` was laid out at the **preview bitmap's** size (the route serves `?w=1024`) while `fitScale`
+  divided the **file's** real width — so a 1440-pixel file drawn from a 1024-pixel bitmap opened at 54% of
+  the fit. The picture is now laid out at its **declared pixel size**, which is what makes the fit scale
+  mean what the label says; a file whose header declares nothing adopts the bitmap's own size on load, so
+  an unreadable header still fits instead of guessing.
+
+**The facts block carries no heading and no separator** (same pass: *"remove separator and Metadata
+label"*). It sits in its own column of a layout that has already drawn the boundary, and a word naming a
+list of a file's facts is the list's least informative line — so `meta.title` left both dictionaries. Compare is deliberately **not** in this slice — the OS cut it on purpose and
 the founder's word is what would turn it on.
 
 **The arithmetic is exposed on the plugin's own exports** (`zoom`) as a deliberate test seam: the
@@ -310,7 +328,8 @@ node verify/views.mjs      # A3: the grid, the tile, the metadata block, EVERY f
                            #     solid card                                             106
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
-node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36
+node verify/inspect.mjs    # A4: zoom is arithmetic, the stage uses it, and the frame is
+                           #     the picture's own shape and pixel size                    43
 node verify/sync.mjs       # A5: off by default, content-addressed, failure-safe              38
 ```
 

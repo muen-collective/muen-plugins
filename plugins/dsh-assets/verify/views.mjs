@@ -226,7 +226,11 @@ async function render(passes = 4) {
   view = { ...view, selected: RECORDED }
   const tree = await render()
   const text = textOf(tree).join(' | ')
-  check('a selected tile opens the metadata block', text.includes('Metadata'), text.slice(0, 80))
+  // NO HEADING AND NO SEPARATOR (founder, 2026-09-26: *"remove separator and Metadata label"*): the block
+  // is named by the facts it holds, not by a word over them, and it draws no hairline of its own.
+  const block = collect(tree, (node) => node.props && node.props['data-assets-meta'] === 'yes')[0]
+  check('a selected tile opens the facts block, with no heading over it', !!block && !text.includes('Metadata'), text.slice(0, 80))
+  check('and the block draws no separator of its own', !!block && block.props.style.borderTop === undefined && block.props.style.paddingTop === undefined, block ? JSON.stringify({ borderTop: block.props.style.borderTop, paddingTop: block.props.style.paddingTop }) : 'no block')
   check('it names the file and its dimensions', text.includes('20260926-job-aaa.png') && text.includes('1440 × 1920'), '')
   check('and its format, size and date', text.includes('PNG') && text.includes('2.8 MB') && text.includes('2026-09-26'), '')
   check('and WHERE IT IS, which is the catalog job', text.includes('Where it is') && text.includes('here'), '')

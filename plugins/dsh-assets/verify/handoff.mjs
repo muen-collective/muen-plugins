@@ -219,7 +219,7 @@ function press(tree, label) {
   tree = alonePane({ locale: { bind: () => t }, useTabInfo: () => ({ tab: { actions: { openTab: (...args) => opened.push(args) }, navigation: { params: null, revision: 0 } } }) })
 
   const text = textOf(tree).join(' | ')
-  check('with no Generate tab type registered, the library draws its own metadata', text.includes(EN['meta.title']) && text.includes('job-aaa') && text.includes('qwen-2-1-image-edit'), text.slice(0, 100))
+  check('with no Generate tab type registered, the library still draws the file’s own facts', text.includes(EN['meta.file']) && text.includes('job-aaa') && text.includes('qwen-2-1-image-edit'), text.slice(0, 100))
   const sentence = collect(tree, (node) => node.props && node.props['data-assets-no-continue'] === 'no-generate')[0]
   check('plus ONE sentence saying why the run cannot be opened here', !!sentence && textOf(sentence).join(' ').includes(EN['meta.continue.noPlugin']), sentence ? textOf(sentence).join(' ') : 'no sentence')
   check('and never a dead control', collect(tree, (node) => node.props && node.props['data-assets-continue'] !== undefined).length === 0, '')
