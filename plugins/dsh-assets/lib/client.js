@@ -57,8 +57,7 @@ window.__ModuleLoader__.load({
       'pane.empty.body':
         'Add the folder a project keeps its pictures in. Nothing is copied or moved — the library reads that folder where it already lives.',
       'pane.where': 'Folders added to this library',
-      'pane.state': 'Library state',
-      'pane.records': 'Run records',
+      'pane.reveal': 'Show in Finder',
       'pane.add': 'Folder',
       'pane.adding': 'Adding…',
       'pane.path.placeholder': '/Users/you/Desktop/project',
@@ -112,8 +111,7 @@ window.__ModuleLoader__.load({
       'pane.empty.title': '还没有文件夹',
       'pane.empty.body': '把项目存放图片的文件夹加进来。不会复制也不会移动——资产库就地读取该文件夹。',
       'pane.where': '已加入资产库的文件夹',
-      'pane.state': '资产库状态',
-      'pane.records': '运行记录',
+      'pane.reveal': '在访达中显示',
       'pane.add': '文件夹',
       'pane.adding': '正在添加…',
       'pane.path.placeholder': '/Users/你/Desktop/项目',
@@ -171,6 +169,10 @@ window.__ModuleLoader__.load({
       glyph: { color: 'var(--dsw-alias-label-tertiary)', display: 'flex' },
       head: { display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' },
       folderRow: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 },
+      // A FOLDER A PERSON ADDED IS A PLACE, so its name is the way there: the glyph says what
+      // it is, the name is the button, and Finder opens it (`pane.reveal`).
+      folderButton: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: '1 1 auto', padding: '2px 4px', background: 'transparent', border: 0, borderRadius: 6, cursor: 'pointer', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5, textAlign: 'left' },
+      folderName: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
       group: { display: 'flex', flexDirection: 'column', gap: 2, borderTop: '1px solid var(--dsw-alias-border-l2)', paddingTop: 8 },
       groupTitle: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' },
       filterRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', padding: '3px 6px', background: 'transparent', border: 0, borderRadius: 6, cursor: 'pointer', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5, textAlign: 'left' },
@@ -259,12 +261,6 @@ window.__ModuleLoader__.load({
       const text = String(name || '')
       const dot = text.lastIndexOf('.')
       return dot > 0 ? text.slice(0, dot) : text
-    }
-
-    /** A path as the pane shows it: monospaced, wrapping, never clipped into a lie. */
-    function PathRow({ label, value }) {
-      if (!value) return null
-      return h('div', { style: S.row }, h('span', { style: S.muted }, label), h('span', { style: S.path, className: 'mono' }, value))
     }
 
     /** One filter row: a label, and the number of assets behind it. */
@@ -572,7 +568,12 @@ window.__ModuleLoader__.load({
                     : null,
                 ),
             failed ? h('span', { style: S.error }, t('pane.add.failed') + ' ' + failed) : null,
-            h('div', { style: S.facts }, h(PathRow, { label: t('pane.state'), value: registry.data && registry.data.root }), h(PathRow, { label: t('pane.records'), value: registry.data && registry.data.recordsRoot })),
+            // THE TWO SYSTEM PATHS ARE NOT ON SCREEN (founder, 2026-09-26: *"UI upgrade library
+            // state and run records are Mitsumeru system folders? maybe use icon and finder link?
+            // I'm not sure the purpose to showing this to user"*). They are this plugin's own
+            // bookkeeping inside the app's profile — nothing a person acts on — and the route
+            // still answers with them for a bug report. What a person CAN act on is the folder
+            // they added, which is a Finder link in the list below.
           ),
         )
       }
@@ -599,7 +600,20 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { key: folder.path + ':' + index, style: S.row },
-              h('span', { style: S.path, className: 'mono', title: folder.path }, folder.label || folder.path),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  title: t('pane.reveal') + ' — ' + folder.path,
+                  'aria-label': t('pane.reveal') + ' ' + (folder.label || folder.path),
+                  'data-assets-folder': folder.path,
+                  disabled: busy,
+                  onClick: () => post({ action: 'reveal', path: folder.path }),
+                  style: S.folderButton,
+                },
+                IconFolderOpen ? h(IconFolderOpen, { size: 14, style: S.glyph }) : null,
+                h('span', { style: S.folderName }, folder.label || folder.path),
+              ),
               h(
                 'button',
                 {

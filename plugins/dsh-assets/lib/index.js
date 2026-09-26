@@ -25,7 +25,7 @@ import { join } from 'node:path'
 import { resolveDataRoot, resolveRecordsRoot } from './paths.js'
 import { expandFolder, readFolders, writeFolders } from './folders.js'
 import { assetDetail, readCatalog } from './catalog.js'
-import { nativeFolders } from './folder-actions.js'
+import { chooseStart, nativeFolders } from './folder-actions.js'
 import { canPreview, previewFor } from './preview.js'
 
 /** Matches the row id in cordis.patch.yml. */
@@ -179,9 +179,14 @@ export function apply(ctx, config = {}) {
         send(res, 501, { error: 'unsupported', detail: 'this host has no folder dialog' })
         return
       }
+      // A START FOLDER THAT EXISTS — the folders a person already added, then their home.
+      // The plugin's own root is deliberately NOT a candidate: on a fresh install it does not
+      // exist yet, and a dialog whose start folder is missing fails before it opens (the bug
+      // the founder hit on 2026-09-26).
+      const start = chooseStart([...current.folders.map((folder) => folder.path)])
       let picked
       try {
-        picked = await folders.choose(current.folders.length > 0 ? current.folders[0].path : own.root)
+        picked = await folders.choose(start)
       } catch (error) {
         send(res, 500, { error: 'choose-failed', detail: String((error && error.message) || error) })
         return
@@ -194,6 +199,27 @@ export function apply(ctx, config = {}) {
       target = picked.path
     } else if (body.action === 'add') {
       target = body.path
+    } else if (body.action === 'reveal') {
+      // SHOW IT WHERE IT LIVES (founder, 2026-09-26: *"maybe use icon and finder link?"*). The
+      // path must be one this library holds: revealing is a read, but a route that opens a
+      // Finder window on any path a caller names is a route that does something for anybody.
+      const path = expandFolder(body.path)
+      const known = path !== null && current.folders.some((folder) => folder.path === path)
+      if (!known) {
+        send(res, 404, { error: 'not-in-library', detail: 'that folder is not added: ' + String(body.path || '') })
+        return
+      }
+      if (typeof folders.reveal !== 'function') {
+        send(res, 501, { error: 'unsupported', detail: 'this host cannot open a file browser' })
+        return
+      }
+      try {
+        await folders.reveal(path)
+        send(res, 200, { ok: true, path })
+      } catch (error) {
+        send(res, 500, { error: 'reveal-failed', detail: String((error && error.message) || error) })
+      }
+      return
     } else if (body.action === 'remove') {
       const path = expandFolder(body.path)
       if (path === null) {

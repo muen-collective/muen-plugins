@@ -118,7 +118,8 @@ const renderPane = async (fetchImpl) => {
   )
   check('with no folders, the pane draws the empty state', text.includes('No folders yet'), text.slice(0, 120))
   check('and it says what to do next', /Add the folder/i.test(text), text.slice(0, 200))
-  check('and where the library is looking, both paths', text.includes('profiles/mitsu/assets') && text.includes('profiles/mitsu/generate'), text.slice(0, 260))
+  check('and the library\'s own bookkeeping is NOT on screen', !text.includes('profiles/mitsu/assets') && !text.includes('profiles/mitsu/generate') && !text.includes('Library state'), text.slice(0, 200))
+  check('the way in is drawn: one control, named Folder', text.includes('Folder'), text.slice(0, 160))
 }
 
 {

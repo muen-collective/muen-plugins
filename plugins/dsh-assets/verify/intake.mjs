@@ -28,6 +28,8 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { ROOT, callRoute, fakeServer, reporter } from './harness.mjs'
+
+const { chooseStart } = await import(pathToFileURL(join(ROOT, 'lib/folder-actions.js')).href)
 const FOLDERS_PATH = '/plugins/assets/folders'
 const CATALOG_PATH = '/plugins/assets/catalog'
 
@@ -100,7 +102,7 @@ writeFileSync(join(runsDir, 'job-broken.json'), '{ this is not json')
 
 // ── the seams ───────────────────────────────────────────────────────────────
 
-const dialog = { canChoose: true, next: { path: projectA }, calls: 0, choose: async () => { dialog.calls += 1; return dialog.next } }
+const dialog = { canChoose: true, next: { path: projectA }, calls: 0, starts: [], revealed: [], choose: async (start) => { dialog.calls += 1; dialog.starts.push(start); return dialog.next }, reveal: async (path) => { dialog.revealed.push(path); return { ok: true } } }
 
 const server = fakeServer()
 const ctx = {
@@ -140,6 +142,21 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
   check('the catalog is empty before any folder is added', res.statusCode === 200 && body.total === 0 && body.assets.length === 0, JSON.stringify(body.total))
 }
 
+// ── 2b. the dialog's start folder must EXIST ────────────────────────────────
+//
+// `+ Folder` did nothing on a fresh install (founder, 2026-09-26: *"+folder in assets plugin not
+// working"*): the start folder was this plugin's own root, `<profile>/assets`, and nothing had
+// created it yet — so AppleScript's `default location` pointed at a folder that was not there,
+// `choose folder` errored before it opened, and the press was silent. The start is now the first
+// added folder that exists, and the person's home is the floor.
+{
+  dialog.next = { cancelled: true }
+  const res = await call(foldersHandler, 'POST', FOLDERS_PATH, { action: 'choose' })
+  check('with nothing added, the dialog starts at the person\'s home', res.statusCode === 200 && dialog.starts.at(-1) && !dialog.starts.at(-1).startsWith(dataRoot), JSON.stringify(dialog.starts.at(-1)))
+  const home = process.env.HOME || ''
+  check('and never at this plugin\'s own root, which may not exist yet', dialog.starts.at(-1) !== dataRoot, dialog.starts.at(-1))
+}
+
 // ── 3. adding, and the ways it is refused ───────────────────────────────────
 
 {
@@ -170,14 +187,28 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
   check('and the method is bounded', put.statusCode === 405 && put.headers.allow === 'GET, POST', put.statusCode + ' allow=' + put.headers.allow)
 }
 
-// ── 4. the dialog is the same act ───────────────────────────────────────────
+// ── 4. the picker's start folder, as a pure function ────────────────────────
+
+{
+  check('a start folder that is NOT there is never used', chooseStart(['/definitely/not/here']) === homedir(), chooseStart(['/definitely/not/here']))
+  check('an existing one is', chooseStart([projectA]) === projectA, chooseStart([projectA]))
+  check('and the first existing candidate wins', chooseStart(['/not/here', projectB, projectA]) === projectB, chooseStart(['/not/here', projectB, projectA]))
+  check('with nothing to go on, the home stands in', chooseStart([]) === homedir() && chooseStart([null, '', '  ']) === homedir(), chooseStart([]))
+}
+
+// ── 4b. the dialog is the same act ───────────────────────────────────────────
+//
+// And once a folder IS in the library, the dialog starts there — a folder a person has already
+// added is a real place, which is the property the first bug was missing.
 
 {
   dialog.next = { path: projectB }
+  const callsBefore = dialog.calls
   const chosen = await call(foldersHandler, 'POST', FOLDERS_PATH, { action: 'choose' })
   const body = chosen.json()
-  check('the dialog adds the folder it answered', chosen.statusCode === 200 && dialog.calls === 1 && body.folders.some((folder) => folder.path === projectB), JSON.stringify(body.folders.map((folder) => folder.label)))
+  check('the dialog adds the folder it answered', chosen.statusCode === 200 && dialog.calls === callsBefore + 1 && body.folders.some((folder) => folder.path === projectB), JSON.stringify(body.folders.map((folder) => folder.label)))
   check('and the label defaults to the folder\'s own name', body.folders.some((folder) => folder.path === projectB && folder.label.length > 0), JSON.stringify(body.folders.map((folder) => folder.label)))
+  check('the dialog starts at a folder the library already holds', dialog.starts.at(-1) === projectA || dialog.starts.at(-1) === projectB, JSON.stringify(dialog.starts.at(-1)))
 }
 
 {
@@ -185,6 +216,17 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
   const cancelled = await call(foldersHandler, 'POST', FOLDERS_PATH, { action: 'choose' })
   const body = cancelled.json()
   check('a cancelled dialog is not an error and changes nothing', cancelled.statusCode === 200 && body.cancelled === true && body.folders.length === 2, cancelled.statusCode + ' n=' + body.folders.length)
+}
+
+// ── 4b. revealing a folder in the file browser ──────────────────────────────
+
+{
+  const shown = await call(foldersHandler, 'POST', FOLDERS_PATH, { action: 'reveal', path: projectB })
+  check('a folder in the library can be shown in the file browser', shown.statusCode === 200 && dialog.revealed.at(-1) === projectB, shown.statusCode + ' ' + JSON.stringify(shown.json()))
+  const outside = await call(foldersHandler, 'POST', FOLDERS_PATH, { action: 'reveal', path: '/etc' })
+  check('and a path the library does not hold is refused, not opened', outside.statusCode === 404 && outside.json().error === 'not-in-library', outside.statusCode + ' ' + JSON.stringify(outside.json().error))
+  const relative = await call(foldersHandler, 'POST', FOLDERS_PATH, { action: 'reveal', path: 'Desktop' })
+  check('a relative path is refused the same way', relative.statusCode === 404, relative.statusCode)
 }
 
 // ── 5. the catalog: files, records, and the identity of a path ──────────────

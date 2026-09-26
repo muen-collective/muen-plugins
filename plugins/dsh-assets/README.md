@@ -31,6 +31,13 @@ So there are **no stars, no colour tags and no keyword library** here yet.
 - **Identity is the path**, matched exactly against the record's saved file. No guessing from a filename.
 - **Losing the registry costs the grouping, never a picture.** It is one file,
   `<profile>/assets/folders.json`.
+- **A folder a person added is a place, so its name is the way there**: the glyph says what it is,
+  the name is a button, and Finder opens it.
+- **This plugin's own bookkeeping is not on screen.** The route answers with the two profile paths it
+  reads (its own state root and the Generate plugin's records root) because a bug report wants them;
+  the pane used to draw them, and the founder's own question retired that (2026-09-26: *"library state
+  and run records are Mitsumeru system folders? … I'm not sure the purpose to showing this to user"*) —
+  they are the app's business, not a person's, and nothing there is something to act on.
 
 ## Files and paths
 
@@ -50,7 +57,7 @@ absent and neither reaches across.
 | Route | What it answers |
 |---|---|
 | `GET /plugins/assets/folders` | the registry as stored, plus **where the library is looking** — the state root and the records root, each with the rule that answered (`override` · `profile` · `home`) — and `canChoose`, whether this host has a folder dialog. An empty library says where it looked rather than shrugging |
-| `POST /plugins/assets/folders` | `{ action: 'choose' }` opens the OS folder dialog (a cancelled dialog answers the unchanged registry, not an error); `{ action: 'add', path, label? }` adds a typed absolute path; `{ action: 'remove', path }` takes one out. Adding one twice answers `already: true`; removing one that is not there answers 404 |
+| `POST /plugins/assets/folders` | `{ action: 'choose' }` opens the OS folder dialog (**its start folder is one that exists** — the first added folder, else the person's home: a start that is not there makes AppleScript fail before the dialog opens, which is exactly what `+ Folder` did on a fresh install); `{ action: 'add', path, label? }` adds a typed absolute path; `{ action: 'reveal', path }` shows a folder the library holds in Finder; `{ action: 'remove', path }` takes one out. Adding one twice answers `already: true`; removing or revealing one that is not there answers 404 |
 | `GET /plugins/assets/catalog?context=&date=` | the tiles, the two filter groups with their counts, and the roots it looked in. A record's own settled date wins over a file's mtime; counts are over **everything scanned**, so a filter row does not move its own number |
 | `GET /plugins/assets/detail?path=` | one asset, whole: dimensions (read from the file's own header), format, bytes, date, context, **where it is**, the run that made it, the prompt verbatim and the values it ran with. **Containment is the model**: a path outside an added folder is 404 |
 | `GET /plugins/assets/file?path=` · `&w=` | the bytes of an asset the library holds — the tile's picture. Same containment, `no-store` like every other answer: a cached 200 would keep showing a picture that has been moved. **With `w=` it answers a preview** (32–2048px, made once into `<profile>/assets/proxies/` and named by the original's path+mtime+size+width), so a folder of 1,296 pictures is not 1,296 originals drawn into a wall of tiles. `X-Assets-Preview: 1` says it is the preview; **every fallback serves the picture** — a host with no resizer, a video, a failed resize — so a slow grid beats a broken one |
@@ -104,8 +111,8 @@ them.
 ## Verify
 
 ```
-node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room   30
-node verify/intake.mjs     # A2: the folders, the records, the two filters               47
+node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room   31
+node verify/intake.mjs     # A2: the folders, the records, the two filters               57
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, the search      34
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 ```

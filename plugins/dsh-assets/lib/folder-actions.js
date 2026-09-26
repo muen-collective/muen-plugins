@@ -13,6 +13,7 @@
  * @module @muen/dsh-assets/lib/folder-actions
  */
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 
 /** Whether this host has a folder dialog at all. The surface hides the control when it does not. */
@@ -27,9 +28,11 @@ const CANCELLED = '__cancelled__'
  */
 const CHOOSE_SCRIPT = [
   'on run argv',
-  '  set start to item 1 of argv',
+  // THE COERCION IS OUTSIDE THE TRY, which is the shape this plugin's sibling proved: if it
+  // throws, the failure is a failure and not a silent cancel.
+  '  set startFolder to POSIX file (item 1 of argv)',
   '  try',
-  '    set picked to choose folder with prompt "Add a folder to the Assets library" default location (POSIX file start)',
+  '    set picked to (choose folder with prompt "Add a folder to the Assets library" default location startFolder)',
   '    return POSIX path of picked',
   '  on error number -128',
   '    return "' + CANCELLED + '"',
@@ -38,18 +41,42 @@ const CHOOSE_SCRIPT = [
 ].join('\n')
 
 /**
+ * A START FOLDER THAT EXISTS, because one that does not makes the dialog fail before it opens.
+ *
+ * This was `+ Folder`'s first real bug (founder, 2026-09-26: *"+folder in assets plugin not
+ * working"*): the start path was this plugin's own root, `<profile>/assets`, and on a fresh
+ * install nothing had created it yet — so AppleScript's `default location` pointed at a folder
+ * that was not there, `choose folder` errored, and the press did nothing at all. The first
+ * candidate that exists wins, and the person's home is the floor every machine has.
+ */
+export function chooseStart(candidates, { exists = existsSync, home = homedir() } = {}) {
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    if (typeof candidate !== 'string' || candidate.trim() === '') continue
+    try {
+      if (exists(candidate)) return candidate
+    } catch {
+      // A path this host cannot even ask about is not a start folder.
+    }
+  }
+  return home
+}
+
+/**
  * Open the OS folder dialog.
  *
  * @returns {Promise<{ path: string } | { cancelled: true }>}
  */
-export function chooseFolder(startPath, { run = execFile, platform = process.platform, home = homedir() } = {}) {
+export function chooseFolder(startPath, { run = execFile, platform = process.platform, home = homedir(), exists = existsSync } = {}) {
   return new Promise((resolve, reject) => {
     if (platform !== 'darwin') {
       reject(new Error('unsupported'))
       return
     }
-    const start = typeof startPath === 'string' && startPath !== '' ? startPath : home
-    run('osascript', ['-e', CHOOSE_SCRIPT, start], { timeout: 120000 }, (error, stdout) => {
+    // The action takes what it is given, but never a start that is not there: the route
+    // resolves one that exists (`chooseStart`), and this second guard keeps a future caller
+    // from reintroducing the failure.
+    const start = chooseStart([startPath], { exists, home })
+    run('osascript', ['-e', CHOOSE_SCRIPT, start], { timeout: 120000, windowsHide: true }, (error, stdout) => {
       if (error) {
         reject(error)
         return
