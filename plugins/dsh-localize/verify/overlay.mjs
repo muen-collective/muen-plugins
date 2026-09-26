@@ -461,6 +461,45 @@ const parse = (res) => {
   await route(fakeRequest('POST', '/plugins/localize/overlay', { scan: true, plugin: 'not-installed' }), noBundle)
   check('and a plugin with no bundle is a 404, not an empty answer', noBundle.statusCode === 404 && parse(noBundle).error === 'no-bundle', noBundle.body)
 
+  // A SCOPED ID IS A REAL TARGET — our own plugins are `@muen/...`, and they are exactly the ones whose
+  // strings someone may want to scan. Found by the live walkthrough: the route refused them, because the
+  // `@` was stripped from the path and the first cut of the guard allowed no `/`.
+  const scopedLib = join(ROOT, 'node_modules', '@muen', 'dsh-turn-summary', 'lib')
+  mkdirSync(scopedLib, { recursive: true })
+  writeFileSync(join(scopedLib, 'client.js'), "h('span', null, 'Turn summary')\n")
+  const scopedScan = fakeResponse()
+  await route(fakeRequest('POST', '/plugins/localize/overlay', { scan: true, plugin: '@muen/dsh-turn-summary' }), scopedScan)
+  check(
+    'a SCOPED package id scans too, with the @ kept in the path',
+    scopedScan.statusCode === 200 && parse(scopedScan).strings.includes('Turn summary'),
+    scopedScan.body,
+  )
+  // …and the widening must not open a door. THE CANARY IS A REAL FILE the traversal would find, because a
+  // check against a path that does not exist passes whether the guard works or not — the first version of
+  // this check did exactly that, and survived the guard being deleted.
+  const canaryLib = join(ROOT, 'canary', 'lib')
+  mkdirSync(canaryLib, { recursive: true })
+  writeFileSync(join(canaryLib, 'client.js'), "h('span', null, 'CANARY, never served')\n")
+  const climbs = ['../canary', '../../../etc', '@muen/../../canary', '@/passwd', 'muen/', '..', 'a/b/c', '@muen/']
+  const refusedAll = []
+  const leaked = []
+  for (const id of climbs) {
+    const answer = fakeResponse()
+    await route(fakeRequest('POST', '/plugins/localize/overlay', { scan: true, plugin: id }), answer)
+    if (answer.statusCode !== 404) refusedAll.push(id + ' → ' + answer.statusCode)
+    if ((answer.body || '').includes('CANARY')) leaked.push(id)
+  }
+  check(
+    'and a scan id that would climb out of the profile is refused, segment by segment',
+    refusedAll.length === 0,
+    JSON.stringify(refusedAll),
+  )
+  check(
+    'with the canary file proving the refusal is the GUARD and not a missing path',
+    leaked.length === 0 && existsSync(join(canaryLib, 'client.js')),
+    JSON.stringify({ leaked, canary: existsSync(join(canaryLib, 'client.js')) }),
+  )
+
   // THE REVIEW COUNT RIDES THIS RESPONSE (epic 65 §3): the globe's mark is drawn from it, so a language
   // whose translations are waiting says so in the same answer that carries the map.
   {

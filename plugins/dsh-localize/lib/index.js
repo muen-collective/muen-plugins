@@ -183,9 +183,20 @@ function apply(ctx) {
       }
       if (body.scan === true) {
         // THE SCAN, for a plugin already installed in this profile: read its bundle's TEXT.
+        //
+        // A SCOPED ID IS A REAL TARGET — `@muen/dsh-turn-summary` and the other Muen plugins are exactly the
+        // ones whose strings we may want to scan — so the id may be `name` or `@scope/name`, and each
+        // segment is validated on its own. Nothing here may climb: no `..`, no absolute path, no empty part.
         const id = typeof body.plugin === 'string' ? body.plugin : ''
-        const path = join(target, '..', 'node_modules', id, 'lib', 'client.js')
-        if (!/^[A-Za-z0-9][A-Za-z0-9._@-]*$/u.test(id) || !existsSync(path)) {
+        const scoped = id.startsWith('@')
+        const segments = scoped ? id.slice(1).split('/') : [id]
+        const safe = segments.length >= 1 && segments.length <= 2 && segments.every((part) => /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(part))
+        // THE `@` IS PART OF THE DIRECTORY NAME: a scoped package is `node_modules/@muen/dsh-generate`,
+        // so the scope is put back with its sigil. Dropping it looked for `node_modules/muen/...`, which
+        // resolved to nothing and answered 404 for a plugin that was installed all along.
+        const parts = scoped ? ['@' + segments[0], segments[1] || ''] : [id]
+        const path = join(target, '..', 'node_modules', ...parts, 'lib', 'client.js')
+        if (!safe || !existsSync(path)) {
           send(res, 404, { error: 'no-bundle', detail: 'no installed client bundle for ' + (id || '(no plugin)') })
           return
         }
