@@ -244,6 +244,13 @@ async function render() {
     image.props.style.width + '×' + image.props.style.height,
   )
   check('with the ceiling and the width cap the ratio needs', stage.props.style.maxHeight === '60vh' && String(stage.props.style.maxWidth).startsWith('calc(60vh * '), String(stage.props.style.maxHeight) + ' / ' + String(stage.props.style.maxWidth))
+  // A FRAME, SO THE PICTURE HAS AN EDGE (founder, 2026-09-26: *"add border around the side preview"*).
+  // The app's own card ink, and border-box so the hairline cannot widen the frame past the column.
+  check(
+    'and the preview is framed in the app’s own hairline, measured inside its own box',
+    String(stage.props.style.border).includes('var(--dsw-alias-border-l3)') && stage.props.style.boxSizing === 'border-box',
+    String(stage.props.style.border) + ' / ' + String(stage.props.style.boxSizing),
+  )
 
   const before = String(image.props.style.transform)
   stage.props.onWheel({ deltaY: -1, clientX: 200, clientY: 150, currentTarget: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } })

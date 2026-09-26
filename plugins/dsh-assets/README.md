@@ -332,6 +332,12 @@ faults, one symptom — an 11% label on a picture filling a third of the stage:
   mean what the label says; a file whose header declares nothing adopts the bitmap's own size on load, so
   an unreadable header still fits instead of guessing.
 
+**THE PREVIEW IS FRAMED** (founder, 2026-09-26: *"add border around the side preview"*). The stage's own
+fill is a layer, not a line: on a light theme a pale photograph on a pale pane had no edge, so the preview
+read as part of the page rather than as one picture. It now carries the app's own card hairline
+(`--dsw-alias-border-l3`, 0.5px) and is `box-sizing: border-box`, so the stroke cannot push the frame a
+pixel past the column it is measured in.
+
 **The facts block carries no heading and no separator** (same pass: *"remove separator and Metadata
 label"*). It sits in its own column of a layout that has already drawn the boundary, and a word naming a
 list of a file's facts is the list's least informative line — so `meta.title` left both dictionaries. Compare is deliberately **not** in this slice — the OS cut it on purpose and

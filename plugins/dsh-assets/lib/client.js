@@ -346,7 +346,12 @@ window.__ModuleLoader__.load({
       // 3:4 portrait sat in a wide short letterbox; the ratio, the ceiling and the width cap are set per
       // picture in `InspectStage` (`aspectRatio` + `maxHeight`, with `maxWidth` keeping the box the
       // picture's own shape when the pane is wide rather than letting the ratio run past 60vh).
-      stage: { position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))', cursor: 'grab', touchAction: 'none' },
+      // A FRAME, SO THE PICTURE HAS AN EDGE (founder, 2026-09-26: *"add border around the side preview"*).
+      // The stage's own fill is a layer, not a line: on a light theme a pale photograph on a pale pane had
+      // no boundary at all, so the preview read as part of the page rather than as one picture. The ink is
+      // the one the app's own cards use (`--dsw-alias-border-l3`) and it is BORDER-BOX, so the hairline
+      // cannot push the frame a pixel past the column it is measured in.
+      stage: { position: 'relative', width: '100%', boxSizing: 'border-box', border: '0.5px solid var(--dsw-alias-border-l3)', overflow: 'hidden', borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))', cursor: 'grab', touchAction: 'none' },
       stageImage: { position: 'absolute', top: 0, left: 0, transformOrigin: '0 0', maxWidth: 'none', maxHeight: 'none', display: 'block', userSelect: 'none' },
       stageControls: { position: 'absolute', right: 6, bottom: 6, display: 'flex', alignItems: 'center', gap: 4, padding: '3px 5px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)', border: '1px solid var(--dsw-alias-border-l2)' },
       stageHint: { position: 'absolute', left: 8, bottom: 8, color: 'var(--dsw-alias-label-tertiary)', fontSize: 10.5, pointerEvents: 'none' },
