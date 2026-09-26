@@ -25,7 +25,7 @@ and the run are not faked here.
 | `/plugins/generate/providers/<id>/workflow?name=` | one workflow, whole: the doors, labels, bounds and `ui.order` a surface renders |
 | `/plugins/generate/providers/<id>/results?name=&limit=` | **the session's own read** (epic 64 S3): that workflow's runs, newest first, each carrying the values it was asked for (keyed by the API's own field name, so a form can take them back) and the state of every file it saved. A run whose outputs are ALL in `_trash/` **leaves the strip** — a delete is a decision about the series — while a file that has merely gone, or is on an unmounted volume, keeps its row and reads Missing or Offline, because a gap in a series is information |
 | `/plugins/generate/providers/<id>/result?job=&i=` | **the bytes of a finished run's own file** (epic 64 S1): the path comes from that run's record (`outcome.saved[i].file`), never from the query, so a caller names *which* output and cannot ask for a file this host never wrote. `404 no-result` (the run saved nothing) and `404 missing-file` (it saved it and the file has since moved) are different answers, because the asset library draws them apart |
-| `/plugins/generate/providers/<id>/state?name=` | the per-workflow values the surface saves as a person edits: `GET` them back (or `{}`), `POST { name, values }` to store. **Nothing reads it back into a form any more**: the surface writes (it is a cheap record of what was on screen) and opens CLEAN at the authored defaults, because a measured optimum belongs in the skill, in the adapter's `ui.defaults` and in a handoff — and a one-off tweak belongs to the run's own strip row. **Broken until 2026-09-26** — see the note under the table |
+| `/plugins/generate/providers/<id>/state?name=` | the per-workflow values the surface used to save as a person edited: `GET` them back (or `{}`), `POST { name, values }` to store. **Superseded (epic 64 S5/S6): the surface no longer writes it and nothing reads it back into a form.** The snapshot kept one person's last tweak per workflow, which is the "a one-off tweak becomes everyone's default" the founder's knob rule forbids — a **session** keeps the values that were used, and the values a form OPENS with come from the adapter's authored `ui.defaults`. The route stays mounted and tested (`verify/result.mjs`) for the record. **Broken until 2026-09-26** — see the note under the table |
 | `settings.section` | exactly ONE settings page, id `generate`, listing every provider in the Models → Providers shape: a row per provider with a credential dot and its key state, one open editor card at a time, the API key as the primary field, and the install prompt where Models puts a model list |
 | the client locale registry | namespace `generate`, en + zh |
 | `ctx.tools` | `rh_workflow_graph` (read an app's doors) and `rh_adapter_validate` (check a written adapter) |
@@ -42,6 +42,21 @@ card it should be empty, the session starts from empty and if arrived from asset
 session"*). So a workflow's history is not on screen by default — and no history is even read — and the strip
 fills from two directions: a run done in this visit joins it (only that run), or a tab opened to **continue** one
 arrives with its params and shows the whole series with that run selected.
+
+**The pane is what writes a session, and opening a form is not the same as starting work** (epic 64
+S6, first half). A session is created by the **first change** to a door — not by opening a workflow, because
+someone who opens a form and looks at it has not started anything, and a store that fills with empty sessions
+is a store nobody can use. Every later change is written on the same 500 ms debounce the per-workflow snapshot
+used, and **a run that settles is written at once**: its job id is the one thing a crash could lose from a
+session, and the strip already reads that id live. The id the store answers with travels on every later write,
+so an autosaving pane never has to know whether this is the first one.
+
+**And a tab can come back to it**: `openTab('generate', { params: { session } })` (epic 64 S6) reads the
+session, opens the workflow that session names — a session carries its provider and adapter, so unlike
+`params.run` it needs nothing beside it — and fills the form with the values that were used **on top of** the
+authored defaults, so a door the session does not mention keeps the value the adapter authored. The session's
+own run ids join the strip, because the rows ARE the session, and a session that cannot be read is not an
+error screen: it is a form at its defaults, which is where a person would have started anyway.
 
 **A session is a piece of work, written down** (epic 64 S5). One file per session at
 `<profile>/generate/sessions/<id>.json`, holding the workflow, the values it was run with, the

@@ -1677,6 +1677,18 @@ export function apply(ctx, config = {}) {
     const url = new URL(req.url || '/', 'http://127.0.0.1')
 
     if (method === 'GET') {
+      // `?id=` answers ONE session, which is what a pane resuming a tab needs: the list is a
+      // list, and reading twenty files to find one is a request the client should not make.
+      const wanted = str(url.searchParams.get('id'))
+      if (wanted !== null) {
+        const one = await readSession(root.root, wanted)
+        if (one === null) {
+          send(res, 404, { error: 'no-session', detail: 'no session is named "' + wanted + '"' })
+          return
+        }
+        send(res, 200, one)
+        return
+      }
       const listed = await listSessions(root.root)
       send(res, 200, {
         schema: SESSION_SCHEMA,

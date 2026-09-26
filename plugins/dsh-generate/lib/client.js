@@ -157,6 +157,44 @@ window.__ModuleLoader__.load({
     const providerUrl = (id, action) => PROVIDERS_API + '/' + encodeURIComponent(id) + '/' + action
     /** Where finished runs land: the library root, read and changed in one place. */
     const LIBRARY_API = '/plugins/generate/library'
+    /**
+     * The session store (epic 64 S5/S6): one file per piece of work, and the pane is what
+     * writes it. One exact path, three verbs — `?id=` reads one, a POST creates or updates,
+     * DELETE removes.
+     */
+    const SESSIONS_API = '/plugins/generate/sessions'
+
+    /** One session by id, or `null`. A session that cannot be read is a form at its defaults. */
+    async function readSession(id) {
+      try {
+        const answer = await fetch(SESSIONS_API + '?id=' + encodeURIComponent(id), { headers: { accept: 'application/json' } })
+        if (!answer || !answer.ok) return null
+        const stored = await answer.json()
+        return stored && stored.id ? stored : null
+      } catch {
+        return null
+      }
+    }
+
+    /**
+     * Write one session, and answer what the store kept (which carries the id when this was
+     * the first write). Nothing here throws at the caller: a store that cannot be reached must
+     * not break the form a person is typing in.
+     */
+    async function saveSession(body) {
+      try {
+        const answer = await fetch(SESSIONS_API, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!answer || !answer.ok) return null
+        const stored = await answer.json()
+        return stored && stored.id ? stored : null
+      } catch {
+        return null
+      }
+    }
 
     const EN = {
       'type.label': 'Generate',
@@ -3607,7 +3645,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function WorkflowSurface({ t, provider, name, canUpload = false, runOption = null, continueRun = null }) {
+    function WorkflowSurface({ t, provider, name, canUpload = false, runOption = null, continueRun = null, session = null }) {
       const { phase, adapter } = useWorkflow(provider, name)
       const [values, setValues] = React.useState({})
       const [showAdvanced, setShowAdvanced] = React.useState(false)
@@ -3637,32 +3675,94 @@ window.__ModuleLoader__.load({
       }, [phase])
 
       /**
+       * THE SESSION THIS SURFACE IS KEEPING (epic 64 S5/S6).
+       *
+       * A session is the piece of work: the values this form holds, the files that were picked
+       * and the runs those values made. It is created by the FIRST CHANGE, not by opening a
+       * form — someone who opens a workflow and looks at it has not started anything, and a
+       * store that fills with empty sessions is a store nobody can use.
+       *
+       * THE WRITE IS DEBOUNCED, and it REPLACES the per-workflow snapshot: `state/<workflow>.json`
+       * kept one person's last tweak per workflow, which is the "a one-off tweak becomes
+       * everyone's default" the founder's knob rule forbids (2026-09-25). A session keeps the
+       * values THAT WERE USED; the values a form OPENS with come from the adapter's authored
+       * `ui.defaults`. The state route still answers for the record; nothing here calls it.
+       *
+       * A RUN THAT SETTLES is written at once rather than on the debounce: its job id is the
+       * one thing a crash could lose from a session, and the strip already reads the id live.
+       */
+      const thisVisit = React.useRef([])
+      const sessionId = React.useRef(session && session.id ? session.id : null)
+      const [, setKeptSession] = React.useState(sessionId.current)
+      const sessionName = React.useRef(session && session.name ? session.name : null)
+      const sessionValues = React.useRef(values)
+      const sessionTimer = React.useRef(null)
+      sessionValues.current = values
+
+      /** Write the session as it stands. `now` skips the debounce — a settled run cannot wait. */
+      const flushSession = (now = false) => {
+        // In a real browser `setTimeout` exists; in the verify sandbox it may not, and that is
+        // fine — those cases are about the UI, not about persistence.
+        if (typeof setTimeout !== 'function') return
+        const write = async () => {
+          const body = {
+            provider,
+            adapter: adapter ? adapter.name : name,
+            title: adapter ? adapter.title || null : null,
+            name: sessionName.current,
+            values: sessionValues.current,
+            runIds: thisVisit.current.slice(),
+            open: true,
+          }
+          if (sessionId.current !== null) body.id = sessionId.current
+          const stored = await saveSession(body)
+          if (stored !== null) {
+            sessionId.current = stored.id
+            setKeptSession(stored.id)
+            if (typeof stored.name === 'string' && stored.name !== '') sessionName.current = stored.name
+          }
+        }
+        if (sessionTimer.current) clearTimeout(sessionTimer.current)
+        sessionTimer.current = setTimeout(write, now ? 0 : 500)
+      }
+
+      /**
        * One top-level door's value, set. The control layer passes VALUES, not events: an
        * image door hands back a URL an upload answered, and the four native controls hand
        * back what a person typed, so the two cannot share an event-shaped callback.
-       *
-       * Every change is debounced to the host, which writes it to a file. The next time this
-       * workflow opens, the saved values are loaded on top of the defaults.
        */
-      const saveTimer = React.useRef(null)
       const set = (key) => (next) => {
         setValues((current) => {
           const updated = { ...current, [key]: next }
-          // Debounce the save: in a real browser setTimeout exists; in a test sandbox it
-          // may not, and that is fine — the test verifies the UI, not the persistence.
-          if (typeof setTimeout === 'function') {
-            if (saveTimer.current) clearTimeout(saveTimer.current)
-            saveTimer.current = setTimeout(() => {
-              fetch(`/plugins/generate/providers/${provider}/state`, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ name: adapter.name, values: updated }),
-              }).catch(() => {})
-            }, 500)
-          }
+          sessionValues.current = updated
+          flushSession()
           return updated
         })
       }
+
+      /**
+       * COMING BACK TO A SESSION (epic 64 S6/D12). A tab opened with `params.session` arrives
+       * with the piece of work it names: the workflow, the values that were used, and the runs
+       * it made. The form is filled ON TOP of the authored defaults — never in place of them,
+       * so a door the session does not mention keeps the value the adapter authored — and the
+       * session's own runs join the strip, because the rows ARE the session.
+       *
+       * A session that cannot be read is not an error screen: it is a form at its defaults,
+       * which is the same place a person would have started from.
+       */
+      React.useEffect(() => {
+        if (!session || phase !== 'ready' || !adapter) return
+        sessionId.current = session.id
+        setKeptSession(session.id)
+        sessionName.current = session.name || sessionName.current
+        if (session.values && typeof session.values === 'object' && Object.keys(session.values).length > 0) {
+          setValues((current) => ({ ...current, ...session.values }))
+        }
+        if (Array.isArray(session.runIds) && session.runIds.length > 0) {
+          thisVisit.current = [...new Set([...thisVisit.current, ...session.runIds])]
+        }
+      }, [session && session.id, phase])
+
 
       // THE WAY OUT IS THE HEADER'S "All workflows" TAB (founder, 2026-09-25): the surface
       // used to repeat it as a ← All workflows button at the top of the form, which was the
@@ -3685,9 +3785,11 @@ window.__ModuleLoader__.load({
        * Regenerate button is not built yet, and when it lands it needs only that param.
        */
       const continues = typeof continueRun === 'string' && continueRun !== ''
-      const thisVisit = React.useRef([])
       React.useEffect(() => {
-        if (run.phase === 'done' && run.jobId && !thisVisit.current.includes(run.jobId)) thisVisit.current = [...thisVisit.current, run.jobId]
+        if (run.phase !== 'done' || !run.jobId || thisVisit.current.includes(run.jobId)) return
+        thisVisit.current = [...thisVisit.current, run.jobId]
+        // The run joins the session at once: this id is what a person comes back to.
+        flushSession(true)
       }, [run.phase, run.jobId])
       // A pending run is a reason to read; nothing has happened otherwise.
       const readName = adapter && (continues || thisVisit.current.length > 0 || run.phase === 'queued' || run.phase === 'running') ? adapter.name : null
@@ -4929,6 +5031,35 @@ window.__ModuleLoader__.load({
       // (epic 64 S7: `openTab('generate', { params: { run, unit, provider } })`). Absent means
       // a person came in through the guide card, and the session starts empty.
       const askedRun = params && typeof params.run === 'string' && params.run.trim() !== '' ? params.run.trim() : null
+      /**
+       * WHICH SESSION THIS TAB IS (epic 64 S6): `openTab('generate', { params: { session } })`.
+       *
+       * A session names its own workflow, so the pane does not need `unit`/`provider` beside it
+       * — it reads the session and opens the workflow that session belongs to. That is the
+       * difference from `params.run` (epic 64 S7), where an asset has to hand over the run, the
+       * workflow and the provider because a run id alone names nothing to open: a session file
+       * already carries all three.
+       */
+      const askedSession = params && typeof params.session === 'string' && params.session.trim() !== '' ? params.session.trim() : null
+      const [openedSession, setOpenedSession] = React.useState(null)
+      React.useEffect(() => {
+        if (askedSession === null) return
+        let live = true
+        readSession(askedSession).then((stored) => {
+          if (live && stored !== null) setOpenedSession(stored)
+        })
+        return () => {
+          live = false
+        }
+      }, [askedSession])
+      // The workflow the session belongs to is opened once it has been read, through the same
+      // path a card uses — no second way to open a workflow exists.
+      React.useEffect(() => {
+        if (openedSession === null) return
+        if (typeof openedSession.adapter !== 'string' || openedSession.adapter === '') return
+        const providerId = typeof openedSession.provider === 'string' && openedSession.provider !== '' ? openedSession.provider : askedProvider
+        openWorkflow(providerId || '', openedSession.adapter)
+      }, [openedSession && openedSession.id])
 
       // Open a workflow tab: add it to the list if not already there, activate it.
       const openWorkflow = React.useCallback((providerId, name) => {
@@ -5214,8 +5345,10 @@ window.__ModuleLoader__.load({
               name: wt.name,
               canUpload: !!((providers.providers || []).find((row) => row.id === wt.provider) || {}).upload,
               runOption: ((providers.providers || []).find((row) => row.id === wt.provider) || {}).runOption || null,
-              // The tab's own `params.run` travels down as the session to continue.
+              // The tab's own `params.run` travels down as the run to continue.
               continueRun: askedRun,
+              // ...and `params.session` as the piece of work, to the surface it belongs to.
+              session: openedSession && openedSession.adapter === wt.name && (!openedSession.provider || openedSession.provider === wt.provider) ? openedSession : null,
             }),
           ),
         ),

@@ -377,6 +377,13 @@ const linesOf = (tree, out = []) => {
 
 /** Every interval the client half registered, newest last. */
 const timers = []
+/**
+ * The DEBOUNCED writes (the session autosave) record their callbacks the same way the poll
+ * interval does, so a case drives exactly one debounce — `timeouts.at(-1)()` — instead of
+ * waiting 500ms of real time for one. Without a sandbox `setTimeout` the client skips the
+ * write entirely (it checks before scheduling), which is why the sandbox has to provide one.
+ */
+const timeouts = []
 
 /**
  * The blob URLs the image door asked for, and the ones it let go. The browser makes a real
@@ -430,6 +437,11 @@ async function loadClient() {
     // waiting two real seconds for one.
     setInterval: (fn) => timers.push(fn),
     clearInterval: () => {},
+    setTimeout: (fn) => {
+      timeouts.push(fn)
+      return timeouts.length
+    },
+    clearTimeout: () => {},
   }
   vm.createContext(sandbox)
   vm.runInContext(source, sandbox, { filename: 'lib/client.js' })
@@ -767,10 +779,36 @@ function stubHost({
       ? { path: null, root: '/Users/you/Desktop', source: 'desktop', canChoose: true, freeBytes: 187904819200 }
       : { path: chosenPath, root: chosenPath, source: 'custom', canChoose: true, freeBytes: 187904819200 }
   const ok = (body) => ({ ok: true, status: 200, json: async () => body })
+  // THE SESSION STORE the pane writes to (epic 64 S5/S6): a tiny in-memory host, so a case
+  // can read back what the surface autosaved — and seed one, for the resume path.
+  const sessions = new Map()
+  let sessionSeq = 0
+  const sessionRoute = (url, init) => {
+    const method = (init.method || 'GET').toUpperCase()
+    if (method === 'GET') {
+      const id = decodeURIComponent(String(url).split('?id=')[1] || '')
+      const found = sessions.get(id)
+      return found ? ok(found) : { ok: false, status: 404, json: async () => ({ error: 'no-session' }) }
+    }
+    const body = JSON.parse(init.body || '{}')
+    const id = body.id || 's-' + String(++sessionSeq).padStart(3, '0')
+    const stored = {
+      schema: 'muen-generate-session/v1',
+      ...body,
+      id,
+      createdAt: (sessions.get(id) || {}).createdAt || '2026-09-26T00:00:00.000Z',
+      updatedAt: '2026-09-26T00:00:0' + Math.min(9, sessionSeq) + '.000Z',
+    }
+    sessions.set(id, stored)
+    return ok(stored)
+  }
   return {
     calls,
     runs,
     assets,
+    /** What the surface autosaved, and a way to seed a session the pane will resume. */
+    sessions,
+    seedSession: (stored) => sessions.set(stored.id, stored),
     /** What the next upload answers: a URL for Krea, an opaque fileName for RunningHub. */
     set assetUrl(next) {
       assetAnswer = next
@@ -784,6 +822,9 @@ function stubHost({
       calls.push({ url, method: (init.method || 'GET').toUpperCase(), body: init.body })
       // The upload an image door calls: the file goes to this plugin's own host route, the
       // host answers the provider's asset URL, and that URL is the value the door carries.
+      if (String(url).includes('/sessions')) {
+        return sessionRoute(url, init)
+      }
       if (String(url).includes('/results?')) {
         return ok({ name: 'stub', rows: resultRows, total: resultRows.length, truncated: false })
       }
@@ -4508,6 +4549,154 @@ const assetProps = {
       'the very same handoff into an installed workflow draws no notice',
       !byAttr(tree, 'data-generate-missing-unit') && !!byAttr(tree, 'data-generate-surface', 'ready'),
       byAttr(tree, 'data-generate-missing-unit') ? 'notice drawn' : 'no notice',
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// ── THE PANE KEEPS A SESSION (epic 64 S5/S6) ─────────────────────────────────
+//
+// The store exists (S5); THIS is what writes it. The claims: opening a workflow starts
+// nothing, the first CHANGE creates the session, the id the store answers with travels on
+// every later write, and a run that settles joins the session by its job id — that id is the
+// one thing a crash could lose, which is why it is written at once rather than on the
+// debounce. And the other direction: a tab opened with `params.session` resumes it.
+
+const sessionPosts = (stub) => stub.calls.filter((call) => String(call.url).includes('/sessions') && (call.method || 'GET').toUpperCase() === 'POST')
+const bodyOf = (call) => JSON.parse(String(call.body))
+
+{
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: [] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let tree = await settle(paneSlot.component, cardProps, 'pane-session-open')
+    check(
+      'opening a workflow writes no session: looking at a form is not starting work',
+      sessionPosts(stub).length === 0,
+      JSON.stringify(sessionPosts(stub).map((call) => call.url)),
+    )
+
+    const door = byAttr(tree, 'data-generate-door', 'prompt')
+    check('the prompt door is on screen to change', !!door, door ? 'drawn' : 'no door')
+    if (door) door.props.onChange({ target: { value: 'a session prompt' } })
+    const pending = timeouts.at(-1)
+    if (typeof pending === 'function') pending()
+    tree = await settle(paneSlot.component, cardProps, 'pane-session-open')
+
+    const first = sessionPosts(stub)
+    check(
+      'a change to a door creates the session the work belongs to',
+      first.length === 1 && bodyOf(first[0]).values.prompt === 'a session prompt' && bodyOf(first[0]).adapter === MODEL_UNIT.name,
+      JSON.stringify(first.map((call) => bodyOf(call))),
+    )
+    check(
+      'and the FIRST write carries no id, because it is the write that makes one',
+      first.length === 1 && bodyOf(first[0]).id === undefined,
+      JSON.stringify(first.map((call) => bodyOf(call).id)),
+    )
+    check(
+      'the session is open, so a reopen at launch can find it',
+      first.length === 1 && bodyOf(first[0]).open === true,
+      JSON.stringify(first.map((call) => bodyOf(call).open)),
+    )
+
+    const again = byAttr(tree, 'data-generate-door', 'prompt')
+    if (again) again.props.onChange({ target: { value: 'a second prompt' } })
+    const pending2 = timeouts.at(-1)
+    if (typeof pending2 === 'function') pending2()
+    tree = await settle(paneSlot.component, cardProps, 'pane-session-open')
+    const all = sessionPosts(stub)
+    check(
+      'the id the store answered with travels on the next write',
+      all.length >= 2 && bodyOf(all[all.length - 1]).id === 's-001' && bodyOf(all[all.length - 1]).values.prompt === 'a second prompt',
+      JSON.stringify(all.map((call) => ({ id: bodyOf(call).id, prompt: bodyOf(call).values.prompt }))),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+{
+  // A RUN THAT SETTLES joins the session at once, and the strip's own id is the one written.
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: [] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let tree = await settle(paneSlot.component, cardProps, 'pane-session-run')
+    const runButton = byAttr(tree, 'data-generate-run', MODEL_UNIT.name)
+    check('the workflow can be run from its own surface', !!runButton, runButton ? 'drawn' : 'no run control')
+    if (runButton) runButton.props.onClick()
+    tree = await settle(paneSlot.component, cardProps, 'pane-session-run')
+    const poll = timers.at(-1)
+    if (typeof poll === 'function') poll()
+    tree = await settle(paneSlot.component, cardProps, 'pane-session-run')
+    const pending = timeouts.at(-1)
+    if (typeof pending === 'function') pending()
+    tree = await settle(paneSlot.component, cardProps, 'pane-session-run')
+    const written = sessionPosts(stub).map(bodyOf)
+    const last = written[written.length - 1] || {}
+    check(
+      'a run that settles joins the session, by the job id the strip reads',
+      Array.isArray(last.runIds) && last.runIds.includes('job-1'),
+      JSON.stringify(written.map((body) => body.runIds)),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+{
+  // THE OTHER DIRECTION: a tab opened with `params.session` resumes it — the workflow it
+  // names opens, the values it was run with come back onto the form, and its runs are the
+  // strip. The values sit ON TOP of the authored defaults, never in place of them.
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: STRIP_ROWS })
+  stub.seedSession({
+    schema: 'muen-generate-session/v1',
+    id: 's-claire',
+    provider: 'krea',
+    adapter: MODEL_UNIT.name,
+    title: MODEL_UNIT.title,
+    name: 'Claire outfit',
+    createdAt: '2026-09-26T00:00:00.000Z',
+    updatedAt: '2026-09-26T00:00:00.000Z',
+    open: true,
+    values: { prompt: 'the prompt this session used' },
+    uploads: {},
+    runIds: ['job-old'],
+  })
+  const props = { t, useTabInfo: () => ({ tab: { navigation: { params: { session: 's-claire' }, revision: 1 } } }) }
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    const tree = await settle(paneSlot.component, props, 'pane-session-resume')
+    check(
+      'a tab opened by session opens the workflow that session names',
+      !!byAttr(tree, 'data-generate-surface-wrapper', MODEL_UNIT.name),
+      JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-surface-wrapper']).map((node) => node.props['data-generate-surface-wrapper'])),
+    )
+    const prompt = byAttr(tree, 'data-generate-door', 'prompt')
+    check(
+      'and the values it was run with come back onto the form',
+      !!prompt && prompt.props.value === 'the prompt this session used',
+      prompt ? String(prompt.props.value) : 'no prompt door',
+    )
+    const door = nodesOf(tree).find((node) => node.props && node.props['data-generate-door'] === 'aspect_ratio') || null
+    check(
+      'while a door the session does not mention keeps the value the adapter authored',
+      !!door && door.props.value !== undefined && door.props.value !== '' && door.props.value !== 'the prompt this session used',
+      door ? String(door.props.value) : 'no aspect door',
+    )
+    check(
+      'and the session own runs are the strip, because the rows ARE the session',
+      !!byAttr(tree, 'data-generate-strip-row', 'job-old') && !byAttr(tree, 'data-generate-strip-row', 'job-1'),
+      JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-strip-row']).map((node) => node.props['data-generate-strip-row'])),
+    )
+    check(
+      'and the session was not rewritten just by opening it',
+      sessionPosts(stub).length === 0,
+      JSON.stringify(sessionPosts(stub).map((call) => call.url)),
     )
   } finally {
     globalThis.fetch = real

@@ -208,6 +208,27 @@ check(
   JSON.stringify(renamed.json().uploads),
 )
 
+// ── 3b. one session, by id ───────────────────────────────────────────────────
+
+const one = await call('GET', SESSIONS_PATH + '?id=' + encodeURIComponent(second.id))
+check(
+  'one session can be read by id, which is what a pane resuming a tab needs',
+  one.statusCode === 200 && one.json().id === second.id && one.json().values.prompt === 'a third prompt' && one.json().runIds.length === 3,
+  JSON.stringify({ status: one.statusCode, body: one.json() }),
+)
+const none = await call('GET', SESSIONS_PATH + '?id=no-such-session')
+check(
+  'and an id nothing answers to is a 404 rather than an empty session',
+  none.statusCode === 404 && none.json().error === 'no-session',
+  JSON.stringify({ status: none.statusCode, body: none.json() }),
+)
+const hostileRead = await call('GET', SESSIONS_PATH + '?id=' + encodeURIComponent('../../../../etc/passwd'))
+check(
+  'a hostile id read is sanitised like a hostile id written',
+  hostileRead.statusCode === 404,
+  JSON.stringify({ status: hostileRead.statusCode, body: hostileRead.json() }),
+)
+
 // ── 4. the list, newest first ────────────────────────────────────────────────
 
 // A few milliseconds apart, so "newest first" is a claim about the order and not about a
