@@ -97,6 +97,13 @@ window.__ModuleLoader__.load({
       'meta.date': 'Date',
       'meta.context': 'Context',
       'meta.where': 'Where it is',
+      // WHAT THE FILE ITSELF CARRIES (epic 64 S8): a graph makes a picture openable in a local
+      // ComfyUI, so it is a fact about the asset. Three answers, not two — a format the library
+      // cannot read says so rather than claiming there is no graph.
+      'meta.carrier': 'Graph inside',
+      'meta.carrier.yes': 'Yes — {nodes} nodes',
+      'meta.carrier.no': 'No — only the provider’s label',
+      'meta.carrier.unknown': 'Not read',
       'meta.run': 'Run',
       'meta.provider': 'Provider',
       'meta.job': 'Job',
@@ -158,6 +165,10 @@ window.__ModuleLoader__.load({
       'meta.date': '日期',
       'meta.context': '情境',
       'meta.where': '位置',
+      'meta.carrier': '内嵌工作流图',
+      'meta.carrier.yes': '有 —— {nodes} 个节点',
+      'meta.carrier.no': '没有 —— 只有提供方的标记',
+      'meta.carrier.unknown': '未读取',
       'meta.run': '运行',
       'meta.provider': '提供方',
       'meta.job': '任务',
@@ -488,6 +499,18 @@ window.__ModuleLoader__.load({
       // own field (`adapter` for RunningHub, `name` for Krea) and answers it as `workflow`;
       // the title is only ever a nicer word for the row a person reads.
       const workflow = provenance ? String(provenance.workflow || '') : ''
+      // THE FILE'S OWN GRAPH (epic 64 S8): one line, and only when the library could actually
+      // read this format. A file it cannot read draws NOTHING — `Not read` is for a PNG whose
+      // chunks fall past the read bound, which is a different statement from "no graph".
+      const carrier = detail.carrier || null
+      const carrierText =
+        !carrier || carrier.supported !== true
+          ? null
+          : carrier.complete === false
+            ? t('meta.carrier.unknown')
+            : carrier.hasGraph
+              ? t('meta.carrier.yes').replace('{nodes}', String((carrier.api && carrier.api.nodes) || (carrier.ui && carrier.ui.nodes) || 0))
+              : t('meta.carrier.no')
       const rows = [
         [t('meta.file'), detail.name],
         [t('meta.dimensions'), detail.dimensions ? detail.dimensions.width + ' × ' + detail.dimensions.height : '—'],
@@ -496,6 +519,7 @@ window.__ModuleLoader__.load({
         [t('meta.date'), detail.date || '—'],
         [t('meta.context'), detail.context || '—'],
         [t('meta.where'), t('where.' + (detail.where || 'missing'))],
+        ...(carrierText === null ? [] : [[t('meta.carrier'), carrierText]]),
       ]
       const runRows = provenance
         ? [

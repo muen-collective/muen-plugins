@@ -59,7 +59,7 @@ absent and neither reaches across.
 | `GET /plugins/assets/folders` | the registry as stored, plus **where the library is looking** — the state root and the records root, each with the rule that answered (`override` · `profile` · `home`) — and `canChoose`, whether this host has a folder dialog. An empty library says where it looked rather than shrugging |
 | `POST /plugins/assets/folders` | `{ action: 'choose' }` opens the OS folder dialog (**its start folder is one that exists** — the first added folder, else the person's home: a start that is not there makes AppleScript fail before the dialog opens, which is exactly what `+ Folder` did on a fresh install); `{ action: 'add', path, label? }` adds a typed absolute path; `{ action: 'reveal', path }` shows a folder the library holds in Finder; `{ action: 'remove', path }` takes one out. Adding one twice answers `already: true`; removing or revealing one that is not there answers 404 |
 | `GET /plugins/assets/catalog?context=&date=` | the tiles, the two filter groups with their counts, and the roots it looked in. A record's own settled date wins over a file's mtime; counts are over **everything scanned**, so a filter row does not move its own number |
-| `GET /plugins/assets/detail?path=` | one asset, whole: dimensions (read from the file's own header), format, bytes, date, context, **where it is**, the run that made it, the prompt verbatim and the values it ran with. **Containment is the model**: a path outside an added folder is 404 |
+| `GET /plugins/assets/detail?path=` | one asset, whole: dimensions (read from the file's own header), format, bytes, date, context, **where it is**, **what the file itself carries** (`carrier`: does it hold a ComfyUI graph, and how big — epic 64 S8), the run that made it, the prompt verbatim and the values it ran with. **Containment is the model**: a path outside an added folder is 404 |
 | `GET /plugins/assets/file?path=` · `&w=` | the bytes of an asset the library holds — the tile's picture. Same containment, `no-store` like every other answer: a cached 200 would keep showing a picture that has been moved. **With `w=` it answers a preview** (32–2048px, made once into `<profile>/assets/proxies/` and named by the original's path+mtime+size+width), so a folder of 1,296 pictures is not 1,296 originals drawn into a wall of tiles. `X-Assets-Preview: 1` says it is the preview; **every fallback serves the picture** — a host with no resizer, a video, a failed resize — so a slow grid beats a broken one |
 | `GET /plugins/assets/view` · `POST /plugins/assets/view` | the view a person left behind: the layout, the two filters, the selected tile. **The harness does not restore tabs in this shell** (its layout store is localStorage under an origin the shell randomises with `--port 0`), so this file is what survives a reload |
 
@@ -126,6 +126,26 @@ is said out loud:
 reads its source to confirm it consumes exactly those three params. Shipped alone, that last check says so
 instead of failing.
 
+## What the picture itself carries (epic 64 S8)
+
+A picture is not only pixels. ComfyUI writes its graph into the PNG it saves, and RunningHub
+adds a provenance label — so a **canvas export** opens in a local ComfyUI while a **provider
+result** does not, and a person looking at an asset deserves to know which one they have.
+`lib/carrier.js` reads the file's own `tEXt` chunks and the metadata block draws **one row**:
+*Graph inside — Yes, 25 nodes* / *No, only the provider's label*.
+
+**Three answers, never two.** A PNG carrying only the label says **no graph**; a format this
+cannot read (JPEG and WebP carry the same data in EXIF, which is not built) draws **no row at
+all** rather than claiming there is nothing inside; and a PNG whose chunks fall past the read
+bound says **not read**. The read is bounded at 1 MB, and a `.png` that is really a JPEG is
+judged by its **bytes**, not its name.
+
+**The format is shared with `@muen/dsh-generate`, the code is not** (epic 63 §1): that plugin
+owns the same reading for its *export* half — writing a picture out with its graph injected, so
+it opens elsewhere — and the two plugins never import each other. Measured on this machine: all
+**21** PNGs the Generate plugin's runs saved carry the label and no graph; the canvas export
+kept in `~/Desktop/hmu banner` carries all three chunks.
+
 ## Previews (S9)
 
 A tile asks for `&w=320` and the host answers a small copy, **made once** into
@@ -143,8 +163,8 @@ them.
 
 ```
 node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room   31
-node verify/intake.mjs     # A2: the folders, the records, the two filters               57
-node verify/views.mjs      # A3: the grid, the tile, the metadata block, the search      34
+node verify/intake.mjs     # A2: the folders, the records, the filters, the carrier       63
+node verify/views.mjs      # A3: the grid, the tile, the metadata block, the carrier       37
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 ```

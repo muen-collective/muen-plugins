@@ -32,6 +32,7 @@ import { ROOT, callRoute, fakeServer, reporter } from './harness.mjs'
 const { chooseStart } = await import(pathToFileURL(join(ROOT, 'lib/folder-actions.js')).href)
 const FOLDERS_PATH = '/plugins/assets/folders'
 const CATALOG_PATH = '/plugins/assets/catalog'
+const DETAIL_PATH = '/plugins/assets/detail'
 
 const { check, note, finish } = reporter('verify:intake — epic 63 A2 (folders, records, and the two filters)')
 
@@ -115,6 +116,7 @@ module.apply(ctx, { folders: dialog, argv: ['node', 'verify'], env: process.env 
 
 const foldersHandler = server.routes.find((route) => route.path === FOLDERS_PATH).handler
 const catalogHandler = server.routes.find((route) => route.path === CATALOG_PATH).handler
+const detailHandler = server.routes.find((route) => route.path === DETAIL_PATH).handler
 const paths = server.routes.map((route) => route.path)
 
 const call = (handler, method, path, body) => callRoute(handler, method, path, body)
@@ -316,6 +318,76 @@ let catalog = null
   const res = await call(foldersHandler, 'POST', FOLDERS_PATH, { action: 'add', path: '~' })
   check('`~` expands to the home directory', res.statusCode === 200 && res.json().folders.some((folder) => folder.path === homedir()), JSON.stringify(res.json().folders.map((folder) => folder.path)))
   await call(foldersHandler, 'POST', FOLDERS_PATH, { action: 'remove', path: '~' })
+}
+
+// ── 11. what the picture itself carries (epic 64 S8, the library's half) ─────
+
+{
+  // A PNG built here, byte by byte: the reader is what is under test, and a fixture made by
+  // the code being tested proves nothing. Real chunks, real CRCs.
+  const table = (() => { const t = new Int32Array(256); for (let n = 0; n < 256; n += 1) { let c = n; for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c } return t })()
+  const crc = (type, data) => { let c = 0xffffffff; for (const byte of Buffer.concat([Buffer.from(type, 'latin1'), data])) c = table[(c ^ byte) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0 }
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0); const crcBytes = Buffer.alloc(4); crcBytes.writeUInt32BE(crc(type, data), 0); return Buffer.concat([len, Buffer.from(type, 'latin1'), data, crcBytes]) }
+  const text = (key, value) => chunk('tEXt', Buffer.concat([Buffer.from(key, 'latin1'), Buffer.from([0]), Buffer.from(value, 'latin1')]))
+  const pngOf = (...texts) => {
+    const ihdr = Buffer.alloc(13)
+    ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 2
+    // The signature alone, then real chunks: `PNG` above is a fixture, not a file.
+    return Buffer.concat([PNG.subarray(0, 8), chunk('IHDR', ihdr), ...texts, chunk('IDAT', Buffer.from([0x78, 0x9c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01])), chunk('IEND', Buffer.alloc(0))])
+  }
+  const graph = { 1: { class_type: 'CheckpointLoaderSimple', inputs: {} }, 2: { class_type: 'KSampler', inputs: {} }, 3: { class_type: 'VAEDecode', inputs: {} } }
+  const ui = { version: 0.4, nodes: [{ id: 1 }, { id: 2 }], links: [[1]] }
+  const label = { Label: '1', ContentProducer: '001191340100MAEB4N8H7600000' }
+
+  const dir = mkdtempSync(join(tmpdir(), 'project-carrier-'))
+  const withGraph = join(dir, 'canvas.png')
+  const labelOnly = join(dir, 'provider.png')
+  const notRead = join(dir, 'scan.jpg')
+  writeFileSync(withGraph, pngOf(text('prompt', JSON.stringify(graph)), text('workflow', JSON.stringify(ui)), text('AIGC', JSON.stringify(label))))
+  writeFileSync(labelOnly, pngOf(text('AIGC', JSON.stringify(label))))
+  writeFileSync(notRead, Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)]))
+  await call(foldersHandler, 'POST', FOLDERS_PATH, { action: 'add', path: dir })
+
+  const detailOf = async (file) => (await call(detailHandler, 'GET', DETAIL_PATH + '?path=' + encodeURIComponent(file))).json()
+
+  const readGraph = await detailOf(withGraph)
+  check(
+    'the detail says a canvas file carries its graph, and how big it is',
+    !!readGraph.carrier && readGraph.carrier.supported === true && readGraph.carrier.hasGraph === true && readGraph.carrier.api.nodes === 3,
+    JSON.stringify(readGraph.carrier),
+  )
+  check(
+    'and the graph is named by the class types an adapter door lives in',
+    readGraph.carrier.api.classTypes.includes('KSampler') && readGraph.carrier.ui.nodes === 2,
+    JSON.stringify({ classes: readGraph.carrier.api.classTypes, ui: readGraph.carrier.ui }),
+  )
+  const readLabel = await detailOf(labelOnly)
+  check(
+    'a provider result says NO graph while still naming the label it carries',
+    !!readLabel.carrier && readLabel.carrier.supported === true && readLabel.carrier.hasGraph === false && readLabel.carrier.label === true,
+    JSON.stringify(readLabel.carrier),
+  )
+  const readJpeg = await detailOf(notRead)
+  check(
+    'a format the library cannot read says NOT READ rather than no graph',
+    !!readJpeg.carrier && readJpeg.carrier.supported === false && readJpeg.carrier.hasGraph === false,
+    JSON.stringify(readJpeg.carrier),
+  )
+  // A `.png` that is really a JPEG: the extension is a hint, and the BYTES decide. This is the
+  // case that proves the signature is read rather than the name trusted.
+  const mislabeled = join(dir, 'mislabeled.png')
+  writeFileSync(mislabeled, Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)]))
+  const readMislabeled = await detailOf(mislabeled)
+  check(
+    'a picture named .png that is not one is judged by its bytes, and says NOT READ',
+    !!readMislabeled.carrier && readMislabeled.carrier.format === 'jpeg' && readMislabeled.carrier.supported === false,
+    JSON.stringify(readMislabeled.carrier),
+  )
+  check(
+    'and the file facts it already answered are untouched by the read',
+    readGraph.dimensions && readGraph.dimensions.width === 1 && readGraph.where === 'present',
+    JSON.stringify({ dimensions: readGraph.dimensions, where: readGraph.where }),
+  )
 }
 
 finish()

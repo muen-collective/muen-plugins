@@ -95,11 +95,14 @@ const detailBody = {
   where: 'present',
   dimensions: { width: 1440, height: 1920 },
   provenance: { provider: 'runninghub', jobId: 'job-aaa', workflow: 'qwen-2-1-image-edit', title: 'Qwen 2.1 Edit Duo', appId: '2099528179505848321', settledAt: '2026-09-26T01:04:00.000Z', at: '2026-09-26T01:00:00.000Z' },
+  // What the file itself carries (epic 64 S8): this one was exported from a canvas, so it has
+  // a graph — and the row is what says so.
+  carrier: { format: 'png', supported: true, hasGraph: true, api: { nodes: 25, classTypes: ['KSampler', 'VAEDecode'] }, ui: { nodes: 25, links: 33 }, label: true, complete: true, error: null },
   prompt: 'The woman in Image 1 wears the outfit from Image 2.',
   values: [{ key: 'image', value: 'ref-1.png' }, { key: 'cfg', value: '1' }],
 }
 
-const looseDetail = { ...detailBody, path: LOOSE, name: 'hand-added.jpg', ext: 'jpg', bytes: 0, dimensions: null, provenance: null, prompt: null, values: [] }
+const looseDetail = { ...detailBody, path: LOOSE, name: 'hand-added.jpg', ext: 'jpg', bytes: 0, dimensions: null, provenance: null, prompt: null, values: [], carrier: { format: 'jpeg', supported: false, hasGraph: false, api: null, ui: null, label: false, complete: true, error: null } }
 
 let view = { schema: 'muen-assets-view/v1', view: 'grid', context: null, date: null, selected: null }
 const posted = []
@@ -203,6 +206,45 @@ async function render(passes = 4) {
   check('a file no run made says exactly that', collect(tree, (node) => node.props && node.props['data-assets-meta-norecord'] === 'yes').length === 1, text.slice(0, 120))
   check('and still shows the file\'s own facts', text.includes('hand-added.jpg') && text.includes('JPG'), '')
   check('and does not invent a prompt', !text.includes('Prompt'), '')
+  view = { ...view, selected: null }
+}
+
+// ── 4b. what the file itself carries (epic 64 S8) ──────────────────────────
+
+{
+  view = { ...view, selected: RECORDED }
+  const tree = await render()
+  const text = textOf(tree).join(' | ')
+  check(
+    'a file that carries a graph says so, with how big the graph is',
+    text.includes(EN['meta.carrier']) && text.includes(EN['meta.carrier.yes'].replace('{nodes}', '25')),
+    text.slice(0, 160),
+  )
+}
+
+{
+  // A provider result: the label is there and the graph is not, and the row says which.
+  detailBody.carrier = { format: 'png', supported: true, hasGraph: false, api: null, ui: null, label: true, complete: true, error: null }
+  view = { ...view, selected: RECORDED }
+  const tree = await render()
+  const text = textOf(tree).join(' | ')
+  check(
+    'a provider result says NO graph, and says what it does carry instead',
+    text.includes(EN['meta.carrier']) && text.includes(EN['meta.carrier.no']) && !text.includes(EN['meta.carrier.yes'].replace('{nodes}', '25')),
+    text.slice(0, 160),
+  )
+  detailBody.carrier = { format: 'png', supported: true, hasGraph: true, api: { nodes: 25, classTypes: ['KSampler'] }, ui: { nodes: 25, links: 33 }, label: true, complete: true, error: null }
+}
+
+{
+  view = { ...view, selected: LOOSE }
+  const tree = await render()
+  const text = textOf(tree).join(' | ')
+  check(
+    'a format the library cannot read draws no row at all, rather than claiming no graph',
+    !text.includes(EN['meta.carrier']) && !text.includes(EN['meta.carrier.no']),
+    text.slice(0, 160),
+  )
   view = { ...view, selected: null }
 }
 

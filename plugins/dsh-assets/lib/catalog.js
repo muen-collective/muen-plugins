@@ -21,6 +21,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { graphFacts } from './carrier.js'
 import { imageSize } from './image-size.js'
 
 /** What counts as a picture or a clip here. Everything else in a folder is not an asset. */
@@ -235,7 +236,7 @@ export async function whereIs(path, folder, { statFile = stat } = {}) {
  * the file for its dimensions. `paths` is what makes the read safe: an asset the library
  * does not hold is refused rather than described.
  */
-export async function assetDetail({ folders = [], recordsRoot, path, statFile = stat, sizeOf = imageSize } = {}) {
+export async function assetDetail({ folders = [], recordsRoot, path, statFile = stat, sizeOf = imageSize, graphOf = graphFacts } = {}) {
   const wanted = String(path || '')
   const folder = folders.find((entry) => wanted === entry.path || wanted.startsWith(entry.path.replace(/\/+$/, '') + '/'))
   if (!folder) return { error: 'not-in-library' }
@@ -263,6 +264,11 @@ export async function assetDetail({ folders = [], recordsRoot, path, statFile = 
     folder: folder.path,
     where,
     dimensions: info && info.isFile() ? await sizeOf(wanted, ext) : null,
+    // WHAT THE PICTURE ITSELF CARRIES (epic 64 S8): a graph is what makes a file openable in
+    // a local ComfyUI, so it is a fact about the asset rather than about the run. Read only
+    // when the file is here — a path that is gone has nothing to read — and answered as
+    // `supported`/`hasGraph` so "not read" and "no graph" never look alike.
+    carrier: info && info.isFile() ? await graphOf(wanted, ext) : null,
     provenance: record,
     prompt: summary.prompt,
     values: summary.values,
