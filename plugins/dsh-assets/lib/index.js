@@ -26,6 +26,7 @@ import { resolveDataRoot, resolveRecordsRoot } from './paths.js'
 import { expandFolder, readFolders, writeFolders } from './folders.js'
 import { assetDetail, readCatalog } from './catalog.js'
 import { nativeFolders } from './folder-actions.js'
+import { canPreview, previewFor } from './preview.js'
 
 /** Matches the row id in cordis.patch.yml. */
 export const name = 'assets'
@@ -121,6 +122,12 @@ export function apply(ctx, config = {}) {
   const argv = Array.isArray(config.argv) ? config.argv : process.argv
   const env = config.env && typeof config.env === 'object' ? config.env : process.env
   const folders = config.folders && typeof config.folders === 'object' ? config.folders : nativeFolders
+  // The resizer is a seam like the folder dialog: a verify run asserts the cache and the
+  // fallbacks without spawning anything, and a host without `sips` answers canPreview false.
+  const preview = {
+    platform: (config.preview && config.preview.platform) || process.platform,
+    run: config.preview ? config.preview.run : undefined,
+  }
   const own = resolveDataRoot({ argv, env })
   const records = resolveRecordsRoot({ argv, env })
 
@@ -134,6 +141,7 @@ export function apply(ctx, config = {}) {
       known: registry.known,
       found: registry.found,
       canChoose: folders.canChoose === true,
+      canPreview: canPreview(preview.platform),
       root: own.root,
       rootKind: own.kind,
       recordsRoot: records.root,
@@ -246,6 +254,7 @@ export function apply(ctx, config = {}) {
       rootKind: own.kind,
       recordsRoot: records.root,
       recordsRootKind: records.kind,
+      canPreview: canPreview(preview.platform),
       truncated: catalog.truncated,
     })
   }
@@ -273,6 +282,7 @@ export function apply(ctx, config = {}) {
     }
     const url = new URL(req.url || '/', 'http://127.0.0.1')
     const wanted = str(url.searchParams.get('path'))
+    const width = str(url.searchParams.get('w'))
     const registry = await readFolders(own.root)
     const folder = registry.folders.find((entry) => wanted === entry.path || wanted.startsWith(entry.path.replace(/\/+$/, '') + '/'))
     if (wanted === '' || !folder) {
@@ -291,11 +301,47 @@ export function apply(ctx, config = {}) {
       return
     }
     const ext = String(wanted).split('.').pop().toLowerCase()
+
+    // A SMALLER FILE WHEN ONE IS ASKED FOR, and the original whenever one cannot be made:
+    // a host without a resizer, a width out of range, a video, a resize that failed. The
+    // answer is always a picture of the right thing rather than an error a grid cannot draw.
+    let serve = wanted
+    let type = TYPE_BY_EXT[ext] || 'application/octet-stream'
+    let bytes = info.size
+    let previewed = false
+    if (width !== '') {
+      const made = await previewFor({
+        path: wanted,
+        ext,
+        width: Number(width),
+        cacheDir: join(own.root, 'proxies'),
+        platform: preview.platform,
+        stat,
+        run: preview.run,
+      })
+      if (made && made.file) {
+        serve = made.file
+        type = 'image/jpeg'
+        previewed = true
+        try {
+          bytes = (await stat(made.file)).size
+        } catch {
+          bytes = info.size
+        }
+      } else if (made && made.error === 'bad-width') {
+        send(res, 400, { error: 'bad-width', detail: 'w is between 32 and 2048' })
+        return
+      }
+    }
+
     res.statusCode = 200
-    res.setHeader('Content-Type', TYPE_BY_EXT[ext] || 'application/octet-stream')
-    res.setHeader('Content-Length', info.size)
+    res.setHeader('Content-Type', type)
+    res.setHeader('Content-Length', bytes)
     res.setHeader('Cache-Control', 'no-store')
-    const stream = createReadStream(wanted)
+    // Whether this is the original matters to a person debugging the grid: 1 means the
+    // resizer answered, 0 means this is the file itself.
+    res.setHeader('X-Assets-Preview', previewed ? '1' : '0')
+    const stream = createReadStream(serve)
     stream.on('error', () => {
       try { res.destroy() } catch { /* the socket is already gone */ }
     })

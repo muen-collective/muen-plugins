@@ -53,7 +53,7 @@ absent and neither reaches across.
 | `POST /plugins/assets/folders` | `{ action: 'choose' }` opens the OS folder dialog (a cancelled dialog answers the unchanged registry, not an error); `{ action: 'add', path, label? }` adds a typed absolute path; `{ action: 'remove', path }` takes one out. Adding one twice answers `already: true`; removing one that is not there answers 404 |
 | `GET /plugins/assets/catalog?context=&date=` | the tiles, the two filter groups with their counts, and the roots it looked in. A record's own settled date wins over a file's mtime; counts are over **everything scanned**, so a filter row does not move its own number |
 | `GET /plugins/assets/detail?path=` | one asset, whole: dimensions (read from the file's own header), format, bytes, date, context, **where it is**, the run that made it, the prompt verbatim and the values it ran with. **Containment is the model**: a path outside an added folder is 404 |
-| `GET /plugins/assets/file?path=` | the bytes of an asset the library holds — the tile's picture. Same containment, `no-store` like every other answer: a cached 200 would keep showing a picture that has been moved |
+| `GET /plugins/assets/file?path=` · `&w=` | the bytes of an asset the library holds — the tile's picture. Same containment, `no-store` like every other answer: a cached 200 would keep showing a picture that has been moved. **With `w=` it answers a preview** (32–2048px, made once into `<profile>/assets/proxies/` and named by the original's path+mtime+size+width), so a folder of 1,296 pictures is not 1,296 originals drawn into a wall of tiles. `X-Assets-Preview: 1` says it is the preview; **every fallback serves the picture** — a host with no resizer, a video, a failed resize — so a slow grid beats a broken one |
 | `GET /plugins/assets/view` · `POST /plugins/assets/view` | the view a person left behind: the layout, the two filters, the selected tile. **The harness does not restore tabs in this shell** (its layout store is localStorage under an origin the shell randomises with `--port 0`), so this file is what survives a reload |
 
 The two filters are the MVP's, and the founder chose them: *"I'd ship context + date and let the search box cover
@@ -88,12 +88,26 @@ The metadata block is what the catalog job is for. With a run behind the file it
 the workflow, the app, the date it settled, **the prompt verbatim** and the values it ran with; without one it
 says so and shows the file's own facts. Both cases carry **where it is**.
 
+## Previews (S9)
+
+A tile asks for `&w=320` and the host answers a small copy, **made once** into
+`<profile>/assets/proxies/` and named by the original's path, mtime, size and width — so a picture replaced in
+place gets a new preview, the same ask twice reads one file, and two tiles asking at once never see half a
+picture (it is written elsewhere and renamed). The original is never touched: nothing is written near a
+person's own folders.
+
+The resizer is the platform's (`sips` on macOS — present everywhere, no dependency). Where there is none, the
+route serves the original and says `canPreview: false`, in the registry and in the catalog. On this machine the
+catalog reads **1,296 assets in 194ms** and the previews are what keep the browser from being handed all of
+them.
+
 ## Verify
 
 ```
 node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room   30
 node verify/intake.mjs     # A2: the folders, the records, the two filters               47
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, the search      34
+node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 ```
 
 The three suites share `verify/harness.mjs`: a reporter, the server fakes, and enough React to render a
@@ -109,8 +123,7 @@ A skip is printed as a skip; a disagreement fails the run. Nothing here spends c
 
 ## Not built yet
 
-The **intake proxy** (epic 64 S9) that keeps a small preview beside the record so a grid of 300 tiles does not
-read 300 originals; the review layer (stars, colour tags, keywords); the session strip that draws the same tile
+The review layer (stars, colour tags, keywords); the session strip that draws the same tile
 in a rail; the intake proxy that keeps a preview beside the record (S9 of
 epic 64); the review layer. The plan of record is `docs/plans/63-assets-library-epic.md` in the dsh-mitsu
 workspace, and the surface reference is hand-me-up-os's own `AssetPanel.tsx`

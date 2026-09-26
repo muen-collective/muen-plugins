@@ -329,7 +329,9 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: S.thumb },
-          h('img', { style: S.thumbImage, src: '/plugins/assets/file?path=' + encodeURIComponent(asset.path), alt: '', loading: 'lazy', draggable: false }),
+          // A TILE ASKS FOR A PREVIEW, not the original: 320px is a tile's own size at this
+          // pane's width, and the host answers the original when it cannot resize.
+          h('img', { style: S.thumbImage, src: '/plugins/assets/file?path=' + encodeURIComponent(asset.path) + '&w=320', alt: '', loading: 'lazy', draggable: false }),
           h(
             'div',
             { style: S.badgeRow },
@@ -362,7 +364,7 @@ window.__ModuleLoader__.load({
           onClick: () => onSelect(asset.path),
           style: { ...S.item, ...(selected ? S.itemOn : null) },
         },
-        h('img', { style: S.swatch, src: '/plugins/assets/file?path=' + encodeURIComponent(asset.path), alt: '', loading: 'lazy' }),
+        h('img', { style: S.swatch, src: '/plugins/assets/file?path=' + encodeURIComponent(asset.path) + '&w=64', alt: '', loading: 'lazy' }),
         h(
           'span',
           { style: S.grow },
