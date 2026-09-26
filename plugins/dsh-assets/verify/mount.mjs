@@ -14,204 +14,24 @@
  * because "no folders yet" without saying where it looked is the shrug this slice exists to
  * avoid.
  *
- * This is source-level evidence: it proves the registration code does what A1 says, not that
- * a running harness accepted it. The live layer is the founder's eyes on the app after a
- * restart, which is the gate this slice ends at.
+ * The pieces are the plugin's shared harness (`verify/harness.mjs`), so this suite and
+ * `views` drive the client half the same way rather than in two dialects.
  *
  *   node verify/mount.mjs
  */
-import { readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import vm from 'node:vm'
+import { miniReact, textOf, loadClient, recordingCtx, reporter, net, settle } from './harness.mjs'
 
-const HERE = dirname(fileURLToPath(import.meta.url))
-const ROOT = join(HERE, '..')
 const PKG_NAME = '@muen/dsh-assets'
 const KIND = 'assets'
 const NS = 'assets'
 const GUIDE_ENTRY_ID = 'open'
 
-// ── the reporter (the same shape as the plugin's siblings) ───────────────────
-
-const rows = []
-const check = (label, ok, detail) => rows.push({ label, status: ok ? 'pass' : 'fail', detail: detail == null ? '' : String(detail) })
-const note = (text) => rows.push({ label: text, status: 'note', detail: '' })
-
-function finish() {
-  let failed = 0
-  process.stdout.write('\nverify:mount — epic 63 A1 (the Assets card and the empty room)\n')
-  for (const row of rows) {
-    if (row.status === 'pass') continue
-    if (row.status === 'note') {
-      process.stdout.write('  ....  ' + row.label + '\n')
-      continue
-    }
-    if (row.status === 'fail') failed += 1
-    process.stdout.write('  FAIL  ' + row.label + (row.detail ? '  —  ' + row.detail : '') + '\n')
-  }
-  const passes = rows.filter((row) => row.status === 'pass').length
-  const total = rows.filter((row) => row.status !== 'note').length
-  process.stdout.write('  ' + passes + '/' + total + ' passed\n')
-  if (failed > 0) process.exitCode = 1
-}
-
-// ── a tiny hook runtime, so a state the pane reaches can be read ─────────────
-
-/**
- * Enough React to render one component twice: hooks are kept in order, effects run after
- * the first render, and the second render reads the values those effects set. This is what
- * makes the empty state checkable as text instead of assumed.
- */
-function miniReact() {
-  let slots = []
-  // A RENDER CURSOR, not `slots.length`: hooks are read in the order a render calls them, so
-  // the second render must start again at 0 and read the values the first one left behind.
-  let cursor = 0
-  const React = {
-    createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
-    useState: (initial) => {
-      const index = cursor
-      cursor += 1
-      if (slots[index] === undefined) slots[index] = { value: typeof initial === 'function' ? initial() : initial }
-      return [slots[index].value, (next) => { slots[index].value = typeof next === 'function' ? next(slots[index].value) : next }]
-    },
-    useEffect: (fn) => {
-      const index = cursor
-      cursor += 1
-      slots[index] = { ...(slots[index] || {}), effect: fn }
-    },
-    useMemo: (fn) => fn(),
-    useCallback: (fn) => fn,
-    useRef: (initial) => ({ current: initial }),
-  }
-  return {
-    React,
-    /** Begin a render pass: hooks are counted from zero again. */
-    reset: () => { cursor = 0 },
-    /** Forget everything, for a fresh component instance. */
-    clear: () => { slots = []; cursor = 0 },
-    peek: () => (slots[0] ? slots[0].value : null),
-    runEffects: () => {
-      // A copy: an effect may render again (and so push slots) while this loop runs.
-      for (const slot of [...slots]) if (slot && typeof slot.effect === 'function') slot.effect()
-    },
-  }
-}
-
-/** Every string in a rendered tree, in order. Function components are called. */
-function textOf(node, out = []) {
-  if (node == null || node === false || node === true) return out
-  if (typeof node === 'string' || typeof node === 'number') {
-    out.push(String(node))
-    return out
-  }
-  if (Array.isArray(node)) {
-    for (const child of node) textOf(child, out)
-    return out
-  }
-  if (typeof node !== 'object') return out
-  const { type, props, children } = node
-  if (typeof type === 'function') {
-    // A function component: call it with its own props, and walk what it returned.
-    return textOf(type({ ...props, children }), out)
-  }
-  const list = Array.isArray(children) ? children : children === undefined ? [] : [children]
-  for (const child of list) textOf(child, out)
-  if (props && props.children !== undefined && !list.includes(props.children)) textOf(props.children, out)
-  return out
-}
-
-/** Load the shipped browser script in a stubbed loader, and return its factory. */
-/** The fetch the pane sees: the browser's is a global, so the sandbox gets one that forwards. */
-const net = { fetch: () => Promise.reject(new Error('no stub installed')) }
-
-async function loadFactory(React) {
-  const source = await readFile(join(ROOT, 'lib/client.js'), 'utf8')
-  let captured = null
-  const sandbox = {
-    window: {
-      __ModuleLoader__: {
-        load: (registration) => {
-          captured = registration
-        },
-      },
-    },
-    // The client half runs in the vm, so a global it reads at call time (`fetch`) has to be
-    // the sandbox's own — a `globalThis.fetch` set here would never be seen from inside.
-    fetch: (...args) => net.fetch(...args),
-    console,
-  }
-  vm.createContext(sandbox)
-  vm.runInContext(source, sandbox, { filename: 'lib/client.js' })
-  if (!captured) throw new Error('lib/client.js never called window.__ModuleLoader__.load')
-  return { registration: captured, sandbox }
-}
-
-/** The recording ctx the browser's own services stand in for. */
-function recordingCtx(locale = 'en') {
-  const seen = { effects: [], locales: [], types: [], injected: [], slots: [] }
-  const dicts = new Map()
-  const ctx = {
-    effect: (fn, id) => {
-      seen.effects.push(id)
-      fn()
-      return () => {}
-    },
-    locale: {
-      register: (ns, table) => {
-        seen.locales.push({ ns, table })
-        dicts.set(ns, table)
-        return () => {}
-      },
-      // `bind(ns)` resolves at CALL time, which is the property that makes a language change
-      // need no re-registration: the closure must not capture the dictionary it saw.
-      bind: (ns) => (key) => {
-        const table = dicts.get(ns) || {}
-        const dict = table[locale] || table.en || {}
-        return Object.prototype.hasOwnProperty.call(dict, key) ? dict[key] : key
-      },
-    },
-    sidebarRightTabs: {
-      register: (definition) => {
-        seen.types.push(definition)
-        return () => {}
-      },
-    },
-    slots: {
-      inject: (name, callback) => {
-        seen.injected.push(name)
-        callback()
-        return () => {}
-      },
-      register: (options, component) => {
-        seen.slots.push({ options, component })
-        return () => {}
-      },
-    },
-  }
-  return { ctx, seen }
-}
+const { check, note, finish } = reporter('verify:mount — epic 63 A1 (the Assets card and the empty room)')
 
 const mini = miniReact()
-const PRIMITIVES_STUB = {
-  // The pane's glyphs, named as the current core names them. The loader resolves by current
-  // name with the legacy as fallback, so a stub carrying only the current name is enough.
-  IconFolderOpenRegular: (props) => mini.React.createElement('svg', { 'data-stub-icon': 'folder', ...props }),
-  IconLoadingOutlineRegular: (props) => mini.React.createElement('svg', { 'data-stub-icon': 'loading', ...props }),
-}
-
-const { registration } = await loadFactory(mini.React)
+const { registration, exports: exports_ } = await loadClient({ React: mini.React })
 check('the client half registers itself under the package name', registration && registration.id === PKG_NAME, registration && registration.id)
 check('and exposes a factory that needs only react', typeof registration.factory === 'function', typeof registration.factory)
-
-const requireStub = (spec) => {
-  if (spec === 'react') return mini.React
-  if (spec === '@deepseek-ai/dsh-client-ui-primitives') return PRIMITIVES_STUB
-  throw new Error('unexpected require: ' + spec)
-}
-
-const exports_ = registration.factory(requireStub)
 check('the factory answers inject + apply', typeof exports_.apply === 'function' && Array.isArray(exports_.inject), JSON.stringify(exports_.inject))
 check('and asks for the three services it registers through', ['slots', 'locale', 'sidebarRightTabs'].every((name) => exports_.inject.includes(name)), JSON.stringify(exports_.inject))
 
@@ -262,12 +82,14 @@ const renderPane = async (fetchImpl) => {
   net.fetch = fetchImpl
   try {
     mini.clear()
-    mini.reset()
-    let tree = body.component({ locale: { bind: () => (key) => en[key] || key } })
-    mini.runEffects()
-    // Let the promise the effect started settle, then render again and read the state it set.
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    let tree = null
+    // Two passes: the first starts the read, the second draws what it answered.
+    for (let pass = 0; pass < 2; pass += 1) {
+      mini.reset()
+      tree = body.component({ locale: { bind: () => (key) => en[key] || key } })
+      mini.runEffects()
+      await settle()
+    }
     if (process.env.DEBUG_RENDER) console.log('  [debug] state =', JSON.stringify(mini.peek()))
     mini.reset()
     tree = body.component({ locale: { bind: () => (key) => en[key] || key } })

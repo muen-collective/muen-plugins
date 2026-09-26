@@ -18,9 +18,13 @@
  *
  * @module @muen/dsh-assets
  */
+import { createReadStream } from 'node:fs'
+import { readFile, stat, writeFile, mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
+
 import { resolveDataRoot, resolveRecordsRoot } from './paths.js'
 import { expandFolder, readFolders, writeFolders } from './folders.js'
-import { readCatalog } from './catalog.js'
+import { assetDetail, readCatalog } from './catalog.js'
 import { nativeFolders } from './folder-actions.js'
 
 /** Matches the row id in cordis.patch.yml. */
@@ -30,6 +34,43 @@ export const name = 'assets'
 const FOLDERS_PATH = '/plugins/assets/folders'
 /** The catalog: the tiles and the counts a surface draws. */
 const CATALOG_PATH = '/plugins/assets/catalog'
+/** One asset, whole: what the metadata block draws when a tile is selected. */
+const DETAIL_PATH = '/plugins/assets/detail'
+/** The bytes of an asset the library holds — the tile's picture. */
+const FILE_PATH = '/plugins/assets/file'
+/** The view a person left behind: grid or list, the filters, the selection. */
+const VIEW_PATH = '/plugins/assets/view'
+
+/**
+ * What an asset's extension means on the wire. Written out here rather than imported from
+ * the generator plugin: this is a route's concern, and sharing it would be the coupling
+ * epic 63 §1 exists to avoid.
+ */
+const TYPE_BY_EXT = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  avif: 'image/avif',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  heic: 'image/heic',
+  bmp: 'image/bmp',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  mkv: 'video/x-matroska',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+}
+
+/** The view file's schema, so an unknown one is reported rather than obeyed. */
+const VIEW_SCHEMA = 'muen-assets-view/v1'
+
+/** The two layouts a person can leave behind. */
+const VIEWS = ['grid', 'list']
 
 /** Refuse a body past this — the only bodies here are a path and a verb. */
 const MAX_BODY_BYTES = 8192
@@ -209,9 +250,143 @@ export function apply(ctx, config = {}) {
     })
   }
 
+  /**
+   * The bytes of an asset the library holds.
+   *
+   * CONTAINMENT IS THE WHOLE SECURITY MODEL, and it is the same check the detail route makes:
+   * the requested path must be the folder itself or something inside it, or the answer is
+   * 404. So this route can serve a picture from a folder a person added and nothing else on
+   * the machine — there is no `..` to climb with, because a path outside the added folders is
+   * simply not in the library.
+   *
+   * IT READS THE DISK EVERY TIME (`no-store`), the same rule the generator's route keeps: a
+   * cached 200 would keep showing a picture that has been moved. The grid asks for a handful
+   * of tiles at a time and the browser is told so with `loading="lazy"`; the answer for many
+   * tiles at once is the preview proxy (epic 64 S9), not a cache that lies.
+   */
+  const fileRoute = async (req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    if (method !== 'GET') {
+      res.setHeader('Allow', 'GET')
+      send(res, 405, { error: 'method-not-allowed' })
+      return
+    }
+    const url = new URL(req.url || '/', 'http://127.0.0.1')
+    const wanted = str(url.searchParams.get('path'))
+    const registry = await readFolders(own.root)
+    const folder = registry.folders.find((entry) => wanted === entry.path || wanted.startsWith(entry.path.replace(/\/+$/, '') + '/'))
+    if (wanted === '' || !folder) {
+      send(res, 404, { error: 'not-in-library', detail: 'that path is not inside a folder this library holds' })
+      return
+    }
+    let info
+    try {
+      info = await stat(wanted)
+    } catch {
+      send(res, 404, { error: 'missing-file', detail: 'the file is not there: ' + wanted })
+      return
+    }
+    if (!info.isFile()) {
+      send(res, 404, { error: 'missing-file', detail: 'not a file: ' + wanted })
+      return
+    }
+    const ext = String(wanted).split('.').pop().toLowerCase()
+    res.statusCode = 200
+    res.setHeader('Content-Type', TYPE_BY_EXT[ext] || 'application/octet-stream')
+    res.setHeader('Content-Length', info.size)
+    res.setHeader('Cache-Control', 'no-store')
+    const stream = createReadStream(wanted)
+    stream.on('error', () => {
+      try { res.destroy() } catch { /* the socket is already gone */ }
+    })
+    stream.pipe(res)
+  }
+
+  /** One asset, whole — dimensions, where it is, and the run that made it, if one did. */
+  const detailRoute = async (req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    if (method !== 'GET') {
+      res.setHeader('Allow', 'GET')
+      send(res, 405, { error: 'method-not-allowed' })
+      return
+    }
+    const url = new URL(req.url || '/', 'http://127.0.0.1')
+    const wanted = str(url.searchParams.get('path'))
+    const registry = await readFolders(own.root)
+    const detail = await assetDetail({ folders: registry.folders, recordsRoot: records.root, path: wanted })
+    if (detail.error === 'not-in-library') {
+      send(res, 404, { error: 'not-in-library', detail: 'that path is not inside a folder this library holds' })
+      return
+    }
+    send(res, 200, detail)
+  }
+
+  /** Where the view file lives, and what it holds. */
+  const viewPath = () => join(own.root, 'view.json')
+  const readView = async () => {
+    try {
+      const parsed = JSON.parse(await readFile(viewPath(), 'utf8'))
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { schema: VIEW_SCHEMA, view: 'grid', context: null, date: null, selected: null }
+      return {
+        schema: VIEW_SCHEMA,
+        known: parsed.schema === VIEW_SCHEMA,
+        view: VIEWS.includes(parsed.view) ? parsed.view : 'grid',
+        context: typeof parsed.context === 'string' ? parsed.context : null,
+        date: typeof parsed.date === 'string' ? parsed.date : null,
+        selected: typeof parsed.selected === 'string' ? parsed.selected : null,
+      }
+    } catch {
+      return { schema: VIEW_SCHEMA, view: 'grid', context: null, date: null, selected: null }
+    }
+  }
+
+  /**
+   * The view a person left behind.
+   *
+   * THE PANE IS NOT REMEMBERED BY THE APP: the harness does not restore tabs in this shell
+   * (its layout store is localStorage under an origin the shell randomises with `--port 0`),
+   * so what survives a reload is what this file holds — the layout, the two filters, and the
+   * selected tile.
+   */
+  const viewRoute = async (req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    if (method === 'GET') {
+      send(res, 200, await readView())
+      return
+    }
+    if (method !== 'POST') {
+      res.setHeader('Allow', 'GET, POST')
+      send(res, 405, { error: 'method-not-allowed' })
+      return
+    }
+    const body = await readJsonBody(req)
+    if (body === undefined) {
+      send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
+      return
+    }
+    const current = await readView()
+    const next = {
+      schema: VIEW_SCHEMA,
+      view: VIEWS.includes(body.view) ? body.view : current.view,
+      context: body.context === undefined ? current.context : (body.context === null ? null : str(body.context)),
+      date: body.date === undefined ? current.date : (body.date === null ? null : str(body.date)),
+      selected: body.selected === undefined ? current.selected : (body.selected === null ? null : str(body.selected)),
+    }
+    if (next.date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(next.date)) {
+      send(res, 400, { error: 'bad-date', detail: 'date is YYYY-MM-DD' })
+      return
+    }
+    await mkdir(own.root, { recursive: true })
+    await writeFile(viewPath(), JSON.stringify(next, null, 2) + '\n', 'utf8')
+    send(res, 200, next)
+  }
+
   const mount = (server) => {
     ctx.effect(() => server.register({ kind: 'exact', path: FOLDERS_PATH, handler: foldersRoute }), 'assets: folders')
     ctx.effect(() => server.register({ kind: 'exact', path: CATALOG_PATH, handler: catalogRoute }), 'assets: catalog')
+    ctx.effect(() => server.register({ kind: 'exact', path: DETAIL_PATH, handler: detailRoute }), 'assets: detail')
+    ctx.effect(() => server.register({ kind: 'exact', path: FILE_PATH, handler: fileRoute }), 'assets: file')
+    ctx.effect(() => server.register({ kind: 'exact', path: VIEW_PATH, handler: viewRoute }), 'assets: view')
   }
 
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined

@@ -24,38 +24,14 @@
  */
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { Readable, Writable } from 'node:stream'
-import { dirname, join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
-const HERE = dirname(fileURLToPath(import.meta.url))
-const ROOT = join(HERE, '..')
+import { ROOT, callRoute, fakeServer, reporter } from './harness.mjs'
 const FOLDERS_PATH = '/plugins/assets/folders'
 const CATALOG_PATH = '/plugins/assets/catalog'
 
-// ── reporter (the same shape as the plugin's siblings) ───────────────────────
-
-const rows = []
-const check = (label, ok, detail) => rows.push({ label, status: ok ? 'pass' : 'fail', detail: detail == null ? '' : String(detail) })
-const note = (text) => rows.push({ label: text, status: 'note', detail: '' })
-
-function finish() {
-  let failed = 0
-  process.stdout.write('\nverify:intake — epic 63 A2 (folders, records, and the two filters)\n')
-  for (const row of rows) {
-    if (row.status === 'pass') continue
-    if (row.status === 'note') {
-      process.stdout.write('  ....  ' + row.label + '\n')
-      continue
-    }
-    if (row.status === 'fail') failed += 1
-    process.stdout.write('  FAIL  ' + row.label + (row.detail ? '  —  ' + row.detail : '') + '\n')
-  }
-  const passes = rows.filter((row) => row.status === 'pass').length
-  const total = rows.filter((row) => row.status !== 'note').length
-  process.stdout.write('  ' + passes + '/' + total + ' passed\n')
-  if (failed > 0) process.exitCode = 1
-}
+const { check, note, finish } = reporter('verify:intake — epic 63 A2 (folders, records, and the two filters)')
 
 // ── a real library, a real project folder, real records ─────────────────────
 
@@ -124,43 +100,7 @@ writeFileSync(join(runsDir, 'job-broken.json'), '{ this is not json')
 
 // ── the seams ───────────────────────────────────────────────────────────────
 
-function fakeServer() {
-  const routes = []
-  return {
-    routes,
-    register(entry) {
-      routes.push(entry)
-      return () => {}
-    },
-  }
-}
-
-/** The OS dialog, injected: nothing opens, and the answer is whatever the case says. */
 const dialog = { canChoose: true, next: { path: projectA }, calls: 0, choose: async () => { dialog.calls += 1; return dialog.next } }
-
-function fakeRes() {
-  const chunks = []
-  const res = new Writable({
-    write(chunk, _encoding, done) {
-      chunks.push(Buffer.from(chunk))
-      done()
-    },
-  })
-  res.statusCode = 0
-  res.headers = {}
-  res.setHeader = (name, value) => { res.headers[String(name).toLowerCase()] = value }
-  res.bytes = () => Buffer.concat(chunks)
-  res.text = () => Buffer.concat(chunks).toString('utf8')
-  res.json = () => { try { return JSON.parse(res.text()) } catch { return null } }
-  return res
-}
-
-function fakeReq(method, path, body) {
-  const req = Readable.from(body === undefined ? [] : [Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))])
-  req.method = method
-  req.url = path
-  return req
-}
 
 const server = fakeServer()
 const ctx = {
@@ -175,16 +115,12 @@ const foldersHandler = server.routes.find((route) => route.path === FOLDERS_PATH
 const catalogHandler = server.routes.find((route) => route.path === CATALOG_PATH).handler
 const paths = server.routes.map((route) => route.path)
 
-async function call(handler, method, path, body) {
-  const res = fakeRes()
-  await handler(fakeReq(method, path, body), res)
-  return res
-}
+const call = (handler, method, path, body) => callRoute(handler, method, path, body)
 
 // ── 1. the routes are mounted the way the matcher needs ─────────────────────
 
 {
-  check('two exact routes are mounted', paths.length === 2 && paths.includes(FOLDERS_PATH) && paths.includes(CATALOG_PATH), paths.join(', '))
+  check('the routes A2 needs are mounted', [FOLDERS_PATH, CATALOG_PATH].every((path) => paths.includes(path)), paths.join(', '))
   check('neither carries a trailing slash (the contract)', paths.every((path) => !path.endsWith('/')), paths.join(', '))
 }
 

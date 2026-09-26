@@ -33,6 +33,9 @@ window.__ModuleLoader__.load({
     const IconLoadingOutline16 = icon('IconLoadingOutlineRegular', 'IconLoadingOutline16')
     const IconPlusOutline16 = icon('IconPlusOutlineRegular', 'IconPlusOutline16')
     const IconCloseOutline16 = icon('IconCloseOutlineRegular', 'IconCloseOutline16')
+    const IconGridOutline16 = icon('IconGridRegular', 'IconGrid16')
+    const IconRowsOutline16 = icon('IconRowsRegular', 'IconRows16')
+    const IconWarningOutline16 = icon('IconWarningOutlineRegular', 'IconWarningOutline16')
     const Button = primitives.Button
     const h = React.createElement
 
@@ -41,6 +44,8 @@ window.__ModuleLoader__.load({
     const NS = 'assets'
     const FOLDERS_URL = '/plugins/assets/folders'
     const CATALOG_URL = '/plugins/assets/catalog'
+    const DETAIL_URL = '/plugins/assets/detail'
+    const VIEW_URL = '/plugins/assets/view'
 
     const EN = {
       'type.label': 'Assets',
@@ -71,6 +76,31 @@ window.__ModuleLoader__.load({
       'pane.truncated': 'This folder list is longer than the library scans; the rest is not shown.',
       'pane.add.failed': 'The folder could not be added.',
       'pane.inLibrary': 'already in the library',
+      'pane.view.grid': 'Grid',
+      'pane.view.list': 'List',
+      'pane.search.placeholder': 'Search by name or prompt',
+      'pane.selected': 'Selected',
+      'meta.title': 'Metadata',
+      'meta.file': 'File',
+      'meta.dimensions': 'Dimensions',
+      'meta.format': 'Format',
+      'meta.bytes': 'Size',
+      'meta.date': 'Date',
+      'meta.context': 'Context',
+      'meta.where': 'Where it is',
+      'meta.run': 'Run',
+      'meta.provider': 'Provider',
+      'meta.job': 'Job',
+      'meta.workflow': 'Workflow',
+      'meta.app': 'App',
+      'meta.settled': 'Settled',
+      'meta.prompt': 'Prompt',
+      'meta.values': 'Values',
+      'meta.noRecord': 'No run made this file — it is listed with the file\'s own facts only.',
+      'where.present': 'here',
+      'where.trashed': 'in the trash',
+      'where.offline': 'on a volume that is not mounted',
+      'where.missing': 'gone',
     }
 
     const ZH = {
@@ -101,6 +131,31 @@ window.__ModuleLoader__.load({
       'pane.truncated': '文件夹内容超出资产库的扫描范围，其余未显示。',
       'pane.add.failed': '无法添加该文件夹。',
       'pane.inLibrary': '已在资产库中',
+      'pane.view.grid': '网格',
+      'pane.view.list': '列表',
+      'pane.search.placeholder': '按名称或提示词搜索',
+      'pane.selected': '已选择',
+      'meta.title': '元数据',
+      'meta.file': '文件',
+      'meta.dimensions': '尺寸',
+      'meta.format': '格式',
+      'meta.bytes': '大小',
+      'meta.date': '日期',
+      'meta.context': '情境',
+      'meta.where': '位置',
+      'meta.run': '运行',
+      'meta.provider': '提供方',
+      'meta.job': '任务',
+      'meta.workflow': '工作流',
+      'meta.app': '应用',
+      'meta.settled': '完成',
+      'meta.prompt': '提示词',
+      'meta.values': '参数',
+      'meta.noRecord': '这个文件不是运行产生的——只列出文件本身的信息。',
+      'where.present': '在此处',
+      'where.trashed': '在回收站',
+      'where.offline': '在未挂载的卷上',
+      'where.missing': '已丢失',
     }
 
     /** The pane's ink, in the harness's own aliases so it follows the theme. */
@@ -128,13 +183,50 @@ window.__ModuleLoader__.load({
       itemMeta: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, display: 'flex', gap: 8, minWidth: 0 },
       input: { width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l3)', background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5 },
       error: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5 },
+      // THE GRID, from the OS that shipped this surface: fluid columns, a 240px floor, no
+      // breakpoints — the pane's own width is the only input (`repeat(auto-fit, minmax(240px, 1fr))`).
+      grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignContent: 'start' },
+      tile: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, padding: 0, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, background: 'var(--dsw-alias-bg-layer-2)', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' },
+      tileOn: { borderColor: 'var(--dsw-alias-label-tertiary)' },
+      // ONE RATIO FOR EVERY TILE, so a grid stays a grid.
+      thumb: { position: 'relative', width: '100%', aspectRatio: '3 / 4', background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))', overflow: 'hidden' },
+      thumbImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
+      thumbEmpty: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: 'var(--dsw-alias-label-tertiary)' },
+      badgeRow: { position: 'absolute', left: 6, bottom: 6, display: 'flex', alignItems: 'center', gap: 4, maxWidth: 'calc(100% - 12px)' },
+      // THE TWO BADGES ARE DIFFERENT KINDS OF FACT: the context is FILLED (where it belongs),
+      // the size is OUTLINED (how big it is). They must not read as the same statement.
+      badgeFill: { background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-primary)', fontSize: 10.5, lineHeight: '15px', padding: '0 5px', borderRadius: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.94 },
+      badgeLine: { border: '1px solid var(--dsw-alias-border-l3)', color: 'var(--dsw-alias-label-secondary)', fontSize: 10.5, lineHeight: '15px', padding: '0 4px', borderRadius: 4, whiteSpace: 'nowrap', letterSpacing: '0.02em' },
+      tileText: { padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 },
+      head2: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+      toggle: { display: 'inline-flex', gap: 2, background: 'var(--dsw-alias-bg-layer-2)', borderRadius: 8, padding: 2 },
+      toggleOn: { background: 'var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-layer-2))', color: 'var(--dsw-alias-label-primary)' },
+      toggleOff: { background: 'transparent', color: 'var(--dsw-alias-label-tertiary)' },
+      toggleButton: { display: 'inline-flex', alignItems: 'center', gap: 4, border: 0, borderRadius: 6, padding: '3px 7px', cursor: 'pointer', font: 'inherit', fontSize: 11.5 },
+      meta: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l2)', paddingTop: 10 },
+      metaHead: { color: 'var(--dsw-alias-label-primary)', fontSize: 12.5, fontWeight: 600 },
+      metaRow: { display: 'flex', gap: 10, justifyContent: 'space-between', minWidth: 0 },
+      metaKey: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11.5, whiteSpace: 'nowrap' },
+      metaValue: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, textAlign: 'right', overflowWrap: 'anywhere', minWidth: 0 },
+      prompt: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, lineHeight: '17px', whiteSpace: 'pre-wrap', background: 'var(--dsw-alias-bg-layer-2)', borderRadius: 8, padding: '6px 8px', maxHeight: 160, overflow: 'auto' },
+      sectionLabel: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' },
+      list: { display: 'flex', flexDirection: 'column', gap: 4 },
+      item: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)', minWidth: 0, border: '1px solid transparent', cursor: 'pointer', textAlign: 'left', width: '100%', font: 'inherit' },
+      itemOn: { borderColor: 'var(--dsw-alias-label-tertiary)' },
+      swatch: { width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0, background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))' },
+      grow: { display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, flex: '1 1 auto' },
     }
 
     /** A GET that answers a state rather than throwing: an empty library and an unreachable host never look alike. */
     function useJson(url) {
-      const [state, setState] = React.useState({ phase: 'loading', data: null, error: null })
+      const [state, setState] = React.useState(url === null ? { phase: 'idle', data: null, error: null } : { phase: 'loading', data: null, error: null })
       const [tick, setTick] = React.useState(0)
       React.useEffect(() => {
+        // No URL is not a failure: a selection nothing has been made yet is simply idle.
+        if (url === null) {
+          setState({ phase: 'idle', data: null, error: null })
+          return () => {}
+        }
         let live = true
         const read = async () => {
           try {
@@ -192,16 +284,200 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The pane. A1's three honest states, and then A2's controls: the folders, the filters
-     * with their counts, and the list.
+     * ONE TILE. The 3/4 thumbnail, the name, and the two badges that are deliberately unlike
+     * each other: the context is FILLED (where the asset belongs) and the size is OUTLINED
+     * (how big it is). It is a button — `role`, `tabIndex`, Enter and Space — because a tile a
+     * keyboard cannot reach is a tile half the people cannot use.
+     *
+     * DRAGGABLE ONLY WHEN THERE ARE BYTES: an entry with a name and no file is listed (so a
+     * person can see the library knows about it) but nothing invents a file to carry.
+     */
+    function Tile({ asset, selected, onSelect, t }) {
+      const carry = typeof asset.bytes === 'number' && asset.bytes > 0
+      return h(
+        'div',
+        {
+          role: 'button',
+          tabIndex: 0,
+          'aria-label': t('pane.selected') + ': ' + stemOf(asset.name),
+          'data-assets-tile': 'yes',
+          'data-assets-tile-selected': selected ? 'yes' : 'no',
+          draggable: carry,
+          onDragStart: (event) => {
+            if (!carry) {
+              event.preventDefault()
+              return
+            }
+            // The path is what another surface needs — a prompt, an agent turn, an editor.
+            try {
+              event.dataTransfer.setData('text/plain', asset.path)
+              event.dataTransfer.setData('text/uri-list', 'file://' + asset.path)
+              event.dataTransfer.effectAllowed = 'copy'
+            } catch {
+              /* a browser that refuses the payload simply does not drag */
+            }
+          },
+          onClick: () => onSelect(asset.path),
+          onKeyDown: (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              onSelect(asset.path)
+            }
+          },
+          style: { ...S.tile, ...(selected ? S.tileOn : null) },
+        },
+        h(
+          'div',
+          { style: S.thumb },
+          h('img', { style: S.thumbImage, src: '/plugins/assets/file?path=' + encodeURIComponent(asset.path), alt: '', loading: 'lazy', draggable: false }),
+          h(
+            'div',
+            { style: S.badgeRow },
+            asset.context ? h('span', { style: S.badgeFill, title: t('meta.context') }, asset.context) : null,
+            asset.bytes ? h('span', { style: S.badgeLine, title: t('meta.bytes') }, sizeOf(asset.bytes)) : null,
+          ),
+        ),
+        h(
+          'div',
+          { style: S.tileText },
+          h('span', { style: S.itemName, title: asset.path }, stemOf(asset.name)),
+          h(
+            'span',
+            { style: S.itemMeta },
+            h('span', null, asset.date || ''),
+            asset.hasRecord ? h('span', null, t('pane.recorded')) : h('span', null, t('pane.unrecorded')),
+          ),
+        ),
+      )
+    }
+
+    /** One row of the list view: the same facts, read across. */
+    function Row({ asset, selected, onSelect, t }) {
+      return h(
+        'button',
+        {
+          type: 'button',
+          'data-assets-item': 'yes',
+          'data-assets-tile-selected': selected ? 'yes' : 'no',
+          onClick: () => onSelect(asset.path),
+          style: { ...S.item, ...(selected ? S.itemOn : null) },
+        },
+        h('img', { style: S.swatch, src: '/plugins/assets/file?path=' + encodeURIComponent(asset.path), alt: '', loading: 'lazy' }),
+        h(
+          'span',
+          { style: S.grow },
+          h('span', { style: S.itemName, title: asset.path }, stemOf(asset.name)),
+          h(
+            'span',
+            { style: S.itemMeta },
+            h('span', null, asset.date || ''),
+            h('span', null, sizeOf(asset.bytes)),
+            asset.context ? h('span', null, asset.context) : null,
+            asset.hasRecord ? h('span', null, t('pane.recorded')) : h('span', null, t('pane.unrecorded')),
+          ),
+        ),
+      )
+    }
+
+    /** The two layouts, as one control that says which is on. */
+    function ViewToggle({ view, onView, t }) {
+      const options = [
+        { id: 'grid', label: t('pane.view.grid'), Icon: IconGridOutline16 },
+        { id: 'list', label: t('pane.view.list'), Icon: IconRowsOutline16 },
+      ]
+      return h(
+        'span',
+        { style: S.toggle, 'data-assets-view': view },
+        ...options.map((option) =>
+          h(
+            'button',
+            {
+              key: option.id,
+              type: 'button',
+              'aria-pressed': view === option.id ? 'true' : 'false',
+              'data-assets-view-button': option.id,
+              onClick: () => onView(option.id),
+              style: { ...S.toggleButton, ...(view === option.id ? S.toggleOn : S.toggleOff) },
+            },
+            option.Icon ? h(option.Icon, { size: 13 }) : null,
+            option.label,
+          ),
+        ),
+      )
+    }
+
+    /**
+     * THE METADATA BLOCK: what the catalog job is for.
+     *
+     * PROVENANCE WHEN A RUN MADE IT — the provider, the job, the workflow, the app, the date
+     * it settled, the prompt verbatim and the values it ran with — and THE FILE'S OWN FACTS
+     * WHEN NOTHING DID. `where it is` is on both, because "find the original" is the job.
+     */
+    function MetadataBlock({ detail, loading, t }) {
+      if (loading) return h('div', { style: S.meta, 'data-assets-meta': 'loading' }, h('span', { style: S.muted }, t('pane.loading')))
+      if (!detail) return null
+      const provenance = detail.provenance || null
+      const rows = [
+        [t('meta.file'), detail.name],
+        [t('meta.dimensions'), detail.dimensions ? detail.dimensions.width + ' × ' + detail.dimensions.height : '—'],
+        [t('meta.format'), String(detail.ext || '').toUpperCase()],
+        [t('meta.bytes'), sizeOf(detail.bytes)],
+        [t('meta.date'), detail.date || '—'],
+        [t('meta.context'), detail.context || '—'],
+        [t('meta.where'), t('where.' + (detail.where || 'missing'))],
+      ]
+      const runRows = provenance
+        ? [
+            [t('meta.provider'), provenance.provider],
+            [t('meta.job'), provenance.jobId],
+            [t('meta.workflow'), provenance.workflow || provenance.title || '—'],
+            [t('meta.app'), provenance.appId === null || provenance.appId === undefined ? '—' : String(provenance.appId)],
+            [t('meta.settled'), provenance.settledAt || provenance.at || '—'],
+          ]
+        : []
+      return h(
+        'div',
+        { style: S.meta, 'data-assets-meta': 'yes' },
+        h('span', { style: S.metaHead }, t('meta.title')),
+        ...rows.map(([key, value]) => h('div', { key: 'f:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
+        provenance
+          ? h(
+              'div',
+              { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+              h('span', { style: S.sectionLabel }, t('meta.run')),
+              ...runRows.map(([key, value]) => h('div', { key: 'r:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
+              detail.prompt ? h('span', { style: S.sectionLabel }, t('meta.prompt')) : null,
+              detail.prompt ? h('div', { style: S.prompt, 'data-assets-prompt': 'yes' }, detail.prompt) : null,
+              detail.values && detail.values.length > 0 ? h('span', { style: S.sectionLabel }, t('meta.values')) : null,
+              ...(detail.values || []).slice(0, 24).map((row) =>
+                h('div', { key: 'v:' + row.key, style: S.metaRow }, h('span', { style: S.metaKey }, row.key), h('span', { style: S.metaValue }, row.value.length > 300 ? row.value.slice(0, 300) + '…' : row.value)),
+              ),
+            )
+          : h('span', { style: S.muted, 'data-assets-meta-norecord': 'yes' }, t('meta.noRecord')),
+      )
+    }
+
+    /**
+     * The pane. A1's three honest states, A2's controls, and A3's grid: the layouts, the
+     * tiles, and the metadata block for whichever tile is selected.
      */
     function AssetsPane(props) {
       const t = (props && props.locale ? props.locale.bind(NS) : (key) => EN[key] || key)
-      const [context, setContext] = React.useState(null)
-      const [date, setDate] = React.useState(null)
+      // THE VIEW IS THE FILE, not component state: the harness does not restore tabs in this
+      // shell (the layout store is localStorage under an origin the shell randomises with
+      // `--port 0`), so the layout, the two filters and the selection survive a reload
+      // because view.json holds them.
+      const [view, reloadView] = useJson(VIEW_URL)
       const [typed, setTyped] = React.useState('')
+      const [search, setSearch] = React.useState('')
       const [busy, setBusy] = React.useState(false)
       const [failed, setFailed] = React.useState(null)
+
+      const chosen = view.data || { view: 'grid', context: null, date: null, selected: null }
+      const layout = chosen.view === 'list' ? 'list' : 'grid'
+      const context = chosen.context
+      const date = chosen.date
+      const selectedPath = chosen.selected
 
       const query = []
       if (context) query.push('context=' + encodeURIComponent(context))
@@ -209,25 +485,21 @@ window.__ModuleLoader__.load({
       const catalogUrl = CATALOG_URL + (query.length > 0 ? '?' + query.join('&') : '')
       const [registry, reloadRegistry] = useJson(FOLDERS_URL)
       const [catalog, reloadCatalog] = useJson(catalogUrl)
+      const [detail, reloadDetail] = useJson(selectedPath ? DETAIL_URL + '?path=' + encodeURIComponent(selectedPath) : null)
 
-      const post = async (body) => {
-        setBusy(true)
-        setFailed(null)
+      /** Every change to the view is written, so the next reload opens where this one left off. */
+      const patchView = async (patch) => {
         try {
-          const answer = await fetch(FOLDERS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          const answer = await fetch(VIEW_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
           if (!answer.ok) throw new Error('http-' + answer.status)
-          const result = await answer.json()
-          reloadRegistry()
-          reloadCatalog()
-          return result
+          reloadView()
         } catch (error) {
           setFailed(String((error && error.message) || error))
-          return null
-        } finally {
-          setBusy(false)
         }
       }
-
+      const select = (path) => {
+        patchView({ selected: selectedPath === path ? null : path })
+      }
       if (registry.phase === 'loading' && catalog.phase === 'loading') {
         return h(
           'div',
@@ -303,6 +575,17 @@ window.__ModuleLoader__.load({
         )
       }
 
+      // THE SEARCH IS OVER WHAT THE LIBRARY KNOWS: the name, the prompt a run was given,
+      // and the context. It narrows the list on this machine — no route, no scan.
+      const needle = search.trim().toLowerCase()
+      const shownAssets = needle === ''
+        ? assets
+        : assets.filter((asset) =>
+            (asset.name + ' ' + (asset.context || '') + ' ' + ((asset.provenance && asset.provenance.prompt) || ''))
+              .toLowerCase()
+              .includes(needle),
+          )
+
       return h(
         'div',
         { style: S.pane, 'data-assets-pane': 'ready' },
@@ -340,12 +623,27 @@ window.__ModuleLoader__.load({
             ),
         failed ? h('span', { style: S.error }, t('pane.add.failed') + ' ' + failed) : null,
 
+        // ── the search, and the two layouts ──────────────────────────────────
+        h(
+          'div',
+          { style: S.head2 },
+          h('input', {
+            style: { ...S.input, flex: '1 1 auto' },
+            value: search,
+            placeholder: t('pane.search.placeholder'),
+            'aria-label': t('pane.search.placeholder'),
+            'data-assets-search': 'yes',
+            onChange: (event) => setSearch(event.target.value),
+          }),
+          h(ViewToggle, { view: layout, onView: (next) => patchView({ view: next }), t }),
+        ),
+
         // ── the two filter groups, each row carrying its count ────────────────
         h(
           'div',
           { style: S.group, 'data-assets-filters': 'yes' },
           h('span', { style: S.groupTitle }, t('pane.filter.context') + ' · ' + total + ' ' + t('pane.assets')),
-          h(FilterRow, { label: t('pane.filter.all'), count: total, on: context === null, onClick: () => setContext(null) }),
+          h(FilterRow, { label: t('pane.filter.all'), count: total, on: context === null, onClick: () => patchView({ context: null }) }),
           ...counts.context.map((row) =>
             h(FilterRow, {
               key: 'ctx:' + row.value,
@@ -353,7 +651,7 @@ window.__ModuleLoader__.load({
               count: row.count,
               depth: 1,
               on: context === row.value,
-              onClick: () => setContext(context === row.value ? null : row.value),
+              onClick: () => patchView({ context: context === row.value ? null : row.value }),
             }),
           ),
         ),
@@ -361,41 +659,41 @@ window.__ModuleLoader__.load({
           'div',
           { style: S.group },
           h('span', { style: S.groupTitle }, t('pane.filter.date')),
-          h(FilterRow, { label: t('pane.filter.all'), count: total, on: date === null, onClick: () => setDate(null) }),
+          h(FilterRow, { label: t('pane.filter.all'), count: total, on: date === null, onClick: () => patchView({ date: null }) }),
           ...counts.date.flatMap((year) => [
-            h(FilterRow, { key: 'y:' + year.year, label: year.year, count: year.count, depth: 1, on: false, onClick: () => setDate(null) }),
             ...year.months.flatMap((month) => [
-              h(FilterRow, { key: 'm:' + year.year + '-' + month.month, label: year.year + '-' + month.month, count: month.count, depth: 2, on: false, onClick: () => setDate(null) }),
               ...month.days.map((day) =>
-                h(FilterRow, { key: 'd:' + day.day, label: day.day, count: day.count, depth: 3, on: date === day.day, onClick: () => setDate(date === day.day ? null : day.day) }),
+                h(FilterRow, {
+                  key: 'd:' + day.day,
+                  label: day.day,
+                  count: day.count,
+                  depth: 1,
+                  on: date === day.day,
+                  onClick: () => patchView({ date: date === day.day ? null : day.day }),
+                }),
               ),
             ]),
           ]),
         ),
 
-        // ── the list (A3 replaces this with the grid and the metadata block) ──
-        assets.length === 0
+        // ── the grid, or the list ────────────────────────────────────────────
+        shownAssets.length === 0
           ? h('span', { style: S.muted, 'data-assets-none': 'yes' }, total === 0 ? t('pane.none') : t('pane.none.match'))
-          : h(
-              'div',
-              { style: S.list, 'data-assets-list': 'yes' },
-              ...assets.map((asset) =>
-                h(
-                  'div',
-                  { key: asset.path, style: S.item, 'data-assets-item': 'yes' },
-                  h('span', { style: S.itemName, title: asset.path }, stemOf(asset.name)),
-                  h(
-                    'span',
-                    { style: S.itemMeta },
-                    h('span', null, asset.date || ''),
-                    h('span', null, sizeOf(asset.bytes)),
-                    h('span', null, asset.hasRecord ? t('pane.recorded') : t('pane.unrecorded')),
-                    asset.context ? h('span', null, asset.context) : null,
-                  ),
-                ),
+          : layout === 'grid'
+            ? h(
+                'div',
+                { style: S.grid, 'data-assets-grid': 'yes' },
+                ...shownAssets.map((asset) => h(Tile, { key: asset.path, asset, selected: selectedPath === asset.path, onSelect: select, t })),
+              )
+            : h(
+                'div',
+                { style: S.list, 'data-assets-list': 'yes' },
+                ...shownAssets.map((asset) => h(Row, { key: asset.path, asset, selected: selectedPath === asset.path, onSelect: select, t })),
               ),
-            ),
         catalog.data && catalog.data.truncated ? h('span', { style: S.muted }, t('pane.truncated')) : null,
+
+        // ── the metadata block for the selected tile ─────────────────────────
+        selectedPath ? h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t }) : null,
       )
     }
 

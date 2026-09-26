@@ -17,7 +17,8 @@
   },
   "scripts": {
     "verify:mount": "node verify/mount.mjs",
-    "verify:intake": "node verify/intake.mjs"
+    "verify:intake": "node verify/intake.mjs",
+    "verify:views": "node verify/views.mjs"
   },
   "dsh": {
     "bundle": {

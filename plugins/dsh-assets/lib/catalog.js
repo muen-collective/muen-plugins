@@ -21,6 +21,8 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { imageSize } from './image-size.js'
+
 /** What counts as a picture or a clip here. Everything else in a folder is not an asset. */
 const MEDIA_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'tif', 'tiff', 'heic', 'bmp', 'mp4', 'mov', 'webm', 'mkv', 'mp3', 'wav', 'm4a'])
 
@@ -78,9 +80,13 @@ export async function readRecords(recordsRoot, { listDir = readdir, readText = r
       records += 1
       const jobId = String(record.jobId || String(name).replace(/\.json$/, ''))
       const outcome = record.outcome && typeof record.outcome === 'object' ? record.outcome : {}
+      // The prompt rides with the record so a search can find a picture by what it was
+      // asked for; it is a field on the run, not a second read of the file.
+      const prompt = summariseRecord(record).prompt
       const provenance = {
         provider,
         jobId,
+        prompt,
         at: String(record.at || outcome.at || '') || null,
         settledAt: String(outcome.at || '') || null,
         workflow: String(record.adapter || '') || null,
@@ -142,6 +148,120 @@ export async function scanFolders(folders, { listDir = readdir, statFile = stat 
   }
   for (const folder of folders) await walk(folder, folder.path, 0)
   return { files, truncated }
+}
+
+/**
+ * What a run was asked for, in the shape the metadata block draws: the prompt first, then
+ * the rest of the values as key/value rows.
+ *
+ * THE TWO PROVIDERS CARRY THEIR VALUES DIFFERENTLY, so both are read: RunningHub's body is
+ * `{ webappId, nodeInfoList: [{ nodeId, fieldName, fieldValue }] }` — a door list — while
+ * Krea's body is the request itself, with the prompt at the top level. Nothing is guessed: a
+ * body neither shape matches yields no values rather than invented ones.
+ */
+export function summariseRecord(record) {
+  const body = record && record.body && typeof record.body === 'object' ? record.body : null
+  if (!body) return { prompt: null, values: [] }
+  const values = []
+  let prompt = null
+  const list = Array.isArray(body.nodeInfoList) ? body.nodeInfoList : null
+  if (list) {
+    for (const node of list) {
+      if (!node || typeof node !== 'object') continue
+      const key = String(node.fieldName === undefined ? node.nodeId : node.fieldName)
+      const value = node.fieldValue
+      if (value === undefined || value === null || value === '') continue
+      if (/prompt|text/i.test(key) && typeof value === 'string' && value.length > 8) prompt = value
+      values.push({ key, value: String(value) })
+    }
+    return { prompt, values }
+  }
+  for (const [key, value] of Object.entries(body)) {
+    if (value === undefined || value === null || value === '') continue
+    if (typeof value === 'boolean') continue
+    const text = typeof value === 'string' ? value : JSON.stringify(value)
+    if (text === undefined || text === null) continue
+    if (key === 'prompt' || (/prompt/i.test(key) && typeof value === 'string' && value.length > 8)) prompt = text
+    values.push({ key, value: text })
+  }
+  return { prompt, values }
+}
+
+/**
+ * Where an asset is, as far as this machine can honestly say.
+ *
+ * `present` — the file is here. `trashed` — the record's own path is gone but a file of the
+ * same name is under the folder's `_trash/`, which is where this product's delete moves
+ * things rather than unlinking them. `offline` — the path lives on a volume that is not
+ * mounted. `missing` — none of the above, and saying so is the whole point.
+ */
+export async function whereIs(path, folder, { statFile = stat } = {}) {
+  try {
+    const info = await statFile(path)
+    if (info.isFile()) return 'present'
+  } catch {
+    // Not there, which is what the rest of this function is about.
+  }
+  const name = String(path).split(/[\\/]/).pop() || ''
+  if (folder && name !== '') {
+    try {
+      const info = await statFile(join(folder, '_trash', name))
+      if (info.isFile()) return 'trashed'
+    } catch {
+      // No trash copy either.
+    }
+  }
+  const volume = /^\/(?:Volumes|media|mnt)\/([^/]+)\//.exec(String(path))
+  if (volume) {
+    try {
+      await statFile('/Volumes/' + volume[1])
+    } catch {
+      const mount = /^\/(media|mnt)\//.exec(String(path))
+      if (mount) return 'offline'
+    }
+  }
+  return 'missing'
+}
+
+/**
+ * One asset, whole: what the metadata block draws when a tile is selected.
+ *
+ * The list stays cheap — it reads names, sizes and dates — and this is the read that opens
+ * the file for its dimensions. `paths` is what makes the read safe: an asset the library
+ * does not hold is refused rather than described.
+ */
+export async function assetDetail({ folders = [], recordsRoot, path, statFile = stat, sizeOf = imageSize } = {}) {
+  const wanted = String(path || '')
+  const folder = folders.find((entry) => wanted === entry.path || wanted.startsWith(entry.path.replace(/\/+$/, '') + '/'))
+  if (!folder) return { error: 'not-in-library' }
+  const ext = extOf(wanted)
+  let info = null
+  try {
+    info = await statFile(wanted)
+  } catch {
+    info = null
+  }
+  const where = await whereIs(wanted, folder.path, { statFile })
+  const { byPath } = await readRecords(recordsRoot, {})
+  const record = byPath.get(wanted) || null
+  const summary = summariseRecord(record)
+  const name = wanted.split(/[\\/]/).pop() || ''
+  return {
+    path: wanted,
+    name,
+    ext,
+    type: record && record.type ? record.type : ext,
+    bytes: info && info.isFile() ? info.size : null,
+    mtime: info && info.isFile() ? new Date(info.mtimeMs).toISOString() : null,
+    date: dayOf(record && (record.settledAt || record.at)) || (info && info.isFile() ? dayOf(new Date(info.mtimeMs).toISOString()) : null),
+    context: folder.label || '',
+    folder: folder.path,
+    where,
+    dimensions: info && info.isFile() ? await sizeOf(wanted, ext) : null,
+    provenance: record,
+    prompt: summary.prompt,
+    values: summary.values,
+  }
 }
 
 /** The date tree and the context rows, each with the number of assets behind it. */
@@ -213,5 +333,7 @@ export async function readCatalog({ folders = [], recordsRoot, context = null, d
   const counts = summarise(assets)
   const kept = assets.filter((asset) => (context === null || asset.context === context) && (date === null || asset.date === date))
   kept.sort((a, b) => (a.date === b.date ? String(b.mtime).localeCompare(String(a.mtime)) : String(b.date).localeCompare(String(a.date))))
-  return { assets: kept, counts, countsOver: 'all', total: assets.length, shown: kept.length, truncated, providers: undefined }
+  // The list is deliberately light — names, sizes, dates — and `assetDetail` is the read
+  // that opens a file for its dimensions. So no `dimensions` field here on purpose.
+  return { assets: kept, counts, countsOver: 'all', total: assets.length, shown: kept.length, truncated }
 }
