@@ -22,10 +22,10 @@
  *
  *   node verify/intake.mjs
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { ROOT, callRoute, fakeServer, reporter } from './harness.mjs'
@@ -35,6 +35,8 @@ const FOLDERS_PATH = '/plugins/assets/folders'
 const CATALOG_PATH = '/plugins/assets/catalog'
 const DETAIL_PATH = '/plugins/assets/detail'
 const VIEW_PATH = '/plugins/assets/view'
+const DELETE_PATH = '/plugins/assets/delete'
+const FILE_PATH = '/plugins/assets/file'
 
 const { check, note, finish } = reporter('verify:intake — epic 63 A2 (folders, records, and the two filters)')
 
@@ -63,6 +65,18 @@ function seedProject(dir) {
   writeFileSync(join(dir, '.hidden.png'), PNG)
   return { recorded, loose, other }
 }
+
+// TWO THINGS THE LIBRARY MUST NOT REACH, both created outside its registered folders:
+// an ordinary file beside them, and a symlink INSIDE project A pointing at the temp root, so a
+// lexical check would call `projectA/out/x.png` inside the library while the bytes live outside.
+// Both exist because the file route once served the first one (`..`) and the delete route must
+// refuse the second (`realpath`).
+const outsider = join(tmpdir(), 'assets-outsider-' + String(process.pid) + '.txt')
+writeFileSync(outsider, 'not in the library')
+const outsideDir = mkdtempSync(join(tmpdir(), 'assets-outside-'))
+const outsideFile = join(outsideDir, 'outside.png')
+writeFileSync(outsideFile, PNG)
+symlinkSync(outsideDir, join(projectA, 'out'))
 
 const seededA = seedProject(projectA)
 const seededB = seedProject(projectB)
@@ -107,6 +121,27 @@ writeFileSync(join(runsDir, 'job-broken.json'), '{ this is not json')
 
 const dialog = { canChoose: true, next: { path: projectA }, calls: 0, starts: [], revealed: [], choose: async (start) => { dialog.calls += 1; dialog.starts.push(start); return dialog.next }, reveal: async (path) => { dialog.revealed.push(path); return { ok: true } } }
 
+/**
+ * THE FAKE TRASH. It really moves the file — into a directory of its own — so a check can assert
+ * both halves of the act: the file is gone from the folder, and it is in the trash. The real verb is
+ * never reached from a suite (`apply(ctx, { trash })`), which is the same rule the folder dialog
+ * follows: a test must not rearrange a person's disk.
+ */
+const trashDir = mkdtempSync(join(tmpdir(), 'assets-trash-'))
+const trash = {
+  canTrash: true,
+  calls: [],
+  async trash(path) {
+    trash.calls.push(path)
+    try {
+      renameSync(path, join(trashDir, basename(path) + '.' + String(trash.calls.length)))
+      return { ok: true, where: 'Trash' }
+    } catch (error) {
+      return { ok: false, error: 'trash-failed', detail: String(error && error.message) }
+    }
+  },
+}
+
 const server = fakeServer()
 const ctx = {
   get: (name) => (name === 'webServer' ? server : undefined),
@@ -114,12 +149,14 @@ const ctx = {
   inject: () => {},
 }
 const module = await import(pathToFileURL(join(ROOT, 'lib/index.js')).href)
-module.apply(ctx, { folders: dialog, argv: ['node', 'verify'], env: process.env })
+module.apply(ctx, { folders: dialog, trash, argv: ['node', 'verify'], env: process.env })
 
 const foldersHandler = server.routes.find((route) => route.path === FOLDERS_PATH).handler
 const catalogHandler = server.routes.find((route) => route.path === CATALOG_PATH).handler
 const detailHandler = server.routes.find((route) => route.path === DETAIL_PATH).handler
 const viewHandler = server.routes.find((route) => route.path === VIEW_PATH).handler
+const deleteHandler = server.routes.find((route) => route.path === DELETE_PATH).handler
+const fileHandler = server.routes.find((route) => route.path === FILE_PATH).handler
 const paths = server.routes.map((route) => route.path)
 
 const call = (handler, method, path, body) => callRoute(handler, method, path, body)
@@ -182,6 +219,7 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
   check('an empty library answers an empty registry', res.statusCode === 200 && Array.isArray(body.folders) && body.folders.length === 0, JSON.stringify(body.folders))
   check('and says where it looked, with the rule that answered', body.root === dataRoot && body.rootKind === 'override' && body.recordsRoot === recordsRoot, body.root + ' / ' + body.recordsRoot)
   check('and whether the host has a folder dialog', body.canChoose === true, String(body.canChoose))
+  check('and whether it can trash a file, which is what hides the Delete control', body.canTrash === true, String(body.canTrash))
 }
 
 {
@@ -233,6 +271,119 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
   check('an unknown action is named', odd.statusCode === 400 && odd.json().error === 'unknown-action', odd.statusCode + ' ' + JSON.stringify(odd.json().detail))
   const put = await call(foldersHandler, 'PUT', FOLDERS_PATH)
   check('and the method is bounded', put.statusCode === 405 && put.headers.allow === 'GET, POST', put.statusCode + ' allow=' + put.headers.allow)
+}
+
+// ── 1c. THE READER'S CONTAINMENT, which was a string and is now a location ───
+//
+// MEASURED ON THE RUNNING APP 2026-09-26: `GET …/file?path=/Users/…/Downloads/../../../etc/hosts`
+// answered 200 with the file, because the check was `startsWith(folder + '/')` and a string is not a
+// place. The catalog and the detail route answered honestly (they build their lists from a scan), so
+// the hole was this one route — and it is a person's whole disk, not one folder.
+
+{
+  const ask = (target) => call(fileHandler, 'GET', FILE_PATH + '?path=' + encodeURIComponent(target))
+
+  const inside = await ask(seededA.recorded)
+  check('a file inside a registered folder is served', inside.statusCode === 200, String(inside.statusCode))
+
+  // CONCATENATED, NOT joined: `path.join` collapses `..` before the route ever sees it, and a check
+  // that cannot spell the hole cannot see it. This is the string the live request carried.
+  const walkedOut = await ask(projectA + '/../' + basename(outsider))
+  check(
+    'and a path that starts inside and walks out with `..` is REFUSED (this served the file before the fix)',
+    walkedOut.statusCode === 404 && walkedOut.json().error === 'not-in-library',
+    walkedOut.statusCode + ' ' + JSON.stringify(walkedOut.json()),
+  )
+
+  const throughLink = await ask(join(projectA, 'out', 'outside.png'))
+  check(
+    'while a path through a symlink is served: the LINK is inside the library, and the reader follows links the way Finder does',
+    throughLink.statusCode === 200,
+    String(throughLink.statusCode),
+  )
+}
+
+// ── 3c. THE DESTRUCTIVE VERB: it trashes, and it refuses four ways ───────────
+//
+// A delete is the one route here that changes a person's disk, so every refusal is asserted with the
+// SAME evidence: the fake trash's call list, which must not have grown. A refusal that still moved
+// the file would be the worst possible bug in this plugin, and a status code alone cannot show it.
+
+{
+  const before = trash.calls.length
+  const doomed = join(projectA, 'doomed.png')
+  writeFileSync(doomed, PNG)
+
+  const wrongMethod = await call(deleteHandler, 'GET', DELETE_PATH)
+  check('the verb is POST only', wrongMethod.statusCode === 405 && wrongMethod.headers.allow === 'POST', wrongMethod.statusCode + ' ' + String(wrongMethod.headers.allow))
+
+  const noBody = await call(deleteHandler, 'POST', DELETE_PATH)
+  check('a POST with no body changes nothing', noBody.statusCode === 400 && noBody.json().error === 'bad-request', noBody.statusCode + ' ' + JSON.stringify(noBody.json()))
+
+  const noPath = await call(deleteHandler, 'POST', DELETE_PATH, { confirm: true })
+  check('and neither does one with no path', noPath.statusCode === 400 && noPath.json().error === 'bad-request', noPath.statusCode + ' ' + JSON.stringify(noPath.json()))
+
+  const unconfirmed = await call(deleteHandler, 'POST', DELETE_PATH, { path: doomed })
+  check(
+    'WITHOUT confirm: true nothing moves — a stray request cannot empty a folder',
+    unconfirmed.statusCode === 400 && unconfirmed.json().error === 'needs-confirmation' && trash.calls.length === before,
+    unconfirmed.statusCode + ' ' + JSON.stringify(unconfirmed.json()) + ' calls=' + String(trash.calls.length - before),
+  )
+
+  const outside = await call(deleteHandler, 'POST', DELETE_PATH, { path: outsider, confirm: true })
+  check(
+    'a file outside every registered folder is refused, and survives',
+    outside.statusCode === 404 && outside.json().error === 'not-in-library' && trash.calls.length === before && existsSync(outsider),
+    outside.statusCode + ' ' + JSON.stringify(outside.json()),
+  )
+
+  const walkedOut = await call(deleteHandler, 'POST', DELETE_PATH, { path: projectA + '/../' + basename(outsider), confirm: true })
+  check(
+    'and so is a path that walks out with `..` — the containment is resolved, not spelled',
+    walkedOut.statusCode === 404 && walkedOut.json().error === 'not-in-library' && trash.calls.length === before,
+    walkedOut.statusCode + ' ' + JSON.stringify(walkedOut.json()),
+  )
+
+  const throughLink = await call(deleteHandler, 'POST', DELETE_PATH, { path: join(projectA, 'out', 'outside.png'), confirm: true })
+  check(
+    'and a file reached through a symlink inside the folder: the LINK is not where the bytes are, so the real path decides (`realpath`)',
+    throughLink.statusCode === 404 && throughLink.json().error === 'not-in-library' && trash.calls.length === before && existsSync(outsideFile),
+    throughLink.statusCode + ' ' + JSON.stringify(throughLink.json()) + ' outside still there=' + String(existsSync(outsideFile)),
+  )
+
+  const folder = await call(deleteHandler, 'POST', DELETE_PATH, { path: projectA, confirm: true })
+  check('a folder is refused by name — this verb deletes assets, not structure', folder.statusCode === 400 && folder.json().error === 'is-a-folder' && trash.calls.length === before, folder.statusCode + ' ' + JSON.stringify(folder.json()))
+
+  const gone = await call(deleteHandler, 'POST', DELETE_PATH, { path: join(projectA, 'never-was.png'), confirm: true })
+  check('a file that is not there says so rather than trashing nothing', gone.statusCode === 404 && gone.json().error === 'missing-file', gone.statusCode + ' ' + JSON.stringify(gone.json()))
+
+  const trashed = await call(deleteHandler, 'POST', DELETE_PATH, { path: doomed, confirm: true })
+  const body = trashed.json()
+  check(
+    'a confirmed file inside the library is TRASHED, and the answer says what and where',
+    trashed.statusCode === 200 && body.trashed === true && body.where === 'Trash' && body.name === 'doomed.png' && body.path === doomed,
+    trashed.statusCode + ' ' + JSON.stringify(body),
+  )
+  check('through the verb this host was given, with the path the route resolved', trash.calls.length === before + 1 && trash.calls[before] === doomed, trash.calls.slice(before).join(','))
+  check('and the file really left the folder and really landed in the trash', !existsSync(doomed) && existsSync(join(trashDir, 'doomed.png.1')), 'folder=' + String(existsSync(doomed)) + ' trash=' + String(existsSync(join(trashDir, 'doomed.png.1'))))
+
+  // A HOST WITH NO TRASH VERB REFUSES RATHER THAN DELETING. The shape `unlink` would need is not in
+  // this file at all; this is the second lock on the same door.
+  const revived = join(projectA, 'revived.png')
+  writeFileSync(revived, PNG)
+  trash.canTrash = false
+  const unsupported = await call(deleteHandler, 'POST', DELETE_PATH, { path: revived, confirm: true })
+  check(
+    'a host with no trash verb answers 501 and the file stays — no second-class delete',
+    unsupported.statusCode === 501 && unsupported.json().error === 'unsupported' && existsSync(revived) && trash.calls.length === before + 1,
+    unsupported.statusCode + ' ' + JSON.stringify(unsupported.json()),
+  )
+  trash.canTrash = true
+  // leave the library exactly as this block found it: the file it trashed is already gone, and the
+  // two things it created are removed. Every check above counts the files in these folders, so a
+  // fixture that quietly grew one would be testing a different library from that line on.
+  if (existsSync(revived)) unlinkSync(revived)
+  if (existsSync(join(projectA, 'out'))) unlinkSync(join(projectA, 'out'))
 }
 
 // ── 4. the picker's start folder, as a pure function ────────────────────────

@@ -259,6 +259,13 @@ export async function loadClient({ React, stubs = {} }) {
     IconWarningOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'warning', ...props }),
     IconChevronDownOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'chevronDown', ...props }),
     IconSearchOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'search', ...props }),
+    // THE BUTTON, at last. Every control in this pane prefers the primitive and falls back to a plain
+    // `<button>` when a host has no primitives — and NO suite rendered the preferred branch, because
+    // this stub did not exist: the suites have been asserting the fallback all along. That is the same
+    // shape of gap as the folder helper that was deleted while its call sites stayed, so the stub is
+    // here now and both branches are exercised (the fallback by the panes' own `Button ? … : …`).
+    Button: ({ variant = 'ghost', size = 'md', icon, className, children, ...rest }) =>
+      React.createElement('button', { type: 'button', 'data-stub-button': variant + ':' + size, className, ...rest }, icon === undefined ? null : icon, children),
     // The app's own field: a flex wrap holding an optional icon and the input itself, with the caller's
     // props landing on the INPUT (that is where `data-assets-search` has to arrive for a suite to press it).
     Input: ({ icon, className, ...rest }) =>

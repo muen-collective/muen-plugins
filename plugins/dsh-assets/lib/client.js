@@ -72,6 +72,7 @@ window.__ModuleLoader__.load({
     const CATALOG_URL = '/plugins/assets/catalog'
     const DETAIL_URL = '/plugins/assets/detail'
     const VIEW_URL = '/plugins/assets/view'
+    const DELETE_URL = '/plugins/assets/delete'
 
     const EN = {
       'type.label': 'Assets',
@@ -139,6 +140,14 @@ window.__ModuleLoader__.load({
       'meta.prompt': 'Prompt',
       'meta.values': 'Values',
       'meta.noRecord': 'No run made this file — it is listed with the file\'s own facts only.',
+      // THE DESTRUCTIVE ACT, in Finder's own words: the control says Delete (what a person
+      // calls it), the confirm says Move to Trash (what actually happens).
+      'meta.delete': 'Delete',
+      'meta.deleteAsk': 'Move this to the Trash?',
+      'meta.deleteYes': 'Move to Trash',
+      'meta.deleteCancel': 'Cancel',
+      'meta.trashed': 'Moved to the Trash: {name}',
+      'meta.trashFailed': 'The Trash refused it',
       // THE HANDOFF'S OWN WORDS (epic 64 S7). The control says what it does and the hint says
       // what it does NOT do, because "Regenerate" is the one word here a person could read as
       // spending money.
@@ -213,6 +222,12 @@ window.__ModuleLoader__.load({
       'meta.prompt': '提示词',
       'meta.values': '参数',
       'meta.noRecord': '这个文件不是运行产生的——只列出文件本身的信息。',
+      'meta.delete': '删除',
+      'meta.deleteAsk': '移到废纸篓？',
+      'meta.deleteYes': '移到废纸篓',
+      'meta.deleteCancel': '取消',
+      'meta.trashed': '已移到废纸篓：{name}',
+      'meta.trashFailed': '废纸篓拒绝了该操作',
       'meta.continue': '重新生成',
       'meta.continue.hint': '在「生成」中打开这次运行，连同它的图片和参数。在那里按下生成之前不会运行任何东西。',
       'meta.continue.noPlugin': '未安装「生成」，无法在这里打开这次运行。',
@@ -249,6 +264,12 @@ window.__ModuleLoader__.load({
       itemMeta: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, display: 'flex', gap: 8, minWidth: 0 },
       input: { width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l3)', background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5 },
       error: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5 },
+      // The one destructive row in the pane, and the one line that says where a file went.
+      deleteRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 },
+      deleteAsk: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5 },
+      // The pane's own error ink, worn by the control: a ghost button that says what it does.
+      deleteInk: { color: 'var(--dsw-alias-state-error-primary)' },
+      notice: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, padding: '0 2px' },
       // THE GRID, from the OS that shipped this surface: fluid columns, a 240px floor, no
       // breakpoints — the pane's own width is the only input (`repeat(auto-fit, minmax(240px, 1fr))`).
       grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignContent: 'start' },
@@ -943,7 +964,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function MetadataBlock({ detail, loading, t, openGenerate, generateReady, withStage = true }) {
+    function MetadataBlock({ detail, loading, t, openGenerate, generateReady, withStage = true, canTrash = false, asking = false, busy = false, onAsk, onCancel, onConfirm }) {
       if (loading) return h('div', { style: S.meta, 'data-assets-meta': 'loading' }, h('span', { style: S.muted }, t('pane.loading')))
       if (!detail) return null
       const provenance = detail.provenance || null
@@ -1016,6 +1037,37 @@ window.__ModuleLoader__.load({
               }),
             )
           : h('span', { style: S.muted, 'data-assets-meta-norecord': 'yes' }, t('meta.noRecord')),
+
+        // ── the way out of the file, without leaving this app ─────────────────
+        //
+        // The founder's ask (2026-09-26): *"a feature to delete the asset as if I am deleting from
+        // finder so I don't have to leave mitsumeru ui"*. It ASKS first, and the host will not move
+        // anything without `confirm: true`, so a press here is never a surprise; the render only
+        // draws this row at all when the host has a trash verb to offer (`canTrash`).
+        canTrash
+          ? h(
+              'div',
+              { style: S.deleteRow, 'data-assets-delete-row': 'yes' },
+              asking
+                ? [
+                    h('span', { key: 'ask', style: S.deleteAsk, 'data-assets-delete-ask': 'yes' }, t('meta.deleteAsk')),
+                    Button
+                      ? h(Button, { key: 'yes', variant: 'primary', size: 'sm', disabled: busy, 'data-assets-delete-confirm': 'yes', onClick: onConfirm }, t('meta.deleteYes'))
+                      : h('button', { key: 'yes', type: 'button', disabled: busy, 'data-assets-delete-confirm': 'yes', onClick: onConfirm }, t('meta.deleteYes')),
+                    Button
+                      ? h(Button, { key: 'no', variant: 'ghost', size: 'sm', 'data-assets-delete-cancel': 'yes', onClick: onCancel }, t('meta.deleteCancel'))
+                      : h('button', { key: 'no', type: 'button', 'data-assets-delete-cancel': 'yes', onClick: onCancel }, t('meta.deleteCancel')),
+                  ]
+                : [
+                    Button
+                      ? h(Button, { key: 'del', variant: 'ghost', size: 'sm', disabled: busy, style: S.deleteInk, title: t('meta.delete') + ' ⌘⌫', 'data-assets-delete': 'yes', onClick: onAsk }, t('meta.delete'))
+                      // The fallback carries the same affordances as the primitive — a title with the
+                      // key that does the same thing — because a host without the primitives is a host
+                      // whose controls still have to explain themselves.
+                      : h('button', { key: 'del', type: 'button', disabled: busy, style: S.deleteInk, title: t('meta.delete') + ' ⌘⌫', 'data-assets-delete': 'yes', onClick: onAsk }, t('meta.delete')),
+                  ],
+            )
+          : null,
       )
     }
 
@@ -1038,6 +1090,10 @@ window.__ModuleLoader__.load({
       // tile would make the pane's hook count depend on how many tiles are on screen — a shape the
       // verify shim (hooks keyed by call order) cannot survive.
       const [hoveredPath, setHoveredPath] = React.useState(null)
+      // The confirm is the PANE's state, not the block's: `⌘⌫` on the pane opens the same confirm the
+      // button does, and the block is a child that may not even be mounted when the key is pressed.
+      const [asking, setAsking] = React.useState(false)
+      const [notice, setNotice] = React.useState(null)
 
       const chosen = view.data || { view: 'grid', context: null, date: null, selected: null }
       const layout = chosen.view === 'list' ? 'list' : chosen.view === 'gallery' ? 'gallery' : 'grid'
@@ -1072,7 +1128,58 @@ window.__ModuleLoader__.load({
         }
       }
       const select = (path) => {
+        setNotice(null)
         patchView({ selected: selectedPath === path ? null : path })
+      }
+
+      /**
+       * THE DESTRUCTIVE ACT — the only one in this pane (founder, 2026-09-26: *"a feature to delete the
+       * asset as if I am deleting from finder so I don't have to leave mitsumeru ui"*).
+       *
+       * NOTHING IS UNLINKED, HERE OR IN THE HOST. The file goes to the platform's own trash, where
+       * Finder's Put Back still finds it; that is the whole difference between deleting from Finder
+       * and `rm`, and it is why this is safe to put one press away. The host also refuses a call
+       * without `confirm: true`, so this function is the only path that can move a file.
+       *
+       * After it lands: the selection that pointed at the file goes too — through the view FILE, so a
+       * reload does not ask for a path that no longer exists — and the catalog is re-read, which is
+       * what takes the tile off the grid.
+       */
+      const remove = async (path) => {
+        setAsking(false)
+        setBusy(true)
+        setFailed(null)
+        try {
+          const answer = await fetch(DELETE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, confirm: true }) })
+          const result = await answer.json().catch(() => null)
+          if (!answer.ok) {
+            setFailed(t('meta.trashFailed') + ': ' + String((result && (result.detail || result.error)) || 'http-' + answer.status))
+            return
+          }
+          setNotice(t('meta.trashed').replace('{name}', String((result && result.name) || '')))
+          if (selectedPath === path) await patchView({ selected: null })
+          reloadCatalog()
+        } catch (error) {
+          setFailed(t('meta.trashFailed') + ': ' + String((error && error.message) || error))
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      /**
+       * FINDER'S OWN GESTURE (⌘⌫), because that is what the founder asked to keep. Three guards, each
+       * for a way this could hurt: nothing is selected, the key is not held, or the person is TYPING —
+       * a ⌘⌫ in the search field must delete a character, not a photograph. It opens the confirm
+       * rather than acting outright: the keyboard gets the same one press of warning as the button.
+       */
+      const onKeyDown = (event) => {
+        if (!selectedPath || !event || (event.key !== 'Backspace' && event.key !== 'Delete')) return
+        if (event.metaKey !== true && event.ctrlKey !== true) return
+        const target = event.target || {}
+        const tag = String(target.tagName || '').toLowerCase()
+        if (tag === 'input' || tag === 'textarea' || target.isContentEditable === true) return
+        event.preventDefault()
+        setAsking(true)
       }
 
       /**
@@ -1124,6 +1231,9 @@ window.__ModuleLoader__.load({
 
       const folders = (registry.data && registry.data.folders) || []
       const canChoose = !!(registry.data && registry.data.canChoose)
+      // The Delete control is drawn only when the host has somewhere to put the file (the trash verb
+      // is per platform): a button that always fails is worse than no button.
+      const canTrash = !!(registry.data && registry.data.canTrash)
       const counts = (catalog.data && catalog.data.counts) || { context: [], date: [] }
       const assets = (catalog.data && catalog.data.assets) || []
       const total = (catalog.data && catalog.data.total) || 0
@@ -1219,7 +1329,7 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { style: S.pane, 'data-assets-pane': 'ready' },
+        { style: S.pane, 'data-assets-pane': 'ready', onKeyDown },
         h('div', { style: S.head }, h('span', { style: S.title }, t('pane.where')), addControl),
         h(
           'div',
@@ -1307,6 +1417,7 @@ window.__ModuleLoader__.load({
           }),
           h('span', { style: S.summary, 'data-assets-summary': 'yes' }, summaryText),
         ),
+        notice ? h('span', { style: S.notice, 'data-assets-notice': 'yes' }, notice) : null,
 
         // ── the two columns: the pictures, and the one you picked ─────────────
         //
@@ -1341,7 +1452,20 @@ window.__ModuleLoader__.load({
             ? h(
                 'div',
                 { style: S.columnSide, 'data-assets-side': 'yes' },
-                h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t, openGenerate, generateReady, withStage: layout !== 'gallery' }),
+                h(MetadataBlock, {
+                  detail: detail.data,
+                  loading: detail.phase === 'loading',
+                  t,
+                  openGenerate,
+                  generateReady,
+                  withStage: layout !== 'gallery',
+                  canTrash: canTrash,
+                  asking,
+                  busy,
+                  onAsk: () => setAsking(true),
+                  onCancel: () => setAsking(false),
+                  onConfirm: () => remove(detail.data && detail.data.path ? detail.data.path : selectedPath),
+                }),
               )
             : null,
         ),

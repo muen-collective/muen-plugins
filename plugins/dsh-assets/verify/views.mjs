@@ -46,6 +46,9 @@ const LOOSE = '/Users/someone/Desktop/yammaman/hand-added.jpg'
 const foldersBody = {
   folders: [{ path: '/Users/someone/Desktop/yammaman', label: 'yammaman', addedAt: '2026-09-26T00:00:00.000Z' }],
   canChoose: true,
+  // The trash verb is per platform: the pane draws no Delete control when the host has none, so the
+  // fixture has to say. Section 10 renders the other host.
+  canTrash: true,
   root: '/p/assets',
   recordsRoot: '/p/generate',
 }
@@ -53,7 +56,7 @@ const foldersBody = {
 // The registry the pane reads is mutable, because section 7 renders the empty room too.
 let folders = foldersBody
 
-const catalogBody = {
+let catalogBody = {
   assets: [
     {
       path: RECORDED,
@@ -126,6 +129,13 @@ net.fetch = async (url, options) => {
     // claim behind the founder's report: the press worked, so the folder is there.
     if (href.includes('/folders') && body.action === 'add' && typeof body.path === 'string') {
       folders = { ...folders, folders: [...folders.folders, { path: body.path, label: body.path.split('/').filter(Boolean).pop() }] }
+    }
+    if (href.includes('/delete')) {
+      // THE STUB MOVES THE FILE THE WAY THE HOST DOES: a POST that changed nothing would make "the
+      // grid no longer lists it" unfalsifiable, and that is the claim the founder is buying.
+      const gone = String(body.path || '')
+      catalogBody = { ...catalogBody, assets: catalogBody.assets.filter((row) => row.path !== gone) }
+      return { ok: true, json: async () => (body.confirm === true ? { trashed: true, path: gone, name: gone.split('/').filter(Boolean).pop(), where: 'Trash' } : { error: 'needs-confirmation' }) }
     }
     if (href.includes('/view')) view = { ...view, ...body }
     return { ok: true, json: async () => view }
@@ -726,6 +736,107 @@ async function render(passes = 4) {
   const meta = collect(tree, (node) => node.props && node.props['data-assets-meta'] === 'yes')[0]
   check('the block beside it draws the facts and NOT a second picture', !!meta && collect(meta, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 0, meta ? 'facts only' : 'no block')
   view = { ...view, view: 'grid', selected: null }
+}
+
+// ── 10. THE DESTRUCTIVE ACT: it asks, it trashes, and Finder's key opens it ──
+//
+// The founder's ask (2026-09-26): *"a feature to delete the asset as if I am deleting from finder so I
+// don't have to leave mitsumeru ui"*. Four claims, and the third is the one that matters most: THE
+// PANE MUST NOT MOVE A FILE WITHOUT `confirm: true`. Every check here reads the recorded POSTs, not
+// just the screen, because a control that renders is not a control that acts — and the reverse.
+{
+  // Re-render with the SAME hook slots (a local state change needs no effect run) or from scratch
+  // (a new read does) — the two idioms the sections above use.
+  const rerender = () => {
+    mini.reset()
+    return pane({ locale: { bind: () => t } })
+  }
+  folders = { ...foldersBody, canTrash: true }
+  view = { ...view, selected: RECORDED }
+  const deletePosts = () => posted.filter((entry) => entry.url.includes('/delete'))
+  let tree = await render()
+
+  const control = collect(tree, (node) => node.props && node.props['data-assets-delete'] === 'yes')[0]
+  check('the block offers Delete when the host has a trash verb', !!control, control ? textOf(control).join('') : 'none')
+  check('without a Delete control there is nothing to press — the checks below would be guesses', !!control, control ? 'pressable' : 'no control')
+  check('and it says which key does the same thing', !!control && String(control.props.title).includes('⌘⌫'), control ? String(control.props.title) : 'no title')
+  check('through the app’s own Button, not the fallback a host without primitives gets', !!control && control.props['data-stub-button'] === 'ghost:sm', control ? String(control.props['data-stub-button']) : 'no stub button')
+
+  if (control) control.props.onClick()
+  tree = rerender()
+  const ask = collect(tree, (node) => node.props && node.props['data-assets-delete-ask'] === 'yes')[0]
+  check('pressing it ASKS, naming what will happen', !!ask && textOf(ask).join('') === EN['meta.deleteAsk'], ask ? textOf(ask).join('') : 'no question')
+  check('and nothing has been sent to the host yet — a question is not an act', deletePosts().length === 0, JSON.stringify(deletePosts()))
+
+  const cancel = collect(tree, (node) => node.props && node.props['data-assets-delete-cancel'] === 'yes')[0]
+  check('Cancel is offered beside the answer', !!cancel, cancel ? textOf(cancel).join('') : 'none')
+  if (cancel) cancel.props.onClick()
+  tree = rerender()
+  check('and Cancel closes the question without sending anything', deletePosts().length === 0 && collect(tree, (node) => node.props && node.props['data-assets-delete-ask'] === 'yes').length === 0, JSON.stringify(deletePosts()))
+
+  const againControl = collect(tree, (node) => node.props && node.props['data-assets-delete'] === 'yes')[0]
+  if (againControl) againControl.props.onClick()
+  tree = rerender()
+  const confirm = collect(tree, (node) => node.props && node.props['data-assets-delete-confirm'] === 'yes')[0]
+  check('the question offers the act itself', !!confirm, confirm ? textOf(confirm).join('') : 'no confirm')
+  if (confirm) await confirm.props.onClick()
+  tree = rerender()
+  const sent = deletePosts()
+  check(
+    'confirming posts the path WITH confirm: true — the host refuses the act without it',
+    sent.length === 1 && sent[0].body.path === RECORDED && sent[0].body.confirm === true,
+    JSON.stringify(sent),
+  )
+  check('and the pane says where the file went', textOf(tree).join(' ').includes(EN['meta.trashed'].replace('{name}', '20260926-job-aaa.png')), textOf(tree).join(' ').slice(0, 90))
+  check(
+    'and the selection is cleared IN THE VIEW FILE, so a reload does not ask for a path that is gone',
+    posted.filter((entry) => entry.url.includes('/view') && entry.body.selected === null).length >= 1,
+    JSON.stringify(posted.filter((entry) => entry.url.includes('/view')).slice(-1)),
+  )
+
+  // FINDER'S OWN KEY. It opens the same question rather than acting outright: the keyboard gets the
+  // same one press of warning, and the three guards are what keep it from being a trap.
+  view = { ...view, selected: RECORDED }
+  tree = await render()
+  const root = collect(tree, (node) => node.props && node.props['data-assets-pane'] === 'ready')[0]
+  const key = (props) => {
+    if (!root) return false
+    let prevented = false
+    root.props.onKeyDown({ preventDefault: () => { prevented = true }, ...props })
+    return prevented
+  }
+  check('the pane listens for the key', !!root && typeof root.props.onKeyDown === 'function', root ? 'listening' : 'none')
+  let prevented = key({ key: 'Backspace', metaKey: true, target: { tagName: 'BUTTON' } })
+  tree = rerender()
+  check(
+    '⌘⌫ on a selected asset opens the question',
+    prevented && collect(tree, (node) => node.props && node.props['data-assets-delete-ask'] === 'yes').length === 1,
+    'prevented=' + String(prevented),
+  )
+  collect(tree, (node) => node.props && node.props['data-assets-delete-cancel'] === 'yes')[0].props.onClick()
+  tree = rerender()
+
+  prevented = key({ key: 'Backspace', metaKey: true, target: { tagName: 'INPUT' } })
+  tree = rerender()
+  check(
+    'but NOT while the person is typing — ⌘⌫ in the search field deletes a character',
+    !prevented && collect(tree, (node) => node.props && node.props['data-assets-delete-ask'] === 'yes').length === 0,
+    'prevented=' + String(prevented),
+  )
+
+  prevented = key({ key: 'Backspace', target: { tagName: 'BUTTON' } })
+  check('and a bare Backspace is not the gesture', !prevented, 'prevented=' + String(prevented))
+
+  // THE HOST WITH NO TRASH VERB: no control at all, because a button that always fails is worse.
+  folders = { ...foldersBody, canTrash: false }
+  view = { ...view, selected: RECORDED }
+  tree = await render()
+  check(
+    'a host that cannot trash draws no Delete control',
+    collect(tree, (node) => node.props && node.props['data-assets-delete'] === 'yes').length === 0,
+    'drawn',
+  )
+  folders = { ...foldersBody, canTrash: true }
 }
 
 note('the live layer is the founder’s eyes: the bar, the two columns, the hover and the card’s own mark')

@@ -19,9 +19,9 @@
  *
  * @module @muen/dsh-assets/lib/folders
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, realpath as realpathNative, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { isAbsolute, join, normalize } from 'node:path'
+import { isAbsolute, join, normalize, resolve, sep } from 'node:path'
 
 /** The schema string a reader can trust, and can refuse by name. */
 export const FOLDERS_SCHEMA = 'muen-assets-folders/v1'
@@ -64,6 +64,69 @@ function entryOf(folder) {
  * answer an empty list rather than throwing: this is a read of a person's own note to
  * themselves, and a broken one must not take the surface down with it.
  */
+/**
+ * WHICH FOLDER HOLDS THIS PATH — compared as a LOCATION, not as a string.
+ *
+ * The first cut of the file route asked `wanted.startsWith(folder + '/')`, and a string is not a
+ * place: a path that began with a registered folder and then walked out with `..` passed the test.
+ * Measured on the running app 2026-09-26 — `GET …/file?path=/Users/…/Downloads/../../../etc/hosts`
+ * answered **200** and handed the file over. `resolve()` collapses those segments first, so a path
+ * that escapes is a path that is not inside; the trailing separator is required so `/x/project-2`
+ * is not inside `/x/project`.
+ *
+ * LEXICAL ON PURPOSE: this is what the catalog and the reader use, and they must agree with each
+ * other. `stat` still follows a symlink afterwards, which is the same behaviour Finder has — a link
+ * inside a folder is the person's own business. The destructive verb does not rely on this alone;
+ * see `deletableIn`.
+ *
+ * @returns {object|null} the registry entry that holds the path, or null.
+ */
+export function folderHolding(target, folders) {
+  const wanted = typeof target === 'string' ? target.trim() : ''
+  if (wanted === '') return null
+  const resolved = resolve(wanted)
+  for (const entry of Array.isArray(folders) ? folders : []) {
+    const root = resolve(String(entry && entry.path ? entry.path : '') || '/')
+    if (resolved === root) return entry
+    if (resolved.startsWith(root + sep)) return entry
+  }
+  return null
+}
+
+/**
+ * THE SAME QUESTION FOR A DELETION, WHERE BEING WRONG COSTS A FILE.
+ *
+ * Two differences from `folderHolding`, both about what a symlink can do:
+ *
+ *  - the path may not BE the folder: this library deletes files, and a folder is the person's own;
+ *  - the file's REAL PARENT must be inside the folder's REAL PATH. A registered folder is allowed to
+ *    contain a symlink to a directory elsewhere (`proj/incoming -> /Volumes/Photos`), and a lexical
+ *    check would call `/proj/incoming/x.png` inside the library while `unlink` reaches the file in
+ *    `/Volumes/Photos`. `realpath` on both sides is what closes that, because the question a
+ *    deletion asks is "where is this file", not "how was it spelled".
+ *
+ * @returns {Promise<{ entry: object, path: string }|null>} null when the path may not be deleted.
+ */
+export async function deletableIn(target, folders, { realpath = realpathNative } = {}) {
+  const wanted = typeof target === 'string' ? target.trim() : ''
+  if (wanted === '') return null
+  const resolved = resolve(wanted)
+  const entry = folderHolding(resolved, folders)
+  if (entry === null) return null
+  const root = resolve(String(entry.path))
+  if (resolved === root) return null
+  const cut = resolved.lastIndexOf(sep)
+  const parent = cut <= 0 ? sep : resolved.slice(0, cut)
+  try {
+    const [realParent, realRoot] = await Promise.all([realpath(parent), realpath(root)])
+    if (realParent !== realRoot && !realParent.startsWith(realRoot + sep)) return null
+  } catch {
+    // A parent that cannot be resolved is a parent this verb cannot vouch for.
+    return null
+  }
+  return { entry, path: resolved }
+}
+
 export async function readFolders(root, { readText = readFile } = {}) {
   let parsed
   try {

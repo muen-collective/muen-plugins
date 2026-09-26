@@ -151,6 +151,68 @@ hand-drawn in the bundle so the control carries ONE drawing style: the harness's
 different family (filled 16-unit geometry) and it ships no gallery glyph at all. All three are 24-unit at
 stroke 1.5, the same grid and weight as the card's mark.
 
+### The harness grew a `Button`, and that closed a real gap
+
+Every control in this pane prefers a primitive and falls back to a plain `<button>` when a host has no
+primitives — and **no suite had ever rendered the preferred branch**, because the verify harness stubbed
+no `Button` at all: every suite had been asserting the fallback. That is the same shape of hole as the
+folder helper that was deleted while its call sites stayed, so the harness now stubs `Button` (and the
+Delete checks pin that the control came from the primitive, not the fallback). The suites stayed green
+when it went in, which is the point: the two branches do render the same control.
+
+## Delete — Finder's own act, and the edge of the library (2026-09-26)
+
+*"A feature to delete the asset as if I am deleting from finder so I don't have to leave mitsumeru ui"*
+— the founder, the moment the pane was accepted. It is the only route in this plugin that changes a
+person's disk, so it is built out of refusals.
+
+**IT TRASHES. NOTHING HERE UNLINKS.** Finder's Delete moves the file to the Trash, where Put Back still
+finds it; `rm` is a different act that Finder hides behind a modifier key. `lib/trash.js` carries one
+verb per platform — macOS goes through **Finder itself** (`osascript`, with the path as ARGV and never
+interpolated, so a file called `"; rm -rf ~` is a file name), Linux through **`gio trash`** (which writes
+the XDG `.trashinfo`), Windows through the **Recycle Bin**. A platform with none of them answers
+**`501 unsupported`** and the file stays: a destructive verb this host cannot take back is refused by
+name rather than approximated.
+
+**THE HOST REFUSES FOUR WAYS, EACH BY NAME** — `POST /plugins/assets/delete`:
+
+| the refusal | when | and the file |
+|---|---|---|
+| `400 needs-confirmation` | no `confirm: true` in the body | stays: a stray POST moves nothing |
+| `400 is-a-folder` | the path is a directory (`lstat`, so a symlink is judged as itself) | stays: this deletes assets, not structure |
+| `404 not-in-library` | resolved outside every registered folder — `..` or a symlink | stays |
+| `501 unsupported` | the host has no trash verb | stays |
+
+The pane draws the control only when the folders answer says `canTrash`, at the foot of the facts block,
+in the pane's own error ink. **Pressing it asks** (`Move this to the Trash?` · Move to Trash · Cancel) and
+sends nothing until the question is answered; **⌘⌫ does the same thing** — Finder's own gesture, opening
+the same question rather than acting outright, with three guards (a selection exists, the key is held, and
+the target is not a text field, so a ⌘⌫ in the search box deletes a character). After it lands the pane
+says where the file went, re-reads the catalog, and clears the selection **in `view.json`** so a reload
+does not ask for a path that is gone.
+
+**THE VERB IS A SEAM** (`apply(ctx, { trash })`), like the folder dialog: no verify run moves a real
+file. The suite's fake trash really moves the file into a directory of its own, so both halves are
+asserted — it left the folder, it is in the trash — and every refusal is asserted against the same
+evidence: **the verb's call list must not have grown.**
+
+### What building it found: the reader's containment was a string
+
+`GET /plugins/assets/file` asked `path.startsWith(folder + '/')`, and a string is not a location.
+Measured on the running app the moment this slice started:
+
+```
+…/file?path=/Users/thuypham/Downloads/../../../etc/hosts   →  200 application/octet-stream
+```
+
+The route handed over a file outside the library, and `..` was all it took. `folderHolding()` resolves
+the path first, so a path that escapes is a path that is not inside; the trailing separator is still
+required (`/x/project-2` is not inside `/x/project`). The **destructive** verb goes one step further,
+because being wrong there costs a file: `deletableIn()` requires the file's **real parent** to be inside
+the folder's **real path**, so a symlink inside a registered folder (`proj/incoming -> /Volumes/Photos`)
+cannot become a way out. The reader deliberately keeps following links — a link inside the library is the
+person's own business, and that is what Finder does too.
+
 ## The bar, and the two columns (the polish pass, 2026-09-26)
 
 The founder, after using it: *"now let's UX polish"*. Four changes, none of them to what the pane knows:
@@ -319,13 +381,14 @@ node verify/mount.mjs      # A1: the card, the registrations, the copy, the empt
                            #     the card's own mark (not the folder), the skeleton and
                            #     the sheet that declares what it animates                   42
 node verify/intake.mjs     # A2: the folders, the records, the filters, the carrier,
-                           #     and every view the switch offers stored by the host       72
+                           #     every view the switch offers stored by the host, the
+                           #     reader's containment and the four delete refusals        89
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, EVERY folder
                            #     control pressed through to the host, the bar, the two
                            #     columns, hover, a count in words, the segmented view
                            #     switch, the dropdown filters, the Gallery view, the
-                           #     bar's one height, its centred glyphs, and the menus'
-                           #     solid card                                             106
+                           #     bar's one height, its centred glyphs, the menus' solid
+                           #     card, and the destructive act with its guards           124
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 node verify/inspect.mjs    # A4: zoom is arithmetic, the stage uses it, and the frame is

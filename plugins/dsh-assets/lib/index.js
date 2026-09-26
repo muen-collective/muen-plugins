@@ -19,13 +19,14 @@
  * @module @muen/dsh-assets
  */
 import { createReadStream } from 'node:fs'
-import { readFile, stat, writeFile, mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, readFile, stat, writeFile, mkdir } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 
 import { resolveDataRoot, resolveRecordsRoot } from './paths.js'
-import { expandFolder, readFolders, writeFolders } from './folders.js'
+import { deletableIn, expandFolder, folderHolding, readFolders, writeFolders } from './folders.js'
 import { assetDetail, readCatalog } from './catalog.js'
 import { chooseStart, nativeFolders } from './folder-actions.js'
+import { nativeTrash } from './trash.js'
 import { extFor as syncExt, normaliseConfig, publicConfig, readLedger, readSyncConfig, syncAsset, writeSyncConfig } from './sync.js'
 import { canPreview, previewFor } from './preview.js'
 
@@ -40,6 +41,9 @@ const CATALOG_PATH = '/plugins/assets/catalog'
 const DETAIL_PATH = '/plugins/assets/detail'
 /** The bytes of an asset the library holds — the tile's picture. */
 const FILE_PATH = '/plugins/assets/file'
+
+/** The destructive verb, and the only route here that changes a person's disk. */
+const DELETE_PATH = '/plugins/assets/delete'
 /** The view a person left behind: grid or list, the filters, the selection. */
 const VIEW_PATH = '/plugins/assets/view'
 /** The optional sync (epic 63 A5): its target, its ledger, and one asset at a time. */
@@ -133,6 +137,9 @@ export function apply(ctx, config = {}) {
   const argv = Array.isArray(config.argv) ? config.argv : process.argv
   const env = config.env && typeof config.env === 'object' ? config.env : process.env
   const folders = config.folders && typeof config.folders === 'object' ? config.folders : nativeFolders
+  // The trash verb is a seam for the same reason the dialog is: a verify run must never move a real
+  // file, and a host with no verb of its own answers `unsupported` instead of deleting.
+  const trash = config.trash && typeof config.trash === 'object' ? config.trash : nativeTrash
   // The resizer is a seam like the folder dialog: a verify run asserts the cache and the
   // fallbacks without spawning anything, and a host without `sips` answers canPreview false.
   const preview = {
@@ -152,6 +159,9 @@ export function apply(ctx, config = {}) {
       known: registry.known,
       found: registry.found,
       canChoose: folders.canChoose === true,
+      // Whether this host can put a file in the trash at all. The surface draws no Delete control
+      // when it cannot, because the alternative is a button that always fails.
+      canTrash: trash.canTrash === true,
       canPreview: canPreview(preview.platform),
       root: own.root,
       rootKind: own.kind,
@@ -321,7 +331,10 @@ export function apply(ctx, config = {}) {
     const wanted = str(url.searchParams.get('path'))
     const width = str(url.searchParams.get('w'))
     const registry = await readFolders(own.root)
-    const folder = registry.folders.find((entry) => wanted === entry.path || wanted.startsWith(entry.path.replace(/\/+$/, '') + '/'))
+    // RESOLVED, NOT SPELLED (`folderHolding`): a string prefix let `…/Downloads/../../../etc/hosts`
+    // through, and the route served it — measured on the running app 2026-09-26. A path that walks
+    // out of the library with `..` is not in the library.
+    const folder = folderHolding(wanted, registry.folders)
     if (wanted === '' || !folder) {
       send(res, 404, { error: 'not-in-library', detail: 'that path is not inside a folder this library holds' })
       return
@@ -431,6 +444,85 @@ export function apply(ctx, config = {}) {
    * so what survives a reload is what this file holds — the layout, the two filters, and the
    * selected tile.
    */
+  /**
+   * THE DESTRUCTIVE ROUTE (founder, 2026-09-26: *"a feature to delete the asset as if I am deleting
+   * from finder so I don't have to leave mitsumeru ui"*).
+   *
+   * It TRASHES. Nothing here unlinks: the file goes to the platform's own trash, where the person
+   * can put it back — which is the whole difference between "deleting from Finder" and `rm`, and the
+   * reason this route exists at all rather than a menu item that shells out to something.
+   *
+   * FOUR REFUSALS, EACH BY NAME, because a destructive verb that answers vaguely is worse than one
+   * that answers slowly:
+   *
+   *   `confirm: true` is REQUIRED — a POST without it changes nothing, so a stray request (a
+   *     retry, a prefetch, a bug in a surface) cannot empty someone's folder;
+   *   the path must be a FILE, not a folder (`is-a-folder`) — this library deletes assets, and a
+   *     folder is the person's own structure;
+   *   it must be inside a folder this library HOLDS, proved by resolution and by real path
+   *     (`deletableIn`) rather than by a string prefix, so neither `..` nor a symlink can reach
+   *     outside the library;
+   *   and the platform must have a trash verb, or the answer is `501 unsupported` and the file
+   *     stays exactly where it is.
+   *
+   * The answer names what happened and where the file went, because the pane says it back.
+   */
+  const deleteRoute = async (req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    if (method !== 'POST') {
+      res.setHeader('Allow', 'POST')
+      send(res, 405, { error: 'method-not-allowed' })
+      return
+    }
+    const body = await readJsonBody(req)
+    if (body === undefined) {
+      send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
+      return
+    }
+    const wanted = str(body.path)
+    if (wanted === '') {
+      send(res, 400, { error: 'bad-request', detail: 'path is required' })
+      return
+    }
+    if (body.confirm !== true) {
+      send(res, 400, { error: 'needs-confirmation', detail: 'this moves a file to the trash; send confirm: true' })
+      return
+    }
+
+    let info
+    try {
+      // `lstat`, not `stat`: a symlink is judged as itself. A link inside the library is the
+      // person's own, and trashing it trashes the link rather than whatever it points at.
+      info = await lstat(wanted)
+    } catch {
+      send(res, 404, { error: 'missing-file', detail: 'the file is not there: ' + wanted })
+      return
+    }
+    if (info.isDirectory()) {
+      send(res, 400, { error: 'is-a-folder', detail: 'this deletes files; a folder is yours to keep' })
+      return
+    }
+
+    const registry = await readFolders(own.root)
+    const allowed = await deletableIn(wanted, registry.folders)
+    if (allowed === null) {
+      send(res, 404, { error: 'not-in-library', detail: 'that path is not inside a folder this library holds' })
+      return
+    }
+    if (trash.canTrash !== true || typeof trash.trash !== 'function') {
+      send(res, 501, { error: 'unsupported', detail: 'this host has no trash verb' })
+      return
+    }
+
+    const answer = await trash.trash(allowed.path)
+    if (!answer || answer.ok !== true) {
+      const error = (answer && answer.error) || 'trash-failed'
+      send(res, error === 'unsupported' ? 501 : 500, { error, detail: (answer && answer.detail) || 'the trash verb failed' })
+      return
+    }
+    send(res, 200, { trashed: true, path: allowed.path, name: basename(allowed.path), where: answer.where || 'Trash' })
+  }
+
   const viewRoute = async (req, res) => {
     const method = (req.method || 'GET').toUpperCase()
     if (method === 'GET') {
@@ -568,6 +660,7 @@ export function apply(ctx, config = {}) {
     ctx.effect(() => server.register({ kind: 'exact', path: CATALOG_PATH, handler: catalogRoute }), 'assets: catalog')
     ctx.effect(() => server.register({ kind: 'exact', path: DETAIL_PATH, handler: detailRoute }), 'assets: detail')
     ctx.effect(() => server.register({ kind: 'exact', path: FILE_PATH, handler: fileRoute }), 'assets: file')
+    ctx.effect(() => server.register({ kind: 'exact', path: DELETE_PATH, handler: deleteRoute }), 'assets: delete')
     ctx.effect(() => server.register({ kind: 'exact', path: VIEW_PATH, handler: viewRoute }), 'assets: view')
     ctx.effect(() => server.register({ kind: 'exact', path: SYNC_PATH, handler: syncRoute }), 'assets: sync')
   }
