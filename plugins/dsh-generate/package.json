@@ -1,6 +1,6 @@
 {
   "name": "@muen/dsh-generate",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "The Generate space for DeepSeek Harness: one provider-neutral plugin that holds several providers, in this order everywhere \u2014 RunningHub and Comfy Cloud (workflows), Krea (image) and Magnific last (its key still to be tested) \u2014 each with its own key and its own workflows, opened as surfaces inside the one Generate pane. The provider registry, the Models-shaped settings page and the payload gate with the run are built (Krea can run; RunningHub's run is owed). The strip, the Regenerate handoff, the uploads copy and the session store ship too. Three skills ship inside it: add-rh-workflow installs a workflow, design-generate-screen decides what its screen shows.",
   "license": "MIT",
   "repository": {
