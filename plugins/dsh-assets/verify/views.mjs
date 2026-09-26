@@ -298,6 +298,19 @@ async function render(passes = 4) {
   const tabs = collect(tree, (node) => node.props && node.props.role === 'tab' && node.props['data-segment'] !== undefined)
   check('offering exactly grid, list and filmstrip', tabs.map((node) => node.props['data-segment']).join(',') === 'grid,list,filmstrip', tabs.map((node) => node.props['data-segment']).join(','))
   check('as icon buttons whose word is the title', tabs.every((node) => typeof node.props.title === 'string' && node.props.title.length > 0), tabs.map((node) => String(node.props.title)).join(' / '))
+  // WHICH GLYPH IS WHICH, pinned by structure — three little squares are easy to confuse, and the
+  // founder named these three (2026-09-26: *"lucide icons: layout-grid, list, gallery-thumbnails"*).
+  // Lucide's own geometry: layout-grid is four cells, list is six lines, gallery-thumbnails is a
+  // frame with four ticks under it.
+  const glyphs = collect(tree, (node) => node.props && node.props['data-assets-view-icon'] === 'yes')
+  const shapeOf = (node) => node.children.map((child) => (child.type === 'rect' ? 'r' : 'p')).join('')
+  check('every segment draws its own glyph', glyphs.length === 3, glyphs.length + ' glyphs')
+  check('layout-grid, list and gallery-thumbnails, in that order', glyphs.map(shapeOf).join(' ') === 'rrrr pppppp rpppp', glyphs.map(shapeOf).join(' '))
+  check(
+    'all three on the 24-unit grid at stroke 1.5, currentColor — the same hand as the card’s mark',
+    glyphs.every((node) => node.props.viewBox === '0 0 24 24' && node.props.strokeWidth === 1.5 && node.props.stroke === 'currentColor'),
+    glyphs.map((node) => node.props.viewBox + '/' + node.props.strokeWidth).join(' '),
+  )
   // A WALK THAT CANNOT FIND ITS TAB REPORTS IT: a suite that throws on `[0].props` says nothing
   // about which claim broke (learned on the date filter, then again here).
   const gridTab = tabs.find((node) => node.props['data-segment'] === 'grid')

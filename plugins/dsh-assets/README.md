@@ -120,8 +120,11 @@ white pill **slides** under the selected segment (placed arithmetically from `--
 `InspectStage` at the pane's width, with the catalog's frames in a one-row strip under it and the facts in
 the side column — which is told `withStage: false` there, because the big picture already is the stage and
 two would be silly. Nothing selected says so rather than auto-selecting the first frame (that would write to
-the view file from inside a render). Finder's own filmstrip glyph is hand-drawn beside the card's mark: the
-harness ships no such glyph and its nearest neighbour, `IconFlatListOutline`, is a bulleted list.
+the view file from inside a render). **The switch's three glyphs are Lucide's own — `layout-grid`, `list` and
+`gallery-thumbnails`** (Finder calls the third *filmstrip*; Lucide calls the same shape *gallery-thumbnails*) —
+hand-drawn in the bundle so the control carries ONE drawing style: the harness's grid and rows marks are a
+different family (filled 16-unit geometry) and it ships no gallery glyph at all. All three are 24-unit at
+stroke 1.5, the same grid and weight as the card's mark.
 
 ## The bar, and the two columns (the polish pass, 2026-09-26)
 
@@ -276,7 +279,7 @@ node verify/intake.mjs     # A2: the folders, the records, the filters, the carr
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, EVERY folder
                            #     control pressed through to the host, the bar, the two
                            #     columns, hover, a count in words, the segmented view
-                           #     switch, the dropdown filters and the filmstrip            94
+                           #     switch, the dropdown filters and the filmstrip            97
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36

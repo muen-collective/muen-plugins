@@ -256,8 +256,6 @@ export async function loadClient({ React, stubs = {} }) {
     IconLoadingOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'loading', ...props }),
     IconPlusOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'plus', ...props }),
     IconCloseOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'close', ...props }),
-    IconGridRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'grid', ...props }),
-    IconRowsRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'rows', ...props }),
     IconWarningOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'warning', ...props }),
     IconChevronDownOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'chevronDown', ...props }),
     // THE APP'S OWN CONTROLS, stubbed to the contract the primitives document — not to mine:

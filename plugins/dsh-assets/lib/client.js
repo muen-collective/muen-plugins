@@ -32,8 +32,6 @@ window.__ModuleLoader__.load({
     const IconFolderOpen = icon('IconFolderOpenRegular', 'IconFolderOpen16')
     const IconPlusOutline16 = icon('IconPlusOutlineRegular', 'IconPlusOutline16')
     const IconCloseOutline16 = icon('IconCloseOutlineRegular', 'IconCloseOutline16')
-    const IconGridOutline16 = icon('IconGridRegular', 'IconGrid16')
-    const IconRowsOutline16 = icon('IconRowsRegular', 'IconRows16')
     const IconWarningOutline16 = icon('IconWarningOutlineRegular', 'IconWarningOutline16')
     // The bar's filters wear the app's own disclosure chevron (polish pass, 2026-09-26).
     const IconChevronDownOutline16 = icon('IconChevronDownOutlineRegular', 'IconChevronDown16')
@@ -685,9 +683,10 @@ window.__ModuleLoader__.load({
      */
     function ViewToggle({ view, onView, t }) {
       const options = [
-        { value: 'grid', title: t('pane.view.grid'), label: IconGridOutline16 ? h(IconGridOutline16, { size: 14 }) : t('pane.view.grid') },
-        { value: 'list', title: t('pane.view.list'), label: IconRowsOutline16 ? h(IconRowsOutline16, { size: 14 }) : t('pane.view.list') },
-        { value: 'filmstrip', title: t('pane.view.filmstrip'), label: h(IconFilmstrip, { size: 14 }) },
+        { value: 'grid', title: t('pane.view.grid'), label: h(IconLayoutGrid, { size: 14 }) },
+        { value: 'list', title: t('pane.view.list'), label: h(IconList, { size: 14 }) },
+        // Finder calls this one filmstrip; Lucide calls the same shape `gallery-thumbnails`.
+        { value: 'filmstrip', title: t('pane.view.filmstrip'), label: h(IconGalleryThumbnails, { size: 14 }) },
       ]
       return h(
         'span',
@@ -1348,33 +1347,65 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * THE THIRD VIEW'S MARK (founder, 2026-09-26, reading Finder's toolbar: grid, list, filmstrip).
-     * The harness ships no filmstrip glyph — its nearest neighbour, `IconFlatListOutline`, is a
-     * bulleted list — so this is hand-drawn like the card's mark: a frame with a strip along its
-     * bottom, which is Finder's own shape. 24-unit geometry at stroke 1.5 so it weighs the same as
-     * the app's Regular icons once drawn at 16px.
+     * THE VIEW SWITCH'S THREE GLYPHS — Lucide's `layout-grid`, `list` and `gallery-thumbnails`
+     * (founder, 2026-09-26: *"lucide icons: layout-grid, list, gallery-thumbnails"*), drawn here
+     * rather than resolved from the harness. Mixing families was the reason: the harness's own grid
+     * and rows marks are a different drawing (filled 16-unit geometry) and the filmstrip glyph had
+     * to be hand-drawn because the harness ships none, so one control carried two styles.
+     *
+     * All three are 24-unit at stroke 1.5, which lands on the app's Regular weight (1px) once drawn
+     * at 16px — the same grid and weight as the card's mark. `data-assets-view-icon` marks them, so
+     * a suite can pin WHICH glyph is which rather than trusting three similar little squares.
      */
-    function IconFilmstrip({ size = 16, className, ...rest }) {
-      return h(
-        'svg',
-        {
-          width: size,
-          height: size,
-          className,
-          viewBox: '0 0 24 24',
-          fill: 'none',
-          stroke: 'currentColor',
-          strokeWidth: 1.5,
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          'aria-hidden': 'true',
-          ...rest,
-        },
-        h('rect', { x: 3, y: 3.5, width: 18, height: 17, rx: 2.4 }),
-        h('path', { d: 'M3 15h18' }),
-        h('path', { d: 'M9 15v5.5M15 15v5.5' }),
-      )
+    function viewGlyph(name, children) {
+      const ViewGlyph = ({ size = 16, className, ...rest }) =>
+        h(
+          'svg',
+          {
+            width: size,
+            height: size,
+            className,
+            viewBox: '0 0 24 24',
+            fill: 'none',
+            stroke: 'currentColor',
+            strokeWidth: 1.5,
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            'aria-hidden': 'true',
+            'data-assets-view-icon': 'yes',
+            ...rest,
+          },
+          ...children,
+        )
+      // The verify shim names component instances by `type.name`, so an unnamed factory product
+      // would report every glyph as `ViewGlyph#0..#2` and a failure would not name the one that broke.
+      Object.defineProperty(ViewGlyph, 'name', { value: name })
+      return ViewGlyph
     }
+
+    const IconLayoutGrid = viewGlyph('IconLayoutGrid', [
+      h('rect', { key: 'a', x: 3, y: 3, width: 7, height: 7, rx: 1 }),
+      h('rect', { key: 'b', x: 14, y: 3, width: 7, height: 7, rx: 1 }),
+      h('rect', { key: 'c', x: 14, y: 14, width: 7, height: 7, rx: 1 }),
+      h('rect', { key: 'd', x: 3, y: 14, width: 7, height: 7, rx: 1 }),
+    ])
+
+    const IconList = viewGlyph('IconList', [
+      h('path', { key: 'a', d: 'M3 5h.01' }),
+      h('path', { key: 'b', d: 'M3 12h.01' }),
+      h('path', { key: 'c', d: 'M3 19h.01' }),
+      h('path', { key: 'd', d: 'M8 5h13' }),
+      h('path', { key: 'e', d: 'M8 12h13' }),
+      h('path', { key: 'f', d: 'M8 19h13' }),
+    ])
+
+    const IconGalleryThumbnails = viewGlyph('IconGalleryThumbnails', [
+      h('rect', { key: 'a', x: 3, y: 3, width: 18, height: 14, rx: 2 }),
+      h('path', { key: 'b', d: 'M4 21h1' }),
+      h('path', { key: 'c', d: 'M9 21h1' }),
+      h('path', { key: 'd', d: 'M14 21h1' }),
+      h('path', { key: 'e', d: 'M19 21h1' }),
+    ])
 
     /** The chip beside the DSH glyph: the library's own mark, then the name — the guide tab's own shape. */
     function AssetsTitle(props) {
