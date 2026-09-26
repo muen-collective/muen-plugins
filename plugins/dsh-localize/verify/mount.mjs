@@ -127,10 +127,12 @@ check(
   'and its trigger is a button drawing the app\'s own globe glyph plus the short code',
   anchor &&
     anchor.type === 'button' &&
-    (anchor.children || []).length === 2 &&
-    (anchor.children[0] || {}).type === ui.primitives.IconGlobeOutlineRegular &&
-    (anchor.children[1] || {}).children[0] === 'EN',
-  JSON.stringify({ glyph: (anchor.children[0] || {}).type === ui.primitives.IconGlobeOutlineRegular, code: (anchor.children[1] || {}).children }),
+    // NULL CHILDREN ARE SKIPPED BY REACT, and this tree keeps them: a conditional child that renders
+    // nothing is a `null` here, so the count is of what actually draws.
+    (anchor.children || []).filter(Boolean).length === 2 &&
+    (anchor.children.filter(Boolean)[0] || {}).type === ui.primitives.IconGlobeOutlineRegular &&
+    (anchor.children.filter(Boolean)[1] || {}).children[0] === 'EN',
+  JSON.stringify({ drawn: (anchor.children || []).filter(Boolean).map((child) => child.type) }),
 )
 check(
   'the trigger is a menu control named by our own dictionary',
@@ -226,6 +228,117 @@ check('and the trigger is the only place that carries the code, so a row is a la
   tree.props.anchor.props.onClick()
   tree = render({})
   check('the trigger opens the menu, and the app can close it again', tree.props.open === true && typeof tree.props.onClose === 'function', JSON.stringify({ open: tree.props.open }))
+}
+
+// ── 7. the review mark (epic 65 §3) ──────────────────────────────────────────
+
+{
+  const globeWith = (pendingCount) => {
+    let watcher = null
+    const overlay = {
+      review: () => ({ pending: pendingCount, flagged: pendingCount, unjudged: 0 }),
+      onReview: (fn) => {
+        watcher = fn
+        return () => {
+          watcher = null
+        }
+      },
+    }
+    const Globe = client.makeGlobe(watched.locale, overlay)
+    // CLEARED, not just rewound: the mini React keeps hook slots in call order, and two component
+    // instances rendered through the same stub would otherwise share them (`pending` from the last
+    // globe would decide this one's mark — which is what the first version of these checks measured).
+    mini.clear()
+    const el = Globe({})
+    // EFFECTS ARE RECORDED, NOT RUN, by the mini React: the subscription to the review count is an
+    // effect, and a suite that never runs it measures a globe that never listens.
+    mini.runEffects()
+    return {
+      el,
+      notify: (next) => watcher && watcher(next),
+      // The same instance rendered again, which is what a React re-render does.
+      renderAgain: () => {
+        mini.reset()
+        return Globe({})
+      },
+    }
+  }
+
+  const quiet = globeWith(0)
+  const drawn = (tree) => (tree.props.anchor.children || []).filter(Boolean)
+  check(
+    'with nothing waiting, the globe draws no mark — a mark that is always on says nothing',
+    drawn(quiet.el).length === 2 && !drawn(quiet.el).some((child) => child.props && child.props['data-localize-review']),
+    JSON.stringify(drawn(quiet.el).map((child) => child.type)),
+  )
+
+  const waiting = globeWith(3)
+  const mark = drawn(waiting.el).find((child) => child.props && child.props['data-localize-review'] === 'pending')
+  check(
+    'and with translations waiting it draws one subtle mark, carrying the count',
+    drawn(waiting.el).length === 3 && !!mark && mark.props['data-localize-review-count'] === '3',
+    JSON.stringify(drawn(waiting.el).map((child) => (child.props || {})['data-localize-review'] || child.type)),
+  )
+  check(
+    'the mark wears the app\'s own WARN state, because a review is a to-do and not an error',
+    !!mark && /--dsw-alias-state-warn-primary/u.test(mark.props.style.background) && mark.props.style.borderRadius === '50%',
+    JSON.stringify(mark && mark.props.style),
+  )
+  // IN THE ACTIVE LANGUAGE: an earlier check in this file switched the app to Korean, and the mark is
+  // ours — so it reads Korean, which is the point rather than an accident.
+  const activeLang = watched.runtime.getSnapshot().active
+  check(
+    'and it says what it is, in the ACTIVE language, rather than being a mystery dot',
+    !!mark &&
+      mark.props.role === 'status' &&
+      mark.props.title === client.DICT[activeLang]['review.pending'] &&
+      mark.props['aria-label'] === mark.props.title &&
+      mark.props.title !== 'review.pending',
+    JSON.stringify({ active: activeLang, title: mark && mark.props.title, wanted: client.DICT[activeLang]['review.pending'] }),
+  )
+  check(
+    'the trigger stays a menu control with the mark on it — the mark is not a second button',
+    waiting.el.props.anchor.type === 'button' && waiting.el.props.anchor.props['aria-haspopup'] === 'menu',
+    JSON.stringify(waiting.el.props.anchor.props['aria-haspopup']),
+  )
+
+  // THE MARK FOLLOWS THE COUNT: a review recorded while the app is open moves it without a reload.
+  const moving = globeWith(0)
+  check('a quiet globe has no mark to start with', !drawn(moving.el).some((child) => child.props && child.props['data-localize-review']), 'mark already drawn')
+  moving.notify({ pending: 2 })
+  const after = moving.renderAgain()
+  check(
+    'and a count that ARRIVES LATER draws it — the globe listens rather than polling',
+    drawn(after).some((child) => child.props && child.props['data-localize-review-count'] === '2'),
+    JSON.stringify(drawn(after).map((child) => (child.props || {})['data-localize-review-count'] || child.type)),
+  )
+}
+
+{
+  // THE COUNT RIDES THE OVERLAY RESPONSE, so the mark costs no second request.
+  const node = { nodeType: 3, nodeValue: 'Save' }
+  const body = { nodeType: 1, childNodes: [node] }
+  const wired = loadClient(CLIENT, {
+    react: miniReact().React,
+    primitives: primitivesStub().primitives,
+    globals: {
+      document: { body },
+      fetch: async () => ({ ok: true, json: async () => ({ map: { Save: '저장' }, review: { pending: 4, flagged: 1, unjudged: 3 } }) }),
+      MutationObserver: undefined,
+    },
+  })
+  const overlay = wired.startOverlay({ getSnapshot: () => ({ active: 'ko' }) })
+  const seen = []
+  overlay.onReview((next) => seen.push(next))
+  await overlay.refresh()
+  check(
+    'the overlay reads the review count from the same response as the map',
+    overlay.review().pending === 4 && overlay.review().flagged === 1 && node.nodeValue === '저장',
+    JSON.stringify({ review: overlay.review(), node: node.nodeValue }),
+  )
+  check('and it tells whoever is watching, which is what moves the globe', seen.length >= 1 && seen[seen.length - 1].pending === 4, JSON.stringify(seen))
+  const unwatch = overlay.onReview(() => {})
+  check('a watcher can leave without disturbing the others', typeof unwatch === 'function' && unwatch() === true, 'no disposer')
 }
 
 note('oracle: ' + oraclePath)

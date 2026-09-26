@@ -42,6 +42,7 @@ import {
 import { CLIENT, loadClient, miniReact, primitivesStub } from './harness.mjs'
 import localize from '../lib/index.js'
 import { scanStrings, stringLiterals, looksLikeUiCopy } from '../lib/scan.js'
+import { recordVerdict } from '../lib/memory.js'
 
 const bundle = loadClient(CLIENT, { react: miniReact().React, primitives: primitivesStub().primitives })
 
@@ -459,6 +460,30 @@ const parse = (res) => {
   const noBundle = fakeResponse()
   await route(fakeRequest('POST', '/plugins/localize/overlay', { scan: true, plugin: 'not-installed' }), noBundle)
   check('and a plugin with no bundle is a 404, not an empty answer', noBundle.statusCode === 404 && parse(noBundle).error === 'no-bundle', noBundle.body)
+
+  // THE REVIEW COUNT RIDES THIS RESPONSE (epic 65 §3): the globe's mark is drawn from it, so a language
+  // whose translations are waiting says so in the same answer that carries the map.
+  {
+    const written2 = fakeResponse()
+    await route(fakeRequest('POST', '/plugins/localize/overlay', { plugin: 'dsh-discord', lang: 'ko', map: { Save: '저장', Enable: '활성화' } }), written2)
+    recordVerdict(ROOT, 'dsh-discord', 'ko', { source: 'Enable', target: '활성화', verdict: 'flagged', reason: 'too formal for a toggle' })
+    const withReview = fakeResponse()
+    await route(fakeRequest('GET', '/plugins/localize/overlay?lang=ko'), withReview)
+    const body = parse(withReview)
+    check(
+      'a language with something waiting answers the count, per plugin',
+      body.review.pending >= 1 && body.review.flagged === 1 && body.review.plugins.some((row) => row.plugin === 'dsh-discord' && row.flagged === 1),
+      JSON.stringify(body.review),
+    )
+    check(
+      'and it counts what NOTHING has judged too, because that is also a person\'s work',
+      body.review.unjudged >= 1 && body.review.pending === body.review.flagged + body.review.unjudged,
+      JSON.stringify({ pending: body.review.pending, flagged: body.review.flagged, unjudged: body.review.unjudged }),
+    )
+    const quiet = fakeResponse()
+    await route(fakeRequest('GET', '/plugins/localize/overlay?lang=es'), quiet)
+    check('a language with nothing waiting answers zero, so a mark is never drawn for no reason', parse(quiet).review.pending === 0 && parse(quiet).review.plugins.length === 0, JSON.stringify(parse(quiet).review))
+  }
 
   const removed = fakeResponse()
   await route(fakeRequest('DELETE', '/plugins/localize/overlay?plugin=dsh-discord&lang=fr'), removed)

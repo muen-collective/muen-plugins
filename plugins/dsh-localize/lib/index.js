@@ -14,8 +14,9 @@ import { dirname, join } from 'node:path'
 
 import { fileURLToPath } from 'node:url'
 
-import { overlayRootFor, ROW_ID } from './paths.js'
+import { overlayRootFor, profileDir, ROW_ID } from './paths.js'
 import { listOverlays, mergeOverlays, overlaysFor, readOverlay, removeOverlay, writeOverlay } from './overlay.js'
+import { readMemory, reviewState } from './memory.js'
 import { scanStrings } from './scan.js'
 
 const name = 'localize'
@@ -116,7 +117,11 @@ function readJsonBody(req) {
 }
 
 function apply(ctx) {
+  // TWO ROOTS, AND THEY ARE NOT THE SAME ONE: the overlays live under `<profile>/localizations`, the
+  // verdicts under `<profile>/localize-memory`. Reading the memory from the overlay root found nothing,
+  // so a flagged translation was invisible to the globe's mark — which is what the route check caught.
   const root = () => overlayRootFor()
+  const profile = () => profileDir()
   mountSkill(ctx)
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined
   if (server === undefined || server === null) return
@@ -132,16 +137,38 @@ function apply(ctx) {
     const plugin = url.searchParams.get('plugin')
     const lang = url.searchParams.get('lang')
 
+    /**
+     * WHAT IS WAITING FOR A PERSON, per plugin: verdicts that came back flagged, and translations
+     * nothing has judged yet (new, changed, or approved under an older prompt). This is the number
+     * behind the globe's mark — a to-do, not an error — and it rides the overlay response so the mark
+     * costs no extra request.
+     */
+    const reviewFor = (root, lang) => {
+      const rows = []
+      let flagged = 0
+      let unjudged = 0
+      const memoryRoot = profile()
+      if (memoryRoot === null) return { pending: 0, flagged: 0, unjudged: 0, plugins: [] }
+      for (const row of overlaysFor(root, lang)) {
+        const state = reviewState(readMemory(memoryRoot, row.plugin, lang), row.map)
+        const waiting = state.new.length + state.changed.length + state.stalePrompt.length
+        flagged += state.flagged.length
+        unjudged += waiting
+        rows.push({ plugin: row.plugin, keys: Object.keys(row.map).length, approved: state.approved.length, flagged: state.flagged.length, unjudged: waiting })
+      }
+      return { pending: flagged + unjudged, flagged, unjudged, plugins: rows }
+    }
+
     if (method === 'GET') {
       if (plugin !== null && lang !== null) {
         const one = readOverlay(target, plugin, lang)
-        send(res, 200, { plugin, lang, map: one.map, missing: one.missing })
+        send(res, 200, { plugin, lang, map: one.map, missing: one.missing, review: reviewFor(target, lang) })
         return
       }
       if (lang !== null) {
         const overlays = overlaysFor(target, lang)
         const merged = mergeOverlays(overlays)
-        send(res, 200, { lang, overlays, map: merged.map, conflicts: merged.conflicts })
+        send(res, 200, { lang, overlays, map: merged.map, conflicts: merged.conflicts, review: reviewFor(target, lang) })
         return
       }
       send(res, 200, { overlays: listOverlays(target) })

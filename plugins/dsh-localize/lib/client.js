@@ -53,10 +53,10 @@ window.__ModuleLoader__.load({
      * exists to catch (epic 65 L3). `zh` and `ko`/`ja` are drafted here; the review gate is L5.
      */
     const DICT = {
-      en: { 'globe.aria': 'Change language', 'globe.title': 'Language', 'menu.title': 'Language' },
-      zh: { 'globe.aria': '切换语言', 'globe.title': '语言', 'menu.title': '语言' },
-      ko: { 'globe.aria': '언어 변경', 'globe.title': '언어', 'menu.title': '언어' },
-      ja: { 'globe.aria': '言語を変更', 'globe.title': '言語', 'menu.title': '言語' },
+      en: { 'globe.aria': 'Change language', 'globe.title': 'Language', 'menu.title': 'Language', 'review.pending': 'Some translations need review' },
+      zh: { 'globe.aria': '切换语言', 'globe.title': '语言', 'menu.title': '语言', 'review.pending': '有翻译需要审阅' },
+      ko: { 'globe.aria': '언어 변경', 'globe.title': '언어', 'menu.title': '언어', 'review.pending': '검토가 필요한 번역이 있습니다' },
+      ja: { 'globe.aria': '言語を変更', 'globe.title': '言語', 'menu.title': '言語', 'review.pending': 'レビューが必要な翻訳があります' },
     }
 
     // ── the catalog ────────────────────────────────────────────────────────────
@@ -265,6 +265,8 @@ window.__ModuleLoader__.load({
         if (typeof document === 'undefined' || !document.body) return 0
         return overlay.apply(document.body, current)
       }
+      let review = { pending: 0, flagged: 0, unjudged: 0 }
+      const watchers = new Set()
       const refresh = async () => {
         if (typeof fetch !== 'function' || typeof document === 'undefined' || !document.body) return 0
         const active = locale && typeof locale.getSnapshot === 'function' ? locale.getSnapshot().active || 'en' : 'en'
@@ -273,10 +275,20 @@ window.__ModuleLoader__.load({
           if (!answer || !answer.ok) return 0
           const body = await answer.json()
           current = body && body.map && typeof body.map === 'object' ? body.map : {}
+          // THE MARK'S NUMBER RIDES THIS RESPONSE (epic 65 §3): one request per language, not two.
+          review = body && body.review && typeof body.review === 'object' ? body.review : { pending: 0, flagged: 0, unjudged: 0 }
         } catch {
           current = {}
+          review = { pending: 0, flagged: 0, unjudged: 0 }
         }
         overlay.restore(document.body)
+        for (const watcher of [...watchers]) {
+          try {
+            watcher(review)
+          } catch {
+            // a watcher that throws costs its own render, never the overlay
+          }
+        }
         return draw()
       }
       if (typeof MutationObserver === 'function' && typeof document !== 'undefined' && document.body) {
@@ -290,7 +302,17 @@ window.__ModuleLoader__.load({
         }
       }
       refresh()
-      return { refresh, draw, overlay }
+      return {
+        refresh,
+        draw,
+        overlay,
+        review: () => review,
+        /** Watch the review count: the globe's mark is drawn from it. */
+        onReview: (watcher) => {
+          watchers.add(watcher)
+          return () => watchers.delete(watcher)
+        },
+      }
     }
 
     // ── the globe ──────────────────────────────────────────────────────────────
@@ -305,7 +327,7 @@ window.__ModuleLoader__.load({
      * menu are the app's own primitives — a trigger the app can focus, a list it can walk with Tab
      * and Escape — so this control behaves like every other one in the shell.
      */
-    function makeGlobe(locale) {
+    function makeGlobe(locale, overlay = null) {
       return function GlobeAction(props) {
         const wide = props && props.wide === true
         const t = typeof locale.bind === 'function' ? locale.bind(NS) : (key) => key
@@ -315,6 +337,16 @@ window.__ModuleLoader__.load({
           () => ({ active: '', locales: [], revision: -1 }),
         )
         const [open, setOpen] = React.useState(false)
+        /**
+         * THE REVIEW MARK (epic 65 §3): a subtle dot while a plugin's strings are waiting for a person
+         * — flagged, or not judged yet. It is a TO-DO, not an error, so it wears the app's own warn
+         * state, and it says what it is on hover rather than being a mystery dot.
+         */
+        const [pending, setPending] = React.useState(overlay && typeof overlay.review === 'function' ? overlay.review().pending || 0 : 0)
+        React.useEffect(() => {
+          if (!overlay || typeof overlay.onReview !== 'function') return undefined
+          return overlay.onReview((next) => setPending(next && next.pending ? next.pending : 0))
+        }, [])
         const active = (state && state.active) || ''
         const locales = (state && Array.isArray(state.locales) ? state.locales : []).filter((row) => row && typeof row.id === 'string')
         const items = [{ type: 'label', id: 'heading', text: t('menu.title') }].concat(
@@ -346,6 +378,7 @@ window.__ModuleLoader__.load({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
+                position: 'relative',
                 cursor: 'pointer',
                 background: 'transparent',
                 border: 'none',
@@ -357,6 +390,24 @@ window.__ModuleLoader__.load({
               },
             },
             GlobeGlyph ? h(GlobeGlyph, { size: 16 }) : null,
+            pending > 0
+              ? h('span', {
+                  'data-localize-review': 'pending',
+                  'data-localize-review-count': String(pending),
+                  title: t('review.pending'),
+                  'aria-label': t('review.pending'),
+                  role: 'status',
+                  style: {
+                    position: 'absolute',
+                    top: -1,
+                    left: 9,
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: 'var(--dsw-alias-state-warn-primary)',
+                  },
+                })
+              : null,
             h(
               'span',
               { style: { fontWeight: 600, letterSpacing: '0.04em' } },
@@ -397,6 +448,7 @@ window.__ModuleLoader__.load({
       // THE OVERLAY, and its subscription: a language change re-reads the map for the new language.
       try {
         const overlay = startOverlay(locale)
+        report.__overlay = overlay
         report.overlay = { started: true }
         if (locale && typeof locale.subscribe === 'function') {
           const subscribe = () => locale.subscribe(() => {
@@ -411,7 +463,7 @@ window.__ModuleLoader__.load({
 
       const slots = typeof ctx.get === 'function' ? ctx.get('slots') : undefined
       if (slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
-        const Globe = makeGlobe(locale)
+        const Globe = makeGlobe(locale, report.__overlay || null)
         slots.inject(SEAM, () => slots.register({ name: SEAM, id: ACTION_ID, order: ACTION_ORDER }, Globe))
         report.globe = { seam: SEAM, id: ACTION_ID, order: ACTION_ORDER }
       }

@@ -56,6 +56,12 @@ an installed bundle / DELETE), and the bundle walks the rendered tree to apply t
 text it first saw**, so a language switch is never cumulative. A `MutationObserver` re-applies the map already
 in hand, so late-rendered text is translated without another request.
 
+**The globe carries a review mark** (epic 65 §3): a small dot in the app's own *warn* state while any
+translation is waiting for a person — flagged by a reviewer, or not judged yet — carrying the count in the
+host's answer. It rides the SAME response as the overlay map, so the mark costs no extra request, and it
+follows the count while the app is open rather than polling. It is a to-do, not an error, and it says what it
+is on hover in the active language.
+
 **The reviewer** (`skills/localize-review/SKILL.md`) is the gate, and it ships inside this package so the
 served text is the repo's text. It judges four axes (accuracy, register, context, completeness), gives one of
 three verdicts (`approved` / `flagged` with a reason / `missing`), and records every attempt — including
@@ -69,8 +75,8 @@ makes the cross-plugin consistency check a read instead of a re-scan.
 
 ```
 node verify/catalog.mjs   # the languages we own, against the HARNESS'S OWN LocaleRuntime (22 checks)
-node verify/mount.mjs     # the bundle, the globe and its activation (27 checks)
-node verify/overlay.mjs   # the store, the scan, the DOM walk and the route (62 checks)
+node verify/mount.mjs     # the bundle, the globe, its activation and the review mark (37 checks)
+node verify/overlay.mjs   # the store, the scan, the DOM walk and the route (65 checks)
 node verify/memory.mjs    # the review memory: hashing, re-review scope, attempts, the gate's data (36)
 node verify/review.mjs    # the reviewer skill and its registration (21)
 ```
