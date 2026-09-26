@@ -1,6 +1,6 @@
 {
   "name": "@muen/dsh-localize",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Language and translation control for DeepSeek Harness: the languages we own are added to the shared catalog, and a sidebar globe switches between them. Neutral; catalogs en/zh/ko/ja/fr/de.",
   "license": "MIT",
   "repository": {
