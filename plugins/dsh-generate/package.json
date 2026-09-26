@@ -25,7 +25,8 @@
     "verify:skill": "node verify/skill.mjs",
     "verify:start": "node verify/start.mjs",
     "verify:result": "node verify/result.mjs",
-    "verify:sessions": "node verify/sessions.mjs"
+    "verify:sessions": "node verify/sessions.mjs",
+    "verify:carrier": "node verify/carrier.mjs"
   },
   "dsh": {
     "bundle": {

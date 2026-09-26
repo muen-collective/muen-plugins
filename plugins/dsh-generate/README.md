@@ -43,6 +43,25 @@ session"*). So a workflow's history is not on screen by default — and no histo
 fills from two directions: a run done in this visit joins it (only that run), or a tab opened to **continue** one
 arrives with its params and shows the whole series with that run selected.
 
+**The carrier: a picture can say what made it** (epic 64 S8). ComfyUI writes its graph into the PNG it
+saves — `tEXt` chunks keyed **`prompt`** (the API graph: one entry per node id with its `class_type`) and
+**`workflow`** (the UI graph), beside RunningHub's **`AIGC`** provenance label. `lib/carrier.js` reads that and
+answers what a surface can draw: `supported` (could this format be read at all), `hasGraph`, the API graph's
+**node count and class types** — the same `(nodeId, class_type)` space an adapter's doors use — the UI graph's
+nodes/links/version, and the label. **A file carrying only `AIGC` reports NO GRAPH rather than an empty one**,
+and a JPEG or WebP reports `supported: false` rather than "no graph", because those carry the same data in EXIF
+and this reads PNG only — an empty graph, no graph, and not-read are three different facts. Measured on this
+machine: **all 21 PNGs the plugin's own runs saved carry the label and no graph**, while the canvas export the
+founder kept carries all three chunks (a 6,022-byte `prompt`, a 22,254-byte `workflow`, a 285-byte `AIGC`; the
+API graph is keyed by node id and its `class_type` values are what a door names). **Writing is an export, not
+a run**: `exportGraphPng` injects the chunks after `IHDR`, replaces a key already present rather than writing
+it twice, and **refuses to write a lie** — no graph, or not a PNG, writes nothing. That is what makes a picture
+from this panel open in a local ComfyUI, with the graph coming from the app that ran it rather than from the
+provider.
+
+**The carrier's route and surface are still owed**: nothing draws "this picture carries its graph" yet, and
+the export has no control. The module is what they will call.
+
 **The pane is what writes a session, and opening a form is not the same as starting work** (epic 64
 S6, first half). A session is created by the **first change** to a door — not by opening a workflow, because
 someone who opens a form and looks at it has not started anything, and a store that fills with empty sessions
