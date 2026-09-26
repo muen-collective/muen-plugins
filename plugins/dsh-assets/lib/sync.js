@@ -206,8 +206,14 @@ export function signedHeaders({ method = 'PUT', url, region, accessKeyId, secret
   const headers = { host: target.host, 'x-amz-content-sha256': payloadHash, 'x-amz-date': amzDate }
   for (const [name, value] of Object.entries(extraHeaders)) headers[String(name).toLowerCase()] = String(value)
 
+  // AWS's header rule is TRIM AND COLLAPSE: leading and trailing whitespace goes, and a run of
+  // internal spaces becomes one. Only trimming looks right until a value carries two spaces —
+  // a filename with a double space in a content-disposition, say — and then the signature
+  // silently disagrees with the provider. The canonical form is what is signed, so it is the
+  // canonical form that has to be built to the letter.
+  const canonicalValue = (value) => String(value).trim().replace(/\s+/g, ' ')
   const names = Object.keys(headers).sort()
-  const canonicalHeaders = names.map((name) => name + ':' + headers[name].trim() + '\n').join('')
+  const canonicalHeaders = names.map((name) => name + ':' + canonicalValue(headers[name]) + '\n').join('')
   const signedNames = names.join(';')
   const canonicalQuery = [...target.searchParams.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

@@ -259,6 +259,50 @@ await callRoute(foldersHandler, 'POST', '/plugins/assets/folders', { action: 'ad
   check('a different day changes it', SYNC.signedHeaders({ method: 'PUT', url, region: 'auto', accessKeyId: 'AKIAEXAMPLE', secretAccessKey: 'sekret', payload: Buffer.from('hello'), at: new Date('2026-09-27T05:59:59Z') }).signature !== signed.signature, '')
   check('and a different body changes it, so a swapped picture cannot reuse a signature', sign({ payload: Buffer.from('hello!') }).signature !== signed.signature, '')
 
+  // THE CANONICAL FORM, which is what is actually signed. No provider is needed to check that
+  // it is built to the letter, and each of these is a rule that is easy to get subtly wrong.
+  // (An oracle would be better than a hand-checked shape: `@smithy/signature-v4` is not
+  // complete enough in the app's own tree to drive, so the day a target exists — E3 — the real
+  // proof is one upload, and this is what stands in until then.)
+  const HASH = SYNC.sha256Hex(Buffer.from('hello'))
+  const canonical = sign({ extraHeaders: { range: 'bytes=0-9', 'x-amz-meta-note': '  two   spaces  ' } })
+  const lines = canonical.canonicalRequest.split('\n')
+  check(
+    'the canonical request is method, URI, query, one line per signed header, then the signed list and the payload hash',
+    lines[0] === 'PUT' &&
+      lines[1] === '/mitsu/mitsu/ab/abc.png' &&
+      lines[2] === '' &&
+      lines[lines.length - 1] === HASH &&
+      lines[lines.length - 2] === 'host;range;x-amz-content-sha256;x-amz-date;x-amz-meta-note' &&
+      lines[lines.length - 3] === '',
+    JSON.stringify(lines),
+  )
+  check(
+    'every signed header is lower-cased, sorted, and its value trimmed with runs of whitespace collapsed',
+    lines.slice(3, -3).join(' | ') ===
+      'host:s3.example.com | range:bytes=0-9 | x-amz-content-sha256:' + HASH + ' | x-amz-date:20260926T055959Z | x-amz-meta-note:two spaces',
+    lines.slice(3, -3).join(' | '),
+  )
+  check(
+    'which is load-bearing: `a  b` and `a b` sign the SAME, because a provider collapses them too',
+    sign({ extraHeaders: { range: 'a  b' } }).signature === sign({ extraHeaders: { range: 'a b' } }).signature,
+    '',
+  )
+  check(
+    'the query string is empty for an object URL, and its parameters sort by name when there are any',
+    lines[2] === '' && sign({ url: url + '?b=2&a=1' }).canonicalRequest.split('\n')[2] === 'a=1&b=2',
+    sign({ url: url + '?b=2&a=1' }).canonicalRequest.split('\n')[2],
+  )
+  check(
+    'and the string to sign is four lines: the algorithm, the date, the scope and the request hash',
+    canonical.stringToSign.split('\n').length === 4 &&
+      canonical.stringToSign.split('\n')[0] === 'AWS4-HMAC-SHA256' &&
+      canonical.stringToSign.split('\n')[1] === '20260926T055959Z' &&
+      canonical.stringToSign.split('\n')[2] === '20260926/auto/s3/aws4_request' &&
+      canonical.stringToSign.split('\n')[3] === SYNC.sha256Hex(Buffer.from(canonical.canonicalRequest, 'utf8')),
+    canonical.stringToSign.split('\n').join(' | '),
+  )
+
   const keyOf = (sha) => SYNC.objectKeyFor({ prefix: 'mitsu', sha256: sha, ext: 'png' })
   check(
     'the key is sharded by the first two hex characters, the way the attachment store shards',

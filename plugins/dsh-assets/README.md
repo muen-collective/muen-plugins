@@ -144,11 +144,15 @@ content, so a second bucket uploads everything once and a re-sync of a thousand 
 reads the picture; the failure is reported per asset and the ledger gains its key only *after* the bytes are
 away, so a retry re-uploads rather than believing it already went.
 
-**The signer is AWS Signature Version 4**, hand-rolled (no SDK), and it is verified for **structure and
-determinism** — the authorization header's form, the signed header list, the payload hash, and the fact that a
-different secret, region, day or body changes the signature. **It is not verified against a live provider,
-because no target has been ratified (E3 is open)**; the transport is a seam (`putObject`) for exactly that
-reason, and the day a target exists the real proof is one upload.
+**The signer is AWS Signature Version 4**, hand-rolled (no SDK), and it is verified for **structure,
+determinism and the CANONICAL FORM** — the authorization header's form, the signed header list, the payload
+hash, a different secret/region/day/body changing the signature, and the canonical request built to the letter
+(method, URI, empty query, one lower-cased sorted line per header, the signed list, the payload hash; header
+values **trimmed with runs of whitespace collapsed**, which is why `a  b` and `a b` sign the same; query
+parameters sorted by name). **It is not verified against a live provider**, because no target has been ratified
+(E3 is open): `@smithy/signature-v4` is present in the app's tree but its own `@smithy/protocol-http` is not, so
+it cannot be driven as an oracle, and the real proof is one upload to a real bucket. The transport is a seam
+(`putObject`) for exactly that reason.
 
 **Not built: a Settings row for the target.** The route is the seam; a person configures a target by hand or
 through whatever surface is decided later.
