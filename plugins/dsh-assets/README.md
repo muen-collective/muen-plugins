@@ -116,12 +116,16 @@ white pill **slides** under the selected segment (placed arithmetically from `--
 `title` — and each filter is `Menu`, the anchored list Settings uses for a choice, which takes its own
 `anchor`, closes on a choice or an outside press, and hands the keyboard back to the trigger that opened it.
 
-**THE THIRD VIEW IS THE ONE THE STAGE WAS BUILT FOR.** `filmstrip` draws the selected asset in A4's
-`InspectStage` at the pane's width, with the catalog's frames in a one-row strip under it and the facts in
+**THE THIRD VIEW IS GALLERY** — Finder's own word (*"finder also calls it gallery, that's my ignorance"*,
+after calling it filmstrip): its View menu is Icons · List · Columns · **Gallery**, and Lucide's glyph for
+the same shape is `gallery-thumbnails`.
+
+**THE THIRD VIEW IS THE ONE THE STAGE WAS BUILT FOR.** `gallery` draws the selected asset in A4's
+`InspectStage` at the pane's width, with the catalog's thumbnails in a one-row strip under it and the facts in
 the side column — which is told `withStage: false` there, because the big picture already is the stage and
-two would be silly. Nothing selected says so rather than auto-selecting the first frame (that would write to
+two would be silly. Nothing selected says so rather than auto-selecting the first thumbnail (that would write to
 the view file from inside a render). **The switch's three glyphs are Lucide's own — `layout-grid`, `list` and
-`gallery-thumbnails`** (Finder calls the third *filmstrip*; Lucide calls the same shape *gallery-thumbnails*) —
+`gallery-thumbnails`** —
 hand-drawn in the bundle so the control carries ONE drawing style: the harness's grid and rows marks are a
 different family (filled 16-unit geometry) and it ships no gallery glyph at all. All three are 24-unit at
 stroke 1.5, the same grid and weight as the card's mark.
@@ -275,11 +279,12 @@ them.
 node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room,
                            #     the card's own mark (not the folder), the skeleton and
                            #     the sheet that declares what it animates                   42
-node verify/intake.mjs     # A2: the folders, the records, the filters, the carrier       63
+node verify/intake.mjs     # A2: the folders, the records, the filters, the carrier,
+                           #     and every view the switch offers stored by the host       72
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, EVERY folder
                            #     control pressed through to the host, the bar, the two
                            #     columns, hover, a count in words, the segmented view
-                           #     switch, the dropdown filters and the filmstrip            97
+                           #     switch, the dropdown filters and the Gallery view         97
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36

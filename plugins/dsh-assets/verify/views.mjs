@@ -296,7 +296,7 @@ async function render(passes = 4) {
   const list = collect(tree, (node) => node.props && node.props.role === 'tablist')[0]
   check('the view switch is the app’s segmented tablist, labelled', !!list && typeof list.props['aria-label'] === 'string' && list.props['aria-label'].length > 0, list ? String(list.props['aria-label']) : 'none')
   const tabs = collect(tree, (node) => node.props && node.props.role === 'tab' && node.props['data-segment'] !== undefined)
-  check('offering exactly grid, list and filmstrip', tabs.map((node) => node.props['data-segment']).join(',') === 'grid,list,filmstrip', tabs.map((node) => node.props['data-segment']).join(','))
+  check('offering exactly grid, list and gallery', tabs.map((node) => node.props['data-segment']).join(',') === 'grid,list,gallery', tabs.map((node) => node.props['data-segment']).join(','))
   check('as icon buttons whose word is the title', tabs.every((node) => typeof node.props.title === 'string' && node.props.title.length > 0), tabs.map((node) => String(node.props.title)).join(' / '))
   // WHICH GLYPH IS WHICH, pinned by structure — three little squares are easy to confuse, and the
   // founder named these three (2026-09-26: *"lucide icons: layout-grid, list, gallery-thumbnails"*).
@@ -593,7 +593,7 @@ async function render(passes = 4) {
   view = { ...view, selected: null }
 }
 
-// ── 9. Finder's switch, the dropdowns, and the filmstrip ───────────────────────────────────
+// ── 9. Finder's switch, the dropdowns, and the gallery view ────────────────────────────────
 //
 // The founder, 2026-09-26, from Finder's own toolbar: *"can you copy finder switch view w segmented
 // control using icon buttons: grid, list, filmstrip … also use dropdown select menu primitives"*.
@@ -651,29 +651,29 @@ async function render(passes = 4) {
 {
   // THE FILMSTRIP: one picture big, the frames in a strip under it — and the facts beside it
   // WITHOUT a second stage, because the big one already is the stage.
-  view = { ...view, view: 'filmstrip', context: null, date: null, selected: null }
+  view = { ...view, view: 'gallery', context: null, date: null, selected: null }
   let tree = await render()
-  check('the filmstrip view is drawn when the view file says so', collect(tree, (node) => node.props && node.props['data-assets-filmstrip'] === 'yes').length === 1, 'no filmstrip')
-  check('with nothing picked it says so rather than guessing a frame', collect(tree, (node) => node.props && node.props['data-assets-film-empty'] === 'yes').length === 1, 'no hint')
+  check('the gallery view is drawn when the view file says so', collect(tree, (node) => node.props && node.props['data-assets-gallery'] === 'yes').length === 1, 'no gallery')
+  check('with nothing picked it says so rather than guessing a thumbnail', collect(tree, (node) => node.props && node.props['data-assets-gallery-empty'] === 'yes').length === 1, 'no hint')
   const frames = collect(tree, (node) => node.props && node.props['data-assets-frame'] !== undefined)
-  check('and the strip holds every asset in the catalog', frames.length === 2, frames.length + ' frames')
+  check('and the thumbnail strip holds every asset in the catalog', frames.length === 2, frames.length + ' frames')
   check('each one a selectable option, with none selected', frames.every((node) => node.props.role === 'option') && frames.every((node) => node.props['aria-selected'] === 'false'), frames.map((node) => node.props['aria-selected']).join(','))
 
   posted.length = 0
   if (frames[0]) {
     frames[0].props.onClick()
     await settle()
-    check('pressing a frame selects it, like any other tile', posted.some((entry) => entry.url.includes('/view') && entry.body.selected === RECORDED), JSON.stringify(posted.slice(-2)))
+    check('pressing a thumbnail selects it, like any other tile', posted.some((entry) => entry.url.includes('/view') && entry.body.selected === RECORDED), JSON.stringify(posted.slice(-2)))
   } else {
-    check('pressing a frame selects it, like any other tile', false, 'the strip drew no frame to press')
+    check('pressing a thumbnail selects it, like any other tile', false, 'the strip drew no thumbnail to press')
   }
 
   view = { ...view, selected: RECORDED }
   tree = await render()
   const stage = collect(tree, (node) => node.props && node.props['data-assets-stage'] === 'yes')
-  check('a picked frame is drawn big, in the stage A4 built', stage.length === 1, stage.length + ' stages')
+  check('a picked thumbnail is drawn big, in the stage A4 built', stage.length === 1, stage.length + ' stages')
   const marked = collect(tree, (node) => node.props && node.props['data-assets-frame-on'] === 'yes')
-  check('and its frame is the marked one in the strip', marked.length === 1 && marked[0].props['data-assets-frame'] === RECORDED, marked.length ? String(marked[0].props['data-assets-frame']) : 'none')
+  check('and its thumbnail is the marked one in the strip', marked.length === 1 && marked[0].props['data-assets-frame'] === RECORDED, marked.length ? String(marked[0].props['data-assets-frame']) : 'none')
   const meta = collect(tree, (node) => node.props && node.props['data-assets-meta'] === 'yes')[0]
   check('the block beside it draws the facts and NOT a second picture', !!meta && collect(meta, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 0, meta ? 'facts only' : 'no block')
   view = { ...view, view: 'grid', selected: null }

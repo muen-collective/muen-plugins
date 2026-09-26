@@ -74,7 +74,15 @@ const TYPE_BY_EXT = {
 const VIEW_SCHEMA = 'muen-assets-view/v1'
 
 /** The two layouts a person can leave behind. */
-const VIEWS = ['grid', 'list']
+/**
+ * The layouts a person can leave behind. THE CLIENT'S SWITCH AND THIS LIST MUST AGREE: the route
+ * stores `body.view` only when it is in here, so a view the switch offers and this list does not know
+ * is SILENTLY DROPPED — the choice looks like it took and the next read puts the old one back.
+ * That is exactly what happened to `gallery` on 2026-09-26: the third view shipped in the client and
+ * this list still said two, and nothing failed. `verify/intake.mjs` now posts every value the client's
+ * switch offers and asserts the host stores each one.
+ */
+const VIEWS = ['grid', 'list', 'gallery']
 
 /** Refuse a body past this — the only bodies here are a path and a verb. */
 const MAX_BODY_BYTES = 8192

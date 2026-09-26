@@ -102,8 +102,8 @@ window.__ModuleLoader__.load({
       'pane.view': 'View',
       'pane.view.grid': 'Grid',
       'pane.view.list': 'List',
-      'pane.view.filmstrip': 'Filmstrip',
-      'pane.filmstrip.pick': 'Pick a frame below to look at it closely',
+      'pane.view.gallery': 'Gallery',
+      'pane.gallery.pick': 'Pick a thumbnail below to look at it closely',
       'pane.search.placeholder': 'Search by name or prompt',
       'pane.selected': 'Selected',
       'meta.title': 'Metadata',
@@ -180,8 +180,8 @@ window.__ModuleLoader__.load({
       'pane.view': '视图',
       'pane.view.grid': '网格',
       'pane.view.list': '列表',
-      'pane.view.filmstrip': '胶片',
-      'pane.filmstrip.pick': '在下方选择一帧以便细看',
+      'pane.view.gallery': '画廊',
+      'pane.gallery.pick': '在下方选择缩略图以便细看',
       'pane.search.placeholder': '按名称或提示词搜索',
       'pane.selected': '已选择',
       'meta.title': '元数据',
@@ -298,15 +298,15 @@ window.__ModuleLoader__.load({
       skeletonTile: { border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, overflow: 'hidden', background: 'var(--dsw-alias-bg-layer-2)' },
       skeletonBlock: { background: 'var(--dsw-alias-bg-skeleton)' },
 
-      // ── the filmstrip (founder, 2026-09-26, from Finder) ─────────────────
+      // ── the gallery (founder, 2026-09-26, from Finder) ──────────────────
       //
       // THE FRAME IS THE PANE'S WIDTH and the strip is one row of 56×74 cells under it: the stage
       // A4 already draws, with the catalog's own thumbnails beneath.
-      film: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, flex: '1 1 auto' },
-      filmStage: { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 200, borderRadius: 10, background: 'var(--dsw-alias-bg-layer-2)', overflow: 'hidden' },
-      filmPreview: { maxWidth: '100%', maxHeight: 420, objectFit: 'contain', display: 'block' },
-      filmHint: { padding: 24, textAlign: 'center' },
-      filmStrip: { display: 'flex', gap: 6, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4 },
+      gallery: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, flex: '1 1 auto' },
+      galleryStage: { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 200, borderRadius: 10, background: 'var(--dsw-alias-bg-layer-2)', overflow: 'hidden' },
+      galleryPreview: { maxWidth: '100%', maxHeight: 420, objectFit: 'contain', display: 'block' },
+      galleryHint: { padding: 24, textAlign: 'center' },
+      galleryStrip: { display: 'flex', gap: 6, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4 },
       frame: { flex: '0 0 auto', width: 56, height: 74, padding: 0, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-2)', cursor: 'pointer', overflow: 'hidden' },
       frameOn: { borderColor: 'var(--dsw-alias-brand-primary)' },
       frameImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
@@ -685,8 +685,8 @@ window.__ModuleLoader__.load({
       const options = [
         { value: 'grid', title: t('pane.view.grid'), label: h(IconLayoutGrid, { size: 14 }) },
         { value: 'list', title: t('pane.view.list'), label: h(IconList, { size: 14 }) },
-        // Finder calls this one filmstrip; Lucide calls the same shape `gallery-thumbnails`.
-        { value: 'filmstrip', title: t('pane.view.filmstrip'), label: h(IconGalleryThumbnails, { size: 14 }) },
+        // Finder's own Gallery, drawn with Lucide's `gallery-thumbnails`.
+        { value: 'gallery', title: t('pane.view.gallery'), label: h(IconGalleryThumbnails, { size: 14 }) },
       ]
       return h(
         'span',
@@ -857,7 +857,7 @@ window.__ModuleLoader__.load({
      * file a run made also carries the way back into that run's own pane (S7).
      */
     /**
-     * THE THIRD VIEW (founder, 2026-09-26, reading Finder: *"grid, list, filmstrip"*): one picture
+     * THE THIRD VIEW (founder, 2026-09-26, reading Finder: *"grid, list, filmstrip"*, and then, on second thought, *"finder also calls it gallery, that's my ignorance"* — Finder's own View menu is Icons · List · Columns · **Gallery**, and Lucide's glyph for it is `gallery-thumbnails`): one picture
      * big, the frames in a strip under it, the facts beside it. It is the view A4's inspect stage was
      * built for — the stage is the SAME component the metadata block draws, at the pane's width, so
      * the zoom, the pan and the 1:1 control arrive with it and nothing is written twice.
@@ -866,23 +866,23 @@ window.__ModuleLoader__.load({
      * preview, the way every other tile does. Nothing selected yet says so and waits — auto-selecting
      * the first frame would write to the view file from inside a render.
      */
-    function FilmstripView({ assets, selected, onSelect, detail, t }) {
+    function GalleryView({ assets, selected, onSelect, detail, t }) {
       const ready = detail && detail.path === selected
       return h(
         'div',
-        { style: S.film, 'data-assets-filmstrip': 'yes' },
+        { style: S.gallery, 'data-assets-gallery': 'yes' },
         h(
           'div',
-          { style: S.filmStage, 'data-assets-film-stage': 'yes' },
+          { style: S.galleryStage, 'data-assets-gallery-stage': 'yes' },
           selected === null || selected === undefined
-            ? h('span', { style: { ...S.muted, ...S.filmHint }, 'data-assets-film-empty': 'yes' }, t('pane.filmstrip.pick'))
+            ? h('span', { style: { ...S.muted, ...S.galleryHint }, 'data-assets-gallery-empty': 'yes' }, t('pane.gallery.pick'))
             : ready
               ? h(InspectStage, { detail, t })
-              : h('img', { style: S.filmPreview, src: '/plugins/assets/file?path=' + encodeURIComponent(selected) + '&w=1024', alt: '', 'data-assets-film-preview': 'yes' }),
+              : h('img', { style: S.galleryPreview, src: '/plugins/assets/file?path=' + encodeURIComponent(selected) + '&w=1024', alt: '', 'data-assets-gallery-preview': 'yes' }),
         ),
         h(
           'div',
-          { style: S.filmStrip, 'data-assets-film-strip': 'yes', role: 'listbox', 'aria-label': t('pane.view.filmstrip') },
+          { style: S.galleryStrip, 'data-assets-gallery-strip': 'yes', role: 'listbox', 'aria-label': t('pane.view.gallery') },
           ...assets.map((asset) =>
             h(
               'button',
@@ -949,7 +949,7 @@ window.__ModuleLoader__.load({
         { style: S.meta, 'data-assets-meta': 'yes' },
         h('span', { style: S.metaHead }, t('meta.title')),
         // The stage first: the facts describe the picture, so the picture leads.
-        // In the filmstrip the stage is already the pane's main column, so the block draws its
+        // In the gallery the stage is already the pane's main column, so the block draws its
         // facts only — one picture, not two (`withStage`).
         withStage && picture ? h(InspectStage, { detail, t }) : null,
         ...rows.map(([key, value]) => h('div', { key: 'f:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
@@ -1002,7 +1002,7 @@ window.__ModuleLoader__.load({
       const [hoveredPath, setHoveredPath] = React.useState(null)
 
       const chosen = view.data || { view: 'grid', context: null, date: null, selected: null }
-      const layout = chosen.view === 'list' ? 'list' : chosen.view === 'filmstrip' ? 'filmstrip' : 'grid'
+      const layout = chosen.view === 'list' ? 'list' : chosen.view === 'gallery' ? 'gallery' : 'grid'
       const context = chosen.context
       const date = chosen.date
       const selectedPath = chosen.selected
@@ -1281,8 +1281,8 @@ window.__ModuleLoader__.load({
             { style: S.columnMain, 'data-assets-main': 'yes' },
             shownAssets.length === 0
               ? h('span', { style: S.muted, 'data-assets-none': 'yes' }, total === 0 ? t('pane.none') : t('pane.none.match'))
-              : layout === 'filmstrip'
-                ? h(FilmstripView, { assets: shownAssets, selected: selectedPath, onSelect: select, detail: detail.data, t })
+              : layout === 'gallery'
+                ? h(GalleryView, { assets: shownAssets, selected: selectedPath, onSelect: select, detail: detail.data, t })
                 : layout === 'grid'
                 ? h(
                     'div',
@@ -1300,7 +1300,7 @@ window.__ModuleLoader__.load({
             ? h(
                 'div',
                 { style: S.columnSide, 'data-assets-side': 'yes' },
-                h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t, openGenerate, generateReady, withStage: layout !== 'filmstrip' }),
+                h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t, openGenerate, generateReady, withStage: layout !== 'gallery' }),
               )
             : null,
         ),

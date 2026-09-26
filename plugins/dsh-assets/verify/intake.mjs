@@ -22,7 +22,8 @@
  *
  *   node verify/intake.mjs
  */
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -33,6 +34,7 @@ const { chooseStart } = await import(pathToFileURL(join(ROOT, 'lib/folder-action
 const FOLDERS_PATH = '/plugins/assets/folders'
 const CATALOG_PATH = '/plugins/assets/catalog'
 const DETAIL_PATH = '/plugins/assets/detail'
+const VIEW_PATH = '/plugins/assets/view'
 
 const { check, note, finish } = reporter('verify:intake — epic 63 A2 (folders, records, and the two filters)')
 
@@ -117,6 +119,7 @@ module.apply(ctx, { folders: dialog, argv: ['node', 'verify'], env: process.env 
 const foldersHandler = server.routes.find((route) => route.path === FOLDERS_PATH).handler
 const catalogHandler = server.routes.find((route) => route.path === CATALOG_PATH).handler
 const detailHandler = server.routes.find((route) => route.path === DETAIL_PATH).handler
+const viewHandler = server.routes.find((route) => route.path === VIEW_PATH).handler
 const paths = server.routes.map((route) => route.path)
 
 const call = (handler, method, path, body) => callRoute(handler, method, path, body)
@@ -126,6 +129,49 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
 {
   check('the routes A2 needs are mounted', [FOLDERS_PATH, CATALOG_PATH].every((path) => paths.includes(path)), paths.join(', '))
   check('neither carries a trailing slash (the contract)', paths.every((path) => !path.endsWith('/')), paths.join(', '))
+}
+
+// ── 1b. THE VIEW FILE, and the values the switch actually offers ─────────────
+//
+// THIS BLOCK EXISTS BECAUSE NOTHING TESTED IT AND SOMETHING BROKE. The route stores `body.view`
+// only when it is in `VIEWS`, so a view the client's switch offers and the host does not know is
+// SILENTLY DROPPED: the press looks like it took and the next read puts the old value back. That
+// is exactly what `gallery` did on 2026-09-26 for as long as it existed — the third view shipped
+// in the client half while the host half still said `['grid', 'list']`, every suite was green, and
+// the pane quietly snapped back to the previous view. So the list is not copied here: it is READ
+// OFF THE CLIENT, posted one value at a time, and each one must come back stored.
+
+{
+  const clientSource = await readFile(join(ROOT, 'lib/client.js'), 'utf8')
+  const viewToggleAt = clientSource.indexOf('function ViewToggle(')
+  const viewToggle = clientSource.slice(viewToggleAt, clientSource.indexOf('\n    }', viewToggleAt))
+  const offered = [...viewToggle.matchAll(/value: '([a-z]+)'/g)].map((match) => match[1])
+  check('the switch offers more than one view', offered.length >= 2, offered.join(', '))
+
+  for (const view of offered) {
+    const res = await call(viewHandler, 'POST', VIEW_PATH, { view })
+    const body = res.json()
+    check(
+      'the host STORES the view the switch offers: ' + view,
+      res.statusCode === 200 && body.view === view,
+      'asked for ' + view + ', got ' + JSON.stringify(body.view),
+    )
+    const again = await call(viewHandler, 'GET', VIEW_PATH)
+    check('and it is still there on the next read: ' + view, again.json().view === view, JSON.stringify(again.json().view))
+  }
+
+  const unknown = await call(viewHandler, 'POST', VIEW_PATH, { view: 'columns' })
+  check(
+    'a view the host does not know is ignored rather than fatal — the current one stands',
+    unknown.statusCode === 200 && offered.includes(unknown.json().view),
+    JSON.stringify(unknown.json().view),
+  )
+
+  const badDate = await call(viewHandler, 'POST', VIEW_PATH, { date: '26-09-2026' })
+  check('and a date that is not YYYY-MM-DD is refused, not stored', badDate.statusCode === 400 && badDate.json().error === 'bad-date', badDate.statusCode + ' ' + JSON.stringify(badDate.json()))
+
+  // Leave the file where the suite found it.
+  await call(viewHandler, 'POST', VIEW_PATH, { view: 'grid', date: null, selected: null })
 }
 
 // ── 2. it starts empty ──────────────────────────────────────────────────────
