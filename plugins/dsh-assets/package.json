@@ -21,7 +21,8 @@
     "verify:views": "node verify/views.mjs",
     "verify:preview": "node verify/preview.mjs",
     "verify:handoff": "node verify/handoff.mjs",
-    "verify:inspect": "node verify/inspect.mjs"
+    "verify:inspect": "node verify/inspect.mjs",
+    "verify:sync": "node verify/sync.mjs"
   },
   "dsh": {
     "bundle": {

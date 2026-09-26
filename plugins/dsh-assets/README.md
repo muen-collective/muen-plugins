@@ -61,6 +61,7 @@ absent and neither reaches across.
 | `GET /plugins/assets/catalog?context=&date=` | the tiles, the two filter groups with their counts, and the roots it looked in. A record's own settled date wins over a file's mtime; counts are over **everything scanned**, so a filter row does not move its own number |
 | `GET /plugins/assets/detail?path=` | one asset, whole: dimensions (read from the file's own header), format, bytes, date, context, **where it is**, **what the file itself carries** (`carrier`: does it hold a ComfyUI graph, and how big — epic 64 S8), the run that made it, the prompt verbatim and the values it ran with. **Containment is the model**: a path outside an added folder is 404 |
 | `GET /plugins/assets/file?path=` · `&w=` | the bytes of an asset the library holds — the tile's picture. Same containment, `no-store` like every other answer: a cached 200 would keep showing a picture that has been moved. **With `w=` it answers a preview** (32–2048px, made once into `<profile>/assets/proxies/` and named by the original's path+mtime+size+width), so a folder of 1,296 pictures is not 1,296 originals drawn into a wall of tiles. `X-Assets-Preview: 1` says it is the preview; **every fallback serves the picture** — a host with no resizer, a video, a failed resize — so a slow grid beats a broken one |
+| `GET /plugins/assets/sync` · `POST /plugins/assets/sync` | **the optional S3-compatible sync** (epic 63 A5), and it is **off until a target is configured**: `GET` answers the target and how many keys it already holds (never the secret), `POST { action: 'target', … }` stores one or clears it with `path: null`, `POST { action: 'asset', path }` syncs one picture. The object key comes from the **bytes** (`<prefix>/<aa>/<sha256>.<ext>`, the shard the attachment store uses), so the same picture is one object however it was named; `<profile>/assets/synced.json` is the ledger that makes a **second sync a no-op without a network round trip** and is per target; the secret is a **reference** into the `credentials` seam; and a failure **never deletes the local copy** — this route only reads it, and the ledger gains a key only after the bytes are away |
 | `GET /plugins/assets/view` · `POST /plugins/assets/view` | the view a person left behind: the layout, the two filters, the selected tile. **The harness does not restore tabs in this shell** (its layout store is localStorage under an origin the shell randomises with `--port 0`), so this file is what survives a reload |
 
 The two filters are the MVP's, and the founder chose them: *"I'd ship context + date and let the search box cover
@@ -126,6 +127,32 @@ is said out loud:
 reads its source to confirm it consumes exactly those three params. Shipped alone, that last check says so
 instead of failing.
 
+## The optional sync (epic 63 A5)
+
+**Off by default, and that is the first rule**: nothing is sent unless a target has been configured, so a
+library never phones home because it could. The target lives in `<profile>/assets/sync.json` — an https
+endpoint, a bucket, a region, a prefix and an **access key id**; the secret is a *reference* into the
+`credentials` seam, never a value on disk, and the status route answers whether one resolves rather than what
+it is.
+
+**Content-addressed**: the key is derived from the bytes (`<prefix>/<aa>/<sha256>.<ext>` — the same shard shape
+`$DSH_HOME/attachments/v1/objects/` uses), so the same picture is one object however it was named, and the same
+bytes picked in two sessions upload once. **A second sync is a no-op decided by a ledger, not by the network**:
+`<profile>/assets/synced.json` records which keys a given target holds, keyed by the target as well as the
+content, so a second bucket uploads everything once and a re-sync of a thousand pictures costs zero requests.
+**A failed upload never deletes the local copy** — there is nothing to delete, because this half only ever
+reads the picture; the failure is reported per asset and the ledger gains its key only *after* the bytes are
+away, so a retry re-uploads rather than believing it already went.
+
+**The signer is AWS Signature Version 4**, hand-rolled (no SDK), and it is verified for **structure and
+determinism** — the authorization header's form, the signed header list, the payload hash, and the fact that a
+different secret, region, day or body changes the signature. **It is not verified against a live provider,
+because no target has been ratified (E3 is open)**; the transport is a seam (`putObject`) for exactly that
+reason, and the day a target exists the real proof is one upload.
+
+**Not built: a Settings row for the target.** The route is the seam; a person configures a target by hand or
+through whatever surface is decided later.
+
 ## Looking at one picture closely (epic 63 A4)
 
 **Zoom is arithmetic, not WebGL.** The hard part — keeping the point under the cursor under the
@@ -190,6 +217,7 @@ node verify/views.mjs      # A3: the grid, the tile, the metadata block, the car
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36
+node verify/sync.mjs       # A5: off by default, content-addressed, failure-safe              33
 ```
 
 The suites share `verify/harness.mjs`: a reporter, the server fakes, and enough React to render a

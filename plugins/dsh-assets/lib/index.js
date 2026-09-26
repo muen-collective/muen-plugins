@@ -26,6 +26,7 @@ import { resolveDataRoot, resolveRecordsRoot } from './paths.js'
 import { expandFolder, readFolders, writeFolders } from './folders.js'
 import { assetDetail, readCatalog } from './catalog.js'
 import { chooseStart, nativeFolders } from './folder-actions.js'
+import { extFor as syncExt, normaliseConfig, publicConfig, readLedger, readSyncConfig, syncAsset, writeSyncConfig } from './sync.js'
 import { canPreview, previewFor } from './preview.js'
 
 /** Matches the row id in cordis.patch.yml. */
@@ -41,6 +42,8 @@ const DETAIL_PATH = '/plugins/assets/detail'
 const FILE_PATH = '/plugins/assets/file'
 /** The view a person left behind: grid or list, the filters, the selection. */
 const VIEW_PATH = '/plugins/assets/view'
+/** The optional sync (epic 63 A5): its target, its ledger, and one asset at a time. */
+const SYNC_PATH = '/plugins/assets/sync'
 
 /**
  * What an asset's extension means on the wire. Written out here rather than imported from
@@ -453,12 +456,112 @@ export function apply(ctx, config = {}) {
     send(res, 200, next)
   }
 
+  /**
+   * THE SYNC ROUTE (epic 63 A5). Three actions on one exact path:
+   *
+   *   `status`  — is a target configured, which one, and how many keys it already holds. NEVER
+   *               the secret: it answers whether one RESOLVES, which is the only fact a page
+   *               needs and the only one it may have.
+   *   `target`  — store a target, or clear it with `path: null`. The secret is a REFERENCE into
+   *               the `credentials` seam, so nothing here writes a key to disk.
+   *   `asset`   — sync one asset, which is content-addressed and a no-op when the ledger says
+   *               this target already holds those bytes.
+   *
+   * A failure NEVER deletes the local picture: this route only reads the file, and the ledger
+   * gains a key only after the bytes are away, so a retry re-uploads.
+   */
+  const syncRoute = async (req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    if (method === 'GET') {
+      const config = await readSyncConfig(own.root)
+      const ledger = await readLedger(own.root)
+      send(res, 200, { ...publicConfig(config), synced: Object.values(ledger.targets).reduce((total, keys) => total + (Array.isArray(keys) ? keys.length : 0), 0) })
+      return
+    }
+    if (method !== 'POST') {
+      res.setHeader('Allow', 'GET, POST')
+      send(res, 405, { error: 'method-not-allowed' })
+      return
+    }
+    const body = await readJsonBody(req)
+    if (body === undefined) {
+      send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
+      return
+    }
+    if (body.action === 'target') {
+      if (body.path === null) {
+        await writeSyncConfig(own.root, null)
+        send(res, 200, { ...publicConfig(null) })
+        return
+      }
+      // VALIDATE FIRST, WRITE SECOND. A target that cannot be used must not replace the one
+      // that can: the first cut wrote whatever it was handed and then checked the result, so a
+      // refused target silently turned sync OFF for a library that had a working one. The
+      // suite caught it, which is what the suite is for.
+      const next = normaliseConfig({ ...body, schema: undefined, enabled: true })
+      if (next === null) {
+        send(res, 400, { error: 'bad-target', detail: 'an https endpoint, a bucket and an access key id are required' })
+        return
+      }
+      await writeSyncConfig(own.root, next)
+      send(res, 200, { ...publicConfig(next), stored: true })
+      return
+    }
+    if (body.action === 'asset') {
+      const config = await readSyncConfig(own.root)
+      if (config === null) {
+        // OFF BY DEFAULT is an answer, not an error: nothing is configured, so nothing is sent.
+        send(res, 200, { enabled: false, already: false, uploaded: false })
+        return
+      }
+      const registry = await readFolders(own.root)
+      const wanted = str(body.path)
+      const folder = registry.folders.find((entry) => wanted === entry.path || wanted.startsWith(entry.path.replace(/\/+$/, '') + '/'))
+      if (wanted === null || !folder) {
+        send(res, 404, { error: 'not-in-library', detail: 'that path is not inside a folder this library holds' })
+        return
+      }
+      const secret = await syncSecret(config)
+      if (secret.error) {
+        send(res, secret.error === 'no-key' ? 400 : 500, { error: secret.error, detail: 'the target\'s secret does not resolve' })
+        return
+      }
+      const outcome = await syncAsset({
+        root: own.root,
+        config,
+        path: wanted,
+        ext: syncExt(wanted),
+        secretAccessKey: secret.value,
+        fetchImpl: config.fetchImpl,
+      })
+      const status = outcome.error === 'disabled' || outcome.error === undefined ? 200 : outcome.error === 'unreachable' || outcome.error === 'timeout' ? 502 : 502
+      send(res, status, { enabled: true, ...outcome })
+      return
+    }
+    send(res, 400, { error: 'unknown-action', detail: '"' + str(body.action) + '" is not a sync action' })
+  }
+
+  /** The target's secret, resolved from the `credentials` seam by reference — never stored here. */
+  const syncSecret = async (config) => {
+    const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
+    if (!credentials) return { error: 'no-credentials' }
+    let resolved
+    try {
+      resolved = await credentials.resolve(config.secretRef)
+    } catch {
+      return { error: 'credentials-unavailable' }
+    }
+    if (!resolved || !resolved.value) return { error: 'no-key' }
+    return { value: resolved.value }
+  }
+
   const mount = (server) => {
     ctx.effect(() => server.register({ kind: 'exact', path: FOLDERS_PATH, handler: foldersRoute }), 'assets: folders')
     ctx.effect(() => server.register({ kind: 'exact', path: CATALOG_PATH, handler: catalogRoute }), 'assets: catalog')
     ctx.effect(() => server.register({ kind: 'exact', path: DETAIL_PATH, handler: detailRoute }), 'assets: detail')
     ctx.effect(() => server.register({ kind: 'exact', path: FILE_PATH, handler: fileRoute }), 'assets: file')
     ctx.effect(() => server.register({ kind: 'exact', path: VIEW_PATH, handler: viewRoute }), 'assets: view')
+    ctx.effect(() => server.register({ kind: 'exact', path: SYNC_PATH, handler: syncRoute }), 'assets: sync')
   }
 
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined
