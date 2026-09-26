@@ -70,6 +70,13 @@ used, and **a run that settles is written at once**: its job id is the one thing
 session, and the strip already reads that id live. The id the store answers with travels on every later write,
 so an autosaving pane never has to know whether this is the first one.
 
+**And its picked files come back through the provider** (epic 64 S6): a door's recorded value is a provider
+handle, and that handle may be dead by the time a session is resumed, so the surface records each image door's
+**kept copy** (the sha256 the host stored it under) in the session and, on resume, asks
+`POST …/providers/<id>/restore` for a **fresh handle**. **A door with no kept copy comes back EMPTY** rather
+than holding a handle nobody can check — a form that looks filled and cannot run is worse than one that says it
+needs a picture. A cleared door drops its copy.
+
 **And a tab can come back to it**: `openTab('generate', { params: { session } })` (epic 64 S6) reads the
 session, opens the workflow that session names — a session carries its provider and adapter, so unlike
 `params.run` it needs nothing beside it — and fills the form with the values that were used **on top of** the

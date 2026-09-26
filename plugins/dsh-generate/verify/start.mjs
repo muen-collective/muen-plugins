@@ -376,6 +376,8 @@ const linesOf = (tree, out = []) => {
 // ── the shipped client half, loaded the way the browser loads it ─────────────
 
 /** Every interval the client half registered, newest last. */
+/** The hash the stub host keeps a picked file under, so a session and a restore agree on it. */
+const KEPT_SHA = 'c'.repeat(64)
 const timers = []
 /**
  * The DEBOUNCED writes (the session autosave) record their callbacks the same way the poll
@@ -782,6 +784,7 @@ function stubHost({
   // THE SESSION STORE the pane writes to (epic 64 S5/S6): a tiny in-memory host, so a case
   // can read back what the surface autosaved — and seed one, for the resume path.
   const sessions = new Map()
+  const restores = []
   let sessionSeq = 0
   const sessionRoute = (url, init) => {
     const method = (init.method || 'GET').toUpperCase()
@@ -808,6 +811,8 @@ function stubHost({
     assets,
     /** What the surface autosaved, and a way to seed a session the pane will resume. */
     sessions,
+    /** Every re-upload of a kept input the surface asked for, in order. */
+    restores,
     seedSession: (stored) => sessions.set(stored.id, stored),
     /** What the next upload answers: a URL for Krea, an opaque fileName for RunningHub. */
     set assetUrl(next) {
@@ -828,13 +833,22 @@ function stubHost({
       if (String(url).includes('/results?')) {
         return ok({ name: 'stub', rows: resultRows, total: resultRows.length, truncated: false })
       }
+      if (String(url).endsWith('/restore')) {
+        // RE-UPLOAD A KEPT INPUT (epic 64 S6): the body names a door and a hash, the host finds
+        // the file, and the answer is a fresh handle.
+        const body = JSON.parse(init.body || '{}')
+        restores.push({ url: String(url), door: body.door || null, sha256: body.sha256 || null })
+        return ok({ url: 'https://assets.krea.ai/restored-' + restores.length + '.png', door: body.door || null, sha256: body.sha256 || null, bytes: 8 })
+      }
       if (String(url).endsWith('/asset')) {
         assets.push({
           url: String(url),
           name: (init && init.headers && init.headers['x-file-name']) || null,
           type: (init && init.headers && init.headers['content-type']) || null,
         })
-        return ok({ url: assetAnswer })
+        // The host keeps the picked file and answers its hash beside the handle (epic 64 S2):
+        // the stub does the same, because the surface now records it in the session.
+        return ok({ url: assetAnswer, kept: { sha256: KEPT_SHA, file: '/profile/uploads/' + KEPT_SHA + '.png', name: 'photo.png', type: 'image/png', existed: false } })
       }
       // The payload preview, built here the way the host builds it (verify/run.mjs still
       // drives this route, though the surface stopped calling it when the confirmation
@@ -4697,6 +4711,119 @@ const bodyOf = (call) => JSON.parse(String(call.body))
       'and the session was not rewritten just by opening it',
       sessionPosts(stub).length === 0,
       JSON.stringify(sessionPosts(stub).map((call) => call.url)),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// ── A RESUMED SESSION'S PICKED FILES COME BACK THROUGH THE PROVIDER (epic 64 S6) ──
+//
+// A record's image door holds a PROVIDER HANDLE, and by the time a session is resumed it may
+// be dead. The copy the host kept (S2) is what makes it fresh: the surface records each door's
+// hash in the session, and on resume it asks the host to re-upload — a door with NO copy comes
+// back EMPTY rather than holding a handle nobody can check.
+
+{
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: ARRAYS_UNIT.name, provider: 'krea' }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [], kreaUnits: [ARRAYS_UNIT], file: ARRAYS, jobStates: ['done'], resultRows: [] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let tree = await settle(paneSlot.component, props, 'pane-keeps-upload')
+    const openAdvanced = byAttr(tree, 'data-generate-advanced')
+    if (openAdvanced) openAdvanced.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-keeps-upload')
+    const upload = byAttr(tree, 'data-generate-upload', 'image_url')
+    check('the surface has an image door to pick into', !!upload, upload ? 'drawn' : 'no door')
+    if (upload) upload.props.onChange({ target: { files: [{ name: 'photo.png', type: 'image/png' }], value: 'C:\\fakepath\\photo.png' } })
+    tree = await settle(paneSlot.component, props, 'pane-keeps-upload')
+    const pending = timeouts.at(-1)
+    if (typeof pending === 'function') pending()
+    tree = await settle(paneSlot.component, props, 'pane-keeps-upload')
+    const written = sessionPosts(stub).map(bodyOf)
+    const last = written[written.length - 1] || {}
+    check(
+      'a picked file is recorded in the session under the hash the host kept it as',
+      !!last.uploads && !!last.uploads.image_url && last.uploads.image_url.sha256 === KEPT_SHA,
+      JSON.stringify(last.uploads),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+{
+  // A SESSION WITH A COPY: the door is re-uploaded and holds the FRESH handle.
+  const stub = stubHost({ units: [], kreaUnits: [ARRAYS_UNIT], file: ARRAYS, jobStates: ['done'], resultRows: [] })
+  stub.seedSession({
+    schema: 'muen-generate-session/v1',
+    id: 's-pics',
+    provider: 'krea',
+    adapter: ARRAYS_UNIT.name,
+    title: ARRAYS_UNIT.title,
+    createdAt: '2026-09-26T00:00:00.000Z',
+    updatedAt: '2026-09-26T00:00:00.000Z',
+    open: true,
+    values: { image_url: 'api/dead-handle.png' },
+    uploads: { image_url: { sha256: KEPT_SHA, file: '/profile/uploads/' + KEPT_SHA + '.png', name: 'photo.png', type: 'image/png' } },
+    runIds: [],
+  })
+  const props = { t, useTabInfo: () => ({ tab: { navigation: { params: { session: 's-pics' }, revision: 1 } } }) }
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let tree = await settle(paneSlot.component, props, 'pane-restores-upload')
+    const openRestore = byAttr(tree, 'data-generate-advanced')
+    if (openRestore) openRestore.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-restores-upload')
+    check(
+      'a resumed session asks the host to re-upload the copy it kept',
+      stub.restores.length === 1 && stub.restores[0].sha256 === KEPT_SHA && stub.restores[0].door === 'image_url',
+      JSON.stringify(stub.restores),
+    )
+    check(
+      'and the door then holds the FRESH handle rather than the dead one the record carried',
+      !!byAttr(tree, 'data-generate-thumb', 'image_url') && !byAttr(tree, 'data-generate-upload', 'image_url'),
+      JSON.stringify({ thumb: !!byAttr(tree, 'data-generate-thumb', 'image_url'), empty: !!byAttr(tree, 'data-generate-upload', 'image_url') }),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+{
+  // A SESSION WITH NO COPY: empty and honest, rather than a handle nobody can check.
+  const stub = stubHost({ units: [], kreaUnits: [ARRAYS_UNIT], file: ARRAYS, jobStates: ['done'], resultRows: [] })
+  stub.seedSession({
+    schema: 'muen-generate-session/v1',
+    id: 's-old',
+    provider: 'krea',
+    adapter: ARRAYS_UNIT.name,
+    title: ARRAYS_UNIT.title,
+    createdAt: '2026-09-26T00:00:00.000Z',
+    updatedAt: '2026-09-26T00:00:00.000Z',
+    open: true,
+    values: { image_url: 'api/dead-handle.png' },
+    uploads: {},
+    runIds: [],
+  })
+  const props = { t, useTabInfo: () => ({ tab: { navigation: { params: { session: 's-old' }, revision: 1 } } }) }
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let tree = await settle(paneSlot.component, props, 'pane-no-copy')
+    const openNone = byAttr(tree, 'data-generate-advanced')
+    if (openNone) openNone.props.onClick()
+    tree = await settle(paneSlot.component, props, 'pane-no-copy')
+    check('a session with no kept copy asks for no re-upload', stub.restores.length === 0, JSON.stringify(stub.restores))
+    check(
+      'and its image door comes back EMPTY rather than holding a handle nobody can check',
+      !!byAttr(tree, 'data-generate-upload', 'image_url') && !byAttr(tree, 'data-generate-thumb', 'image_url'),
+      JSON.stringify({ empty: !!byAttr(tree, 'data-generate-upload', 'image_url'), thumb: !!byAttr(tree, 'data-generate-thumb', 'image_url') }),
     )
   } finally {
     globalThis.fetch = real

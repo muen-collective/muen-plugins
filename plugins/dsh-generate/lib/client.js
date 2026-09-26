@@ -2795,7 +2795,33 @@ window.__ModuleLoader__.load({
       if (!response.ok || !body || typeof body.url !== 'string') {
         return { ok: false, error: (body && body.error) || 'host-error', detail: body && body.detail }
       }
-      return { ok: true, url: body.url }
+      // THE KEPT COPY TRAVELS BACK WITH THE HANDLE (epic 64 S2/S6): the host wrote the bytes
+      // once under its hash, and that hash is what a resumed session re-uploads from. A host
+      // too old to answer `kept` simply has none, which is why this is a field and not an
+      // assumption.
+      return { ok: true, url: body.url, kept: body.kept && typeof body.kept.sha256 === 'string' ? body.kept : null }
+    }
+
+    /**
+     * RE-UPLOAD A KEPT INPUT, and answer the FRESH handle (epic 64 S6).
+     *
+     * The body names a door and the hash of the copy; the host finds the file itself. A door
+     * whose copy has gone answers `404 no-copy` and this returns `null` — the caller decides
+     * what an empty door says, which is not the same as a provider that refused.
+     */
+    async function restoreUpload(provider, door, sha256) {
+      try {
+        const answer = await fetch(providerUrl(provider, 'restore'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ door, sha256 }),
+        })
+        if (!answer || !answer.ok) return null
+        const body = await answer.json()
+        return body && typeof body.url === 'string' ? body.url : null
+      } catch {
+        return null
+      }
     }
 
     /**
@@ -3106,7 +3132,7 @@ window.__ModuleLoader__.load({
      * a badge close icon in the top right corner"*). The row of actions under the picture is
      * gone with that: the picture carries its own way out.
      */
-    function ImageField({ t, provider, id, doorKey, value, onChange, canUpload, waitFor }) {
+    function ImageField({ t, provider, id, doorKey, value, onChange, canUpload, waitFor, onKept = null }) {
       /**
        * AN EMPTY SECOND IMAGE WAITS FOR THE FIRST (founder, 2026-09-25: *"its drops in order not by
        * left/right position. we can disable image 2 and message user to drop image 1 first"*).
@@ -3165,6 +3191,8 @@ window.__ModuleLoader__.load({
         const uploaded = await uploadImage(provider, file)
         if (uploaded.ok) {
           setPhase('idle')
+          // The copy first, then the value: the value's own write is what schedules the session.
+          if (onKept) onKept(uploaded.kept)
           onChange(uploaded.url)
           return
         }
@@ -3214,6 +3242,8 @@ window.__ModuleLoader__.load({
         setPhase('idle')
         setProblem(null)
         setUrlBroken(false)
+        // A cleared door has no copy any more: the session must not keep offering to restore one.
+        if (onKept) onKept(null)
         onChange('')
       }
 
@@ -3696,8 +3726,24 @@ window.__ModuleLoader__.load({
       const [, setKeptSession] = React.useState(sessionId.current)
       const sessionName = React.useRef(session && session.name ? session.name : null)
       const sessionValues = React.useRef(values)
+      /**
+       * THE COPIES THIS FORM IS HOLDING, by door (epic 64 S6). The host kept every picked file
+       * once (S2) and answered its hash; this is what a resumed session re-uploads from, so it
+       * travels in the session beside the values rather than being guessed at later.
+       */
+      const sessionUploads = React.useRef(session && session.uploads && typeof session.uploads === 'object' ? session.uploads : {})
       const sessionTimer = React.useRef(null)
       sessionValues.current = values
+      /** One door's kept copy, or `null` when it was cleared — a cleared door restores nothing. */
+      const keepUploadFor = (doorKey) => (kept) => {
+        const next = { ...sessionUploads.current }
+        if (kept && typeof kept.sha256 === 'string') {
+          next[doorKey] = { sha256: kept.sha256, file: kept.file || null, name: kept.name || null, type: kept.type || null }
+        } else {
+          delete next[doorKey]
+        }
+        sessionUploads.current = next
+      }
 
       /** Write the session as it stands. `now` skips the debounce — a settled run cannot wait. */
       const flushSession = (now = false) => {
@@ -3711,6 +3757,7 @@ window.__ModuleLoader__.load({
             title: adapter ? adapter.title || null : null,
             name: sessionName.current,
             values: sessionValues.current,
+            uploads: sessionUploads.current,
             runIds: thisVisit.current.slice(),
             open: true,
           }
@@ -3760,6 +3807,28 @@ window.__ModuleLoader__.load({
         }
         if (Array.isArray(session.runIds) && session.runIds.length > 0) {
           thisVisit.current = [...new Set([...thisVisit.current, ...session.runIds])]
+        }
+        /**
+         * THE PICKED FILES COME BACK THROUGH THE PROVIDER, not from the record: an image door's
+         * stored value is a provider handle, and that handle may be dead by the time a session is
+         * resumed (RunningHub's file is not hosted; Krea's asset link has its own lifetime). The
+         * copy is what makes it fresh. **A door with no copy comes back EMPTY** rather than
+         * holding a handle nobody can check — a form that looks filled and cannot run is worse
+         * than one that says it needs a picture.
+         */
+        const keptByDoor = session.uploads && typeof session.uploads === 'object' ? session.uploads : {}
+        sessionUploads.current = { ...keptByDoor }
+        for (const key of Object.keys(adapter.doors)) {
+          if (adapter.doors[key].type !== 'image') continue
+          const kept = keptByDoor[key]
+          const sha = kept && typeof kept.sha256 === 'string' && /^[a-f0-9]{64}$/.test(kept.sha256) ? kept.sha256 : null
+          if (sha === null) {
+            setValues((current) => (current[key] === '' ? current : { ...current, [key]: '' }))
+            continue
+          }
+          restoreUpload(provider, key, sha).then((handle) => {
+            if (handle !== null) setValues((current) => ({ ...current, [key]: handle }))
+          })
         }
       }, [session && session.id, phase])
 
@@ -3892,7 +3961,7 @@ window.__ModuleLoader__.load({
        * by — so the attribute a page is read through and the key the host builds the body
        * from are the same string.
        */
-      const fieldControl = (id, doorKey, door, value, onValue, canUpload, waitFor = null) => {
+      const fieldControl = (id, doorKey, door, value, onValue, canUpload, waitFor = null, onKept = null) => {
         const shared = { style: S.input, id, 'data-generate-door': doorKey, onChange: (event) => onValue(event.target.value) }
         if (door.type === 'select') {
           return h(
@@ -3954,7 +4023,7 @@ window.__ModuleLoader__.load({
           )
         }
         if (door.type === 'image') {
-          return h(ImageField, { id, doorKey, value, onChange: onValue, t, provider, canUpload, waitFor })
+          return h(ImageField, { id, doorKey, value, onChange: onValue, t, provider, canUpload, waitFor, onKept })
         }
         return door.multiline === true
           ? h('textarea', { ...shared, style: { ...S.input, ...S.multiline }, rows: 4, value })
@@ -4037,7 +4106,7 @@ window.__ModuleLoader__.load({
         const door = adapter.doors[key]
         if (door.type === 'list') return listControl(key, door)
         const value = values[key] === undefined ? startFor(key, door, adapter.defaults) : values[key]
-        return fieldControl('generate-door-' + key, key, door, value, set(key), canUpload, waitFor(key))
+        return fieldControl('generate-door-' + key, key, door, value, set(key), canUpload, waitFor(key), door.type === 'image' ? keepUploadFor(key) : null)
       }
 
       /**
