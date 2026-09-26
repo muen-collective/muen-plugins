@@ -1,0 +1,5 @@
+url: https://github.com/muen-collective/muen-plugins/tree/main/plugins/dsh-assets
+name: muen-collective/muen-plugins#dsh-assets
+category: media
+description:
+  en: The Assets library for DeepSeek Harness — an index over the folders your projects already keep their pictures in, outside the app. Nothing is copied or moved. It reads the run records the Generate plugin writes, so a finished picture can be found again by context and date, read with its prompt and settings, and taken back into Generate with one Regenerate press.

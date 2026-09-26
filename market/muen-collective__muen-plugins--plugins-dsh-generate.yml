@@ -1,0 +1,5 @@
+url: https://github.com/muen-collective/muen-plugins/tree/main/plugins/dsh-generate
+name: muen-collective/muen-plugins#dsh-generate
+category: media
+description:
+  en: The Generate space for DeepSeek Harness — one provider-neutral panel holding several providers (RunningHub and Comfy Cloud for workflows, Krea for images, Magnific last), each with its own key and its own workflows, opened as surfaces inside the one pane. Installs a workflow from an app link, gates every paid run behind a payload a person confirms, saves each finished result to a folder you choose, and carries a filmstrip of the workflow's history where a row puts its values back in the form.
