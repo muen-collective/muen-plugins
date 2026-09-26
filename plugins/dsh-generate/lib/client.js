@@ -296,6 +296,12 @@ window.__ModuleLoader__.load({
       // A host that did not answer is not an empty install, and saying so is the
       // difference between "add a workflow" and "something is wrong".
       'pane.list.failed': 'The installed workflows could not be read.',
+      // A run handed over from an asset whose workflow this install no longer has (epic 64
+      // S7). The name is carried in `{name}` because it is the one fact that makes the notice
+      // actionable: it is the workflow to re-install, or the reason the asset cannot be
+      // continued.
+      'pane.missing.title': 'That run’s workflow is not installed',
+      'pane.missing.body': 'Generate has no workflow named “{name}” any more. Its picture and its record are still in the library.',
       // The field names its provider out loud — "Krea API key", "RunningHub API key" —
       // so the label is the provider's own label plus this suffix, and four providers
       // on one page stay tellable apart.
@@ -511,6 +517,8 @@ window.__ModuleLoader__.load({
       'pane.section.empty': '尚未安装任何工作流。点击上方的 + 添加。',
       'pane.add.button': '添加工作流',
       'pane.list.failed': '无法读取已安装的工作流。',
+      'pane.missing.title': '这次运行所用的工作流未安装',
+      'pane.missing.body': '「生成」里已经没有名为“{name}”的工作流了。它的图片和记录仍然在资产库里。',
       'key.label.suffix': 'API 密钥',
       'wallet.key.placeholder': '粘贴你的密钥',
       'wallet.key.hint': '密钥在你的账户页面里：',
@@ -672,6 +680,21 @@ window.__ModuleLoader__.load({
         padding: '24px 20px 32px',
         maxWidth: 300,
         textAlign: 'center',
+      },
+      /**
+       * The notice for a continuation this install cannot honour (epic 64 S7): a run handed
+       * over from an asset whose workflow is gone. It wears the pane's card ink and sits at
+       * the top of the column, because the grid under it is still the way out — this is an
+       * explanation, not a dead end.
+       */
+      missing: {
+        width: '100%',
+        maxWidth: 380,
+        marginBottom: 14,
+        padding: '10px 12px',
+        borderRadius: 10,
+        border: '1px solid var(--dsw-alias-border-l2)',
+        background: 'var(--dsw-alias-bg-layer-2)',
       },
       form: {
         margin: 'auto',
@@ -4903,7 +4926,7 @@ window.__ModuleLoader__.load({
       const asked = params && typeof params.unit === 'string' ? params.unit : null
       const askedProvider = params && typeof params.provider === 'string' ? params.provider : null
       // WHICH RUN TO CONTINUE, when the tab was opened from an ASSET rather than from a card
-      // (epic 63's Regenerate: `openTab('generate', { params: { run: jobId } })`). Absent means
+      // (epic 64 S7: `openTab('generate', { params: { run, unit, provider } })`). Absent means
       // a person came in through the guide card, and the session starts empty.
       const askedRun = params && typeof params.run === 'string' && params.run.trim() !== '' ? params.run.trim() : null
 
@@ -4932,6 +4955,23 @@ window.__ModuleLoader__.load({
           setActiveTab(unit.name)
         }
       }
+
+      /**
+       * THE OTHER HALF OF "NEVER A DEAD LINK" (epic 64 S7).
+       *
+       * An asset's Regenerate hands off `{ run, unit, provider }` and this pane opens that
+       * unit's tab. When the unit is NOT installed any more — an adapter a person removed, a
+       * Krea model that left the catalogue — that block above simply does nothing, and the
+       * person lands on the start screen with no explanation of why their press did not work.
+       * Three records on this machine already name adapters that are gone, so this is a real
+       * state, not a hypothetical one.
+       *
+       * It is drawn only while the start screen is what the pane shows: once a person opens
+       * any workflow the notice has said its piece, and a sentence about a tab they are no
+       * longer looking at would be clutter.
+       */
+      const askedMissing =
+        asked !== null && units.phase === 'ready' && !units.units.some((unit) => unit.name === asked && (askedProvider === null || unit.provider === askedProvider))
 
       if (providers.phase === 'loading') {
         return h('div', { style: S.root, 'data-generate-pane': 'loading' }, h('div', { style: S.empty }, h('div', { style: S.body }, t('pane.loading'))))
@@ -5125,6 +5165,17 @@ window.__ModuleLoader__.load({
           ? h(
               'div',
               { style: S.sections, 'data-generate-sections': String(shown.length) },
+              // A CONTINUATION THAT CANNOT BE HONOURED SAYS SO (epic 64 S7). An asset whose
+              // run came from a workflow this install no longer has would otherwise land here
+              // in silence, which reads as a broken button.
+              askedMissing
+                ? h(
+                    'div',
+                    { style: S.missing, 'data-generate-missing-unit': asked },
+                    h('div', { style: S.title }, t('pane.missing.title')),
+                    h('div', { style: S.hint }, t('pane.missing.body').replace('{name}', asked)),
+                  )
+                : null,
               units.phase === 'failed'
                 ? h(
                     'div',

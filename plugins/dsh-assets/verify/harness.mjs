@@ -217,6 +217,14 @@ export function recordingCtx(locale = 'en') {
         seen.types.push(definition)
         return () => {}
       },
+      /**
+       * THE REGISTRY'S OWN READ (epic 64 S7). The handoff asks this service whether the
+       * Generate pane is on the page, so the stub has to answer it the way the real registry
+       * does: whatever `register` was given, by kind. A suite turns the handoff on by
+       * registering a `generate` type — which is exactly what the other plugin's boot does —
+       * and leaves it off by not registering one.
+       */
+      get: (kind) => seen.types.find((definition) => definition.kind === kind),
     },
     slots: {
       inject: (name, callback) => {

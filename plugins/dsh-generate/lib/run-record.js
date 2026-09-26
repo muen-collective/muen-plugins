@@ -80,6 +80,25 @@ export async function listRunRecords(root, { limit = 100, listDir, readText = re
 }
 
 /**
+ * The unit a record belongs to, under whichever name its own provider writes.
+ *
+ * A RUNNINGHUB RECORD NAMES IT `adapter` (the adapter file's name); A KREA RECORD NAMES IT
+ * `name` (the model's own name — a Krea model is Krea's, and no user authors one). The two
+ * runners were written a day apart and each wrote the word that read best in its own file,
+ * which made the strip's own read (`?name=<unit>`) match RunningHub records and no Krea
+ * record at all: a Krea run could never appear in its own workflow's series. Reading both is
+ * the fix, and it is the same string the library stores as an asset's `workflow` (epic 64
+ * S7), so an asset and its workflow agree on the name.
+ *
+ * @param {object} record - a run record, as written.
+ * @returns {string} the unit's name, or `''` when the record names none.
+ */
+export function unitOf(record) {
+  if (!record || typeof record !== 'object') return ''
+  return String(record.adapter || record.name || '')
+}
+
+/**
  * The values a run was asked for, in the shape the form can take them back (epic 64 S4).
  *
  * A door's own name is the API's `fieldName`, and that is the key this answers with, because

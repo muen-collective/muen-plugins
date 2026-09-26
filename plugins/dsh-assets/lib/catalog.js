@@ -89,7 +89,12 @@ export async function readRecords(recordsRoot, { listDir = readdir, readText = r
         prompt,
         at: String(record.at || outcome.at || '') || null,
         settledAt: String(outcome.at || '') || null,
-        workflow: String(record.adapter || '') || null,
+        // THE UNIT A RUN BELONGS TO, under whichever name its own provider writes: RunningHub
+        // records it as `adapter` (the adapter file's name), Krea as `name` (the model's own
+        // name, because a Krea model is Krea's and no user authors one). Reading only
+        // `adapter` left every Krea asset unable to say what made it — and the handoff
+        // (epic 64 S7) needs exactly this string, so a null here is a dead control.
+        workflow: String(record.adapter || record.name || '') || null,
         title: String(record.title || '') || null,
         appId: record.appId === undefined || record.appId === null ? null : String(record.appId),
         status: String(outcome.status || record.status || '') || null,

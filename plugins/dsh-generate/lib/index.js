@@ -83,7 +83,7 @@ import { readHidden, withHidden, writeHidden } from './hidden.js'
 import { readChosenFolder, writeChosenFolder } from './library-path.js'
 import { CAN_CHOOSE, chooseFolder, revealFile, revealFolder } from './folder-actions.js'
 import { resolveDataRoot } from './paths.js'
-import { listRunRecords, readRunRecord, valuesOf, whereIs } from './run-record.js'
+import { listRunRecords, readRunRecord, unitOf, valuesOf, whereIs } from './run-record.js'
 
 /** Matches the row id in cordis.patch.yml. */
 export const name = 'generate'
@@ -1248,7 +1248,10 @@ export function apply(ctx, config = {}) {
     const listed = await listRunRecords(provider.data(root.root).root, { limit })
     const rows = []
     for (const record of listed.records) {
-      if (str(record.adapter) !== name) continue
+      // The unit under whichever name its provider wrote it (see `unitOf`): a Krea record
+      // names the model it ran, not an adapter, and matching only `adapter` kept every Krea
+      // run out of its own series.
+      if (unitOf(record) !== name) continue
       const outcome = record.outcome && typeof record.outcome === 'object' ? record.outcome : {}
       const saved = Array.isArray(outcome.saved) ? outcome.saved : []
       const files = []

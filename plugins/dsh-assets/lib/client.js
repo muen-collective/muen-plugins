@@ -36,12 +36,22 @@ window.__ModuleLoader__.load({
     const IconGridOutline16 = icon('IconGridRegular', 'IconGrid16')
     const IconRowsOutline16 = icon('IconRowsRegular', 'IconRows16')
     const IconWarningOutline16 = icon('IconWarningOutlineRegular', 'IconWarningOutline16')
+    // The Generate surface's own glyph, which is what tells a person where this control goes
+    // (epic 64 S7).
+    const IconSparkle16 = icon('IconSparkleRegular', 'IconSparkle16')
     const Button = primitives.Button
     const h = React.createElement
 
     const ASSETS_ID = '@muen/dsh-assets'
     const ASSETS_KIND = 'assets'
     const NS = 'assets'
+    /**
+     * The kind the Generate pane registers and the one an asset hands off through. It is a
+     * STRING, not an import: the seam is the harness's `openTab(kind, { params })`, and what
+     * travels on it is data — `{ run, unit, provider }`, the three facts a run record already
+     * holds (epic 64 S7 and §9).
+     */
+    const GENERATE_KIND = 'generate'
     const FOLDERS_URL = '/plugins/assets/folders'
     const CATALOG_URL = '/plugins/assets/catalog'
     const DETAIL_URL = '/plugins/assets/detail'
@@ -96,6 +106,13 @@ window.__ModuleLoader__.load({
       'meta.prompt': 'Prompt',
       'meta.values': 'Values',
       'meta.noRecord': 'No run made this file — it is listed with the file\'s own facts only.',
+      // THE HANDOFF'S OWN WORDS (epic 64 S7). The control says what it does and the hint says
+      // what it does NOT do, because "Regenerate" is the one word here a person could read as
+      // spending money.
+      'meta.continue': 'Regenerate',
+      'meta.continue.hint': 'Opens this run in Generate, with its picture and its settings. Nothing runs until you press Generate there.',
+      'meta.continue.noPlugin': 'Generate is not installed, so this run cannot be opened here.',
+      'meta.continue.noWorkflow': 'This run does not name the workflow it came from, so it cannot be opened.',
       'where.present': 'here',
       'where.trashed': 'in the trash',
       'where.offline': 'on a volume that is not mounted',
@@ -150,6 +167,10 @@ window.__ModuleLoader__.load({
       'meta.prompt': '提示词',
       'meta.values': '参数',
       'meta.noRecord': '这个文件不是运行产生的——只列出文件本身的信息。',
+      'meta.continue': '重新生成',
+      'meta.continue.hint': '在「生成」中打开这次运行，连同它的图片和参数。在那里按下生成之前不会运行任何东西。',
+      'meta.continue.noPlugin': '未安装「生成」，无法在这里打开这次运行。',
+      'meta.continue.noWorkflow': '这次运行没有记录它来自哪个工作流，因此无法打开。',
       'where.present': '在此处',
       'where.trashed': '在回收站',
       'where.offline': '在未挂载的卷上',
@@ -210,6 +231,14 @@ window.__ModuleLoader__.load({
       metaRow: { display: 'flex', gap: 10, justifyContent: 'space-between', minWidth: 0 },
       metaKey: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11.5, whiteSpace: 'nowrap' },
       metaValue: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, textAlign: 'right', overflowWrap: 'anywhere', minWidth: 0 },
+      // THE HANDOFF'S ROW. The control is the block's one action, so it sits on its own line
+      // under the run it belongs to rather than inside a fact row where it would read as one
+      // more piece of metadata.
+      metaAction: { display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 },
+      // The fallback when the primitives are absent (the verify harness runs this half in a
+      // stub, and the harness's own `Button` is not guaranteed there). Same ink as the kit's
+      // outline variant, kept in one place so the two never drift.
+      metaButton: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l3)', background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12, cursor: 'pointer' },
       prompt: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, lineHeight: '17px', whiteSpace: 'pre-wrap', background: 'var(--dsw-alias-bg-layer-2)', borderRadius: 8, padding: '6px 8px', maxHeight: 160, overflow: 'auto' },
       sectionLabel: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' },
       list: { display: 'flex', flexDirection: 'column', gap: 4 },
@@ -405,16 +434,60 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * THE HANDOFF (epic 64 S7): a run a person finds here can be CONTINUED where it was made.
+     *
+     * IT CARRIES THREE FACTS, NOT ONE, and that is the honest shape of this seam. A run id
+     * alone cannot open anything: the Generate pane opens a WORKFLOW tab and then shows that
+     * run inside it, so the call carries the workflow the record names (`unit`) and the
+     * provider it ran on — both of which this library already reads off the record. Epic 64's
+     * shorthand `{ run: jobId }` assumed the receiver could resolve a job id by itself; it
+     * cannot today, and a lookup there would duplicate knowledge the asset already holds.
+     *
+     * IT RUNS NOTHING. `openTab` shows a surface; the press that spends is still the person's
+     * own, on Generate's own button, behind Generate's own gate (epic 64 S1).
+     *
+     * THE TWO WAYS IT CANNOT HAND OFF are sentences rather than dead controls: no Generate on
+     * the page, or a record that does not name its workflow.
+     */
+    function ContinueControl({ jobId, workflow, provider, title, ready, openGenerate, t }) {
+      if (workflow === '') {
+        return h('span', { style: S.muted, 'data-assets-no-continue': 'no-workflow' }, t('meta.continue.noWorkflow'))
+      }
+      if (ready !== true || typeof openGenerate !== 'function') {
+        return h('span', { style: S.muted, 'data-assets-no-continue': 'no-generate' }, t('meta.continue.noPlugin'))
+      }
+      const props = {
+        title: t('meta.continue.hint'),
+        'aria-label': t('meta.continue') + ' — ' + (title || workflow),
+        'data-assets-continue': jobId,
+        onClick: () => openGenerate(GENERATE_KIND, { params: { run: jobId, unit: workflow, provider } }),
+      }
+      const glyph = IconSparkle16 ? h(IconSparkle16, { size: 14 }) : null
+      return h(
+        'div',
+        { style: S.metaAction, 'data-assets-continue-row': 'yes' },
+        Button
+          ? h(Button, { ...props, variant: 'outline', size: 'sm' }, glyph, t('meta.continue'))
+          : h('button', { type: 'button', ...props, style: S.metaButton }, glyph, t('meta.continue')),
+      )
+    }
+
+    /**
      * THE METADATA BLOCK: what the catalog job is for.
      *
      * PROVENANCE WHEN A RUN MADE IT — the provider, the job, the workflow, the app, the date
      * it settled, the prompt verbatim and the values it ran with — and THE FILE'S OWN FACTS
-     * WHEN NOTHING DID. `where it is` is on both, because "find the original" is the job.
+     * WHEN NOTHING DID. `where it is` is on both, because "find the original" is the job. A
+     * file a run made also carries the way back into that run's own pane (S7).
      */
-    function MetadataBlock({ detail, loading, t }) {
+    function MetadataBlock({ detail, loading, t, openGenerate, generateReady }) {
       if (loading) return h('div', { style: S.meta, 'data-assets-meta': 'loading' }, h('span', { style: S.muted }, t('pane.loading')))
       if (!detail) return null
       const provenance = detail.provenance || null
+      // The unit a run belongs to, as the record names it. The catalog reads the provider's
+      // own field (`adapter` for RunningHub, `name` for Krea) and answers it as `workflow`;
+      // the title is only ever a nicer word for the row a person reads.
+      const workflow = provenance ? String(provenance.workflow || '') : ''
       const rows = [
         [t('meta.file'), detail.name],
         [t('meta.dimensions'), detail.dimensions ? detail.dimensions.width + ' × ' + detail.dimensions.height : '—'],
@@ -450,6 +523,17 @@ window.__ModuleLoader__.load({
               ...(detail.values || []).slice(0, 24).map((row) =>
                 h('div', { key: 'v:' + row.key, style: S.metaRow }, h('span', { style: S.metaKey }, row.key), h('span', { style: S.metaValue }, row.value.length > 300 ? row.value.slice(0, 300) + '…' : row.value)),
               ),
+              // THE WAY BACK IN (epic 64 S7). It is the block's one action, so it sits after
+              // everything it acts on.
+              h(ContinueControl, {
+                jobId: provenance.jobId,
+                workflow,
+                provider: provenance.provider,
+                title: provenance.title || '',
+                ready: generateReady === true,
+                openGenerate,
+                t,
+              }),
             )
           : h('span', { style: S.muted, 'data-assets-meta-norecord': 'yes' }, t('meta.noRecord')),
       )
@@ -484,6 +568,14 @@ window.__ModuleLoader__.load({
       const [registry, reloadRegistry] = useJson(FOLDERS_URL)
       const [catalog, reloadCatalog] = useJson(catalogUrl)
       const [detail, reloadDetail] = useJson(selectedPath ? DETAIL_URL + '?path=' + encodeURIComponent(selectedPath) : null)
+
+      // THE HANDOFF'S OWN SEAM (epic 64 S7): the tab's actions, bound by the harness to the
+      // session this tab is in — so the call lands in the right pane whether this tab is
+      // docked, split or floating, and no service handle is kept anywhere in this file.
+      const tabInfo = typeof props.useTabInfo === 'function' ? props.useTabInfo() : null
+      const tabActions = tabInfo && tabInfo.tab && tabInfo.tab.actions ? tabInfo.tab.actions : null
+      const openGenerate = tabActions && typeof tabActions.openTab === 'function' ? tabActions.openTab : null
+      const generateReady = typeof props.canOpenGenerate === 'function' ? props.canOpenGenerate() === true : props.canOpenGenerate === true
 
       /** Every change to the view is written, so the next reload opens where this one left off. */
       const patchView = async (patch) => {
@@ -709,7 +801,7 @@ window.__ModuleLoader__.load({
         catalog.data && catalog.data.truncated ? h('span', { style: S.muted }, t('pane.truncated')) : null,
 
         // ── the metadata block for the selected tile ─────────────────────────
-        selectedPath ? h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t }) : null,
+        selectedPath ? h(MetadataBlock, { detail: detail.data, loading: detail.phase === 'loading', t, openGenerate, generateReady }) : null,
       )
     }
 
@@ -756,12 +848,39 @@ window.__ModuleLoader__.load({
      */
     function apply(ctx) {
       const t = ctx.locale.bind(NS)
+      /**
+       * IS THERE SOMEWHERE TO HAND OFF TO? (epic 64 S7.) The question is asked of the tab-type
+       * registry — the one service that knows whether the Generate pane is on this page — and
+       * it is asked at RENDER time, not once at registration, because a plugin's row may come
+       * and go while this pane stays mounted.
+       *
+       * A registry that cannot be asked (an older core, or the verify stub) answers "no", and
+       * the block draws its sentence rather than a control that would throw.
+       */
+      const canOpenGenerate = () => {
+        const types = ctx.sidebarRightTabs
+        return !!types && typeof types.get === 'function' && types.get(GENERATE_KIND) !== undefined
+      }
       ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'assets.copy')
       ctx.effect(() => ctx.sidebarRightTabs.register(assetsDefinition(t)), 'assets.type')
       ctx.effect(
         () =>
           ctx.slots.inject('sidebar.right.pane.tab', () =>
-            ctx.slots.register({ name: 'sidebar.right.pane.tab', key: ASSETS_ID, locale: NS }, AssetsPane),
+            ctx.slots.register(
+              { name: 'sidebar.right.pane.tab', key: ASSETS_ID, locale: NS },
+              /**
+               * The pane itself stays free of the registry: it is handed a reader for the one
+               * fact it cannot see, and everything else it needs arrives as props.
+               *
+               * THE PANE IS CALLED, NOT WRAPPED IN AN ELEMENT. A body registered here is a plain
+               * function component, and the verify harness drives it by CALLING it — an outer
+               * component that only returns `h(AssetsPane, …)` would hide the pane's own hooks
+               * from that call, and every suite would read a component stuck in its loading
+               * state. Calling it with the extra prop keeps one component and one hook order,
+               * which is what React does with a wrapper anyway.
+               */
+              (props) => AssetsPane({ ...props, canOpenGenerate }),
+            ),
           ),
         'assets.body',
       )

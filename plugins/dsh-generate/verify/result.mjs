@@ -128,11 +128,18 @@ writeRecord('job-rh-old', {
 })
 const kreaRuns = join(dataRoot, 'krea', 'runs')
 mkdirSync(kreaRuns, { recursive: true })
+// A KREA RECORD NAMES ITS UNIT `name`, NOT `adapter` — that is what the Krea runner writes
+// (`providers.js`: `name: preview.name`, the model's own name, beside the endpoint it points
+// at). This fixture used to say `adapter`, which is not a field any Krea record has, so the
+// suite passed while the route could not match a single real Krea run: a Krea workflow's
+// series was always empty. The fixture now carries what production carries.
 writeFileSync(join(kreaRuns, 'job-krea.json'), JSON.stringify({
   schema: 'muen-krea-run/v1',
   jobId: 'job-krea',
   at: '2026-09-26T03:00:00.000Z',
-  adapter: 'krea2-raw-turbo-claire',
+  name: 'krea2-raw-turbo-claire',
+  model: 'image/krea/krea-2/medium-turbo',
+  title: 'Krea 2 Raw',
   body: { prompt: 'a candid 35mm photograph', aspect_ratio: '1:1', creativity: 'raw' },
   outcome: { state: 'done', status: 'COMPLETED', at: '2026-09-26T03:01:00.000Z', saved: [{ file: kreaFile, bytes: 48, type: 'png' }] },
 }, null, 2))
@@ -395,6 +402,9 @@ function waitForEnd(res) {
   const res = await get(RESULT('krea') + 's?name=krea2-raw-turbo-claire')
   const row = res.json().rows[0]
   check('the other provider\'s shape comes back the same way', res.statusCode === 200 && !!row && row.values.prompt === 'a candid 35mm photograph' && row.values.aspect_ratio === '1:1', res.statusCode + ' ' + JSON.stringify(row && row.values))
+  // A KREA RECORD HAS NO `adapter`: its unit is `name`. This check is the one that would have
+  // failed for the whole life of the route's first cut, when the filter read `adapter` only.
+  check('a Krea run is found by the unit field its own runner writes', res.json().rows.length === 1 && row.jobId === 'job-krea', res.json().rows.length + ' rows: ' + res.json().rows.map((r) => r.jobId).join(','))
   const missingName = await get(RESULT('krea') + 's')
   check('a request with no workflow name is refused by name', missingName.statusCode === 400 && missingName.json().error === 'missing-name', missingName.statusCode)
   const badLimit = await get(RESULT('krea') + 's?name=krea2-raw-turbo-claire&limit=0')

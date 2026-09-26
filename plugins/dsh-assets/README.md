@@ -95,6 +95,37 @@ The metadata block is what the catalog job is for. With a run behind the file it
 the workflow, the app, the date it settled, **the prompt verbatim** and the values it ran with; without one it
 says so and shows the file's own facts. Both cases carry **where it is**.
 
+## The handoff: an asset is a way back into its run (epic 64 S7)
+
+The library is the front door, not the last step (founder, 2026-09-25: *"we designed Generate first as the
+control surface … but the session starts with an asset and the user clicks regenerate"*). So a file a run made
+carries a **Regenerate** control in its metadata block, and pressing it opens that run where it was made:
+
+```
+openTab('generate', { params: { run, unit, provider } })
+```
+
+**Three facts, because one cannot work.** The Generate pane opens a *workflow* tab and then shows the run
+inside its series, so the call names the run, the workflow the record belongs to (`adapter` for RunningHub,
+`name` for Krea) and the provider it ran on. All three are read off the record the library already holds — no
+lookup is invented on the other side. **It runs nothing**: `openTab` shows a surface, and the press that spends
+is still the person's own, behind Generate's own gate.
+
+**It crosses no code.** The call is the harness's own seam, made through the tab's bound `actions.openTab` —
+never an import — so this plugin works with Generate absent, which is the state a stranger installs. And absent
+is said out loud:
+
+| State | What the block draws |
+|---|---|
+| Generate is on the page and the record names its workflow | the **Regenerate** control |
+| Generate is not installed | the metadata, plus **one sentence** — never a control that would do nothing |
+| the record does not name a workflow | the other sentence, because the pane cannot open what nobody named |
+| no run made the file | neither: there is no run to continue |
+
+`verify/handoff.mjs` holds all four, drives the press, and — when the Generate plugin is beside this one —
+reads its source to confirm it consumes exactly those three params. Shipped alone, that last check says so
+instead of failing.
+
 ## Previews (S9)
 
 A tile asks for `&w=320` and the host answers a small copy, **made once** into
@@ -115,24 +146,27 @@ node verify/mount.mjs      # A1: the card, the registrations, the copy, the empt
 node verify/intake.mjs     # A2: the folders, the records, the two filters               57
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, the search      34
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
+node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 ```
 
-The three suites share `verify/harness.mjs`: a reporter, the server fakes, and enough React to render a
+The suites share `verify/harness.mjs`: a reporter, the server fakes, and enough React to render a
 component twice (hooks in call order, effects honoured with their dependencies) — so "what does a person see"
-is checked as text and props rather than in three dialects.
+is checked as text and props rather than in dialects.
 
 `mount` drives the shipped client half in a stubbed loader and a recording ctx, then **renders the pane three
 ways** against a stubbed host — answering, unreachable, and empty — because "no folders yet" is a claim about
 this machine and has to be read as text. `intake` drives the shipped host half against temp directories: an
 empty registry, adding by dialog and by path, the refusals, a file matched to a run by its **exact** path, a
 loose file listed beside it, the counts, the filters, and a half-written record that must not empty the grid.
+`handoff` renders the block four ways — Generate present, absent, a record with no workflow, a file with no run
+— presses the control, and reads the sibling plugin's source when it is there.
 A skip is printed as a skip; a disagreement fails the run. Nothing here spends coins or touches a provider.
 
 ## Not built yet
 
-The review layer (stars, colour tags, keywords); the session strip that draws the same tile
-in a rail; the intake proxy that keeps a preview beside the record (S9 of
-epic 64); the review layer. The plan of record is `docs/plans/63-assets-library-epic.md` in the dsh-mitsu
+The review layer (stars, colour tags, keywords) — it waits on the founder's vocabulary research, and it is the
+one MVP part this plugin does not have; A4 (zoom inspect) and A5 (the optional sync) are the other two slices
+of epic 63. The plan of record is `docs/plans/63-assets-library-epic.md` in the dsh-mitsu
 workspace, and the surface reference is hand-me-up-os's own `AssetPanel.tsx`
 (`repeat(auto-fit, minmax(240px, 1fr))`, no breakpoints, a grid/list toggle, a filled context badge beside an
 outlined size badge).

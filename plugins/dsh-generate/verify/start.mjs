@@ -4463,4 +4463,55 @@ const assetProps = {
   }
 }
 
+// ── A CONTINUATION THAT CANNOT BE HONOURED SAYS SO (epic 64 S7, receiver half) ──
+//
+// An asset's Regenerate hands over `{ run, unit, provider }`, and this pane opens that unit's
+// tab. When the workflow named is not installed any more, the opener block above does
+// nothing — and until this slice the pane simply landed on the grid, which reads as a broken
+// button. It is not hypothetical: three records on this machine name adapters that are gone
+// (`qwen-outfit-swap` twice, `qwen-rapid-aio-subject-swap` once).
+{
+  const goneProps = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: 'qwen-rapid-aio-subject-swap', provider: 'runninghub', run: 'job-gone' }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: [] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    const tree = await settle(paneSlot.component, goneProps, 'pane-missing-unit')
+    const notice = byAttr(tree, 'data-generate-missing-unit', 'qwen-rapid-aio-subject-swap')
+    check(
+      'a handed-over run whose workflow is not installed says so, and names it',
+      !!notice && textIn(notice).includes(EN['pane.missing.title']) && textIn(notice).includes('qwen-rapid-aio-subject-swap'),
+      notice ? textIn(notice).slice(0, 120) : 'nothing drawn',
+    )
+    check(
+      'and it is an explanation, not a dead end: the start screen is still drawn',
+      !!byAttr(tree, 'data-generate-sections') && !!byAttr(tree, 'data-generate-pane', 'home'),
+      byAttr(tree, 'data-generate-sections') ? 'the grid is drawn' : 'no grid',
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+{
+  // The same handoff into a workflow that IS installed draws no notice at all: the notice is
+  // about an absence, and drawing it beside a surface that opened would be a lie.
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done'], resultRows: [] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    const tree = await settle(paneSlot.component, assetProps, 'pane-continue-installed')
+    check(
+      'the very same handoff into an installed workflow draws no notice',
+      !byAttr(tree, 'data-generate-missing-unit') && !!byAttr(tree, 'data-generate-surface', 'ready'),
+      byAttr(tree, 'data-generate-missing-unit') ? 'notice drawn' : 'no notice',
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
 finish()

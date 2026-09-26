@@ -41,8 +41,20 @@ the per-workflow restore was retired: the row is where a one-off tweak lives.
 card it should be empty, the session starts from empty and if arrived from asset / regenerate it shows the
 session"*). So a workflow's history is not on screen by default — and no history is even read — and the strip
 fills from two directions: a run done in this visit joins it (only that run), or a tab opened to **continue** one
-arrives with **`params.run`** and shows the whole series with that run selected. That param is the surface half of
-epic 64 S7; the asset's own Regenerate button is that slice, and it needs nothing else.
+arrives with its params and shows the whole series with that run selected.
+
+**That handoff carries three facts, not one** (epic 64 S7). The opener is
+`openTab('generate', { params: { run, unit, provider } })` — the run, the workflow it belongs to, and the
+provider it ran on — because this pane opens a **workflow** tab and then shows the run inside it: a bare job id
+names nothing to open, and resolving one here would duplicate what the asset already read off the record. The
+Asset library sends exactly those three. And when the workflow named is not installed any more — three records
+on this machine name adapters that were removed — the pane says so **by name** on the start screen rather than
+landing on the grid in silence, which is the receiving half of S7's "never a dead link".
+
+**A record's unit is under whichever name its own runner wrote** (`unitOf` in `lib/run-record.js`): RunningHub
+writes `adapter`, Krea writes `name`. The strip's own read filtered on `adapter` alone, so no Krea run could
+ever appear in its own workflow's series — found while wiring S7, fixed, and now pinned by a Krea fixture that
+carries what production carries.
 
 **The state route was dead, and its failure looked like a decision.** Two faults stacked: it read
 `provider.root`, which no provider has (a provider's own directory is `provider.data(root.root).root`), and it
