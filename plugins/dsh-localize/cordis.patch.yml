@@ -1,0 +1,6 @@
+- insert:
+    - id: localize
+      name: '@muen/dsh-localize'
+      # The language catalog and the sidebar globe (epic 65). One package owns the languages we
+      # offer, the globe that switches between them, and — as L4/L6 land — the profile's overlay and
+      # review memory. Neutral: no brand or client baked in.

@@ -1,8 +1,13 @@
 {
-  "name": "@muen/dsh-language-switcher",
+  "name": "@muen/dsh-localize",
   "version": "0.1.0",
-  "description": "Language & translation control for DeepSeek Harness — a Settings > General row with a Fix plugins action that patches any installed plugin that isn't properly localized, plus a sidebar globe for one-click language switch / on-demand translate. Ships neutral; en/zh/ko/ja.",
+  "description": "Language and translation control for DeepSeek Harness: the languages we own are added to the shared catalog, and a sidebar globe switches between them. Neutral; catalogs en/zh/ko/ja/fr/de.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muen-collective/muen-plugins.git",
+    "directory": "plugins/dsh-localize"
+  },
   "type": "module",
   "main": "lib/index.js",
   "exports": {

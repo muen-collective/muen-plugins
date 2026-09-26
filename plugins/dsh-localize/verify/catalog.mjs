@@ -28,97 +28,17 @@
  *
  *   node verify/catalog.mjs
  */
-import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { createContext, runInContext } from 'node:vm'
 
-import { BUILT_IN, ID_PATTERN, LANGUAGES, catalogued, installLanguages, owned } from '../lib/catalog.js'
+// ── reporter, the bundle, and the harness's own runtime ──────────────────────
 
-const HERE = dirname(fileURLToPath(import.meta.url))
+import { CLIENT, fakeScope, loadClient, loadLocaleRuntime, localeBundlePath, miniReact, primitivesStub, reporter } from './harness.mjs'
 
-// ── reporter (the same shape as the plugin's other suites) ───────────────────
+const { check, note, finish } = reporter('verify:catalog', 'epic 65 L1 (the languages we own)')
 
-const rows = []
-const check = (label, ok, detail) => rows.push({ label, status: ok ? 'pass' : 'fail', detail: detail == null ? '' : String(detail) })
-const note = (text) => rows.push({ label: text, status: 'note', detail: '' })
-
-function finish() {
-  let failed = 0
-  process.stdout.write('\nverify:catalog — epic 65 L1 (the languages we own)\n')
-  for (const row of rows) {
-    if (row.status === 'pass') continue
-    if (row.status === 'note') {
-      process.stdout.write('  ....  ' + row.label + '\n')
-      continue
-    }
-    if (row.status === 'fail') failed += 1
-    process.stdout.write('  FAIL  ' + row.label + (row.detail ? '  —  ' + row.detail : '') + '\n')
-  }
-  const passes = rows.filter((row) => row.status === 'pass').length
-  const total = rows.filter((row) => row.status !== 'note').length
-  process.stdout.write('  ' + passes + '/' + total + ' passed\n')
-  if (failed > 0) process.exitCode = 1
-}
-
-// ── the shipped runtime, loaded the way the app loads it ─────────────────────
-
-/** Where the harness keeps the locale client: the installed app, then a dev tree. */
-function localeBundlePath() {
-  const candidates = [
-    process.env.DSH_CLIENT_LOCALE,
-    '/Applications/Mitsumeru.app/Contents/Resources/harness/node_modules/@deepseek-ai/dsh-client-locale/lib/client.js',
-    join(homedir(), 'mitsumeru', 'node_modules', '@deepseek-ai', 'dsh-client-locale', 'lib', 'client.js'),
-  ].filter((path) => typeof path === 'string' && path !== '')
-  return candidates.find((path) => existsSync(path)) || null
-}
-
-/** Anything a member access asks for answers a no-op function: the bundle only touches these
- *  inside components and actions, never while it is being defined. */
-const anyFunction = () => new Proxy(function noop() {}, { get: () => anyFunction() })
-
-/**
- * Load a `window.__ModuleLoader__.load({ id, factory })` bundle in this process and answer its
- * exports. That is the contract the harness's client tree uses, so the real runtime is what runs.
- */
-function loadBundle(path) {
-  let captured = null
-  const sandbox = {
-    console,
-    setTimeout,
-    clearTimeout,
-    Date,
-    Math,
-    JSON,
-    Object,
-    Array,
-    Map,
-    Set,
-    String,
-    Number,
-    Boolean,
-    Symbol,
-    Error,
-    TypeError,
-    Promise,
-    RegExp,
-  }
-  sandbox.globalThis = sandbox
-  // The runtime asks the BROWSER which language to start in; an English browser is the honest
-  // default here, and it is what makes `active` start at `en` rather than throw on a missing global.
-  sandbox.navigator = { languages: ['en-US', 'en'], language: 'en-US' }
-  sandbox.window = {
-    __ModuleLoader__: {
-      load: (entry) => {
-        captured = entry.factory((name) => anyFunction())
-      },
-    },
-  }
-  createContext(sandbox)
-  runInContext(readFileSync(path, 'utf8'), sandbox, { filename: path })
-  return captured
-}
+const mini = miniReact()
+const ui = primitivesStub()
+const client = loadClient(CLIENT, { react: mini.React, primitives: ui.primitives })
+const { BUILT_IN, ID_PATTERN, LANGUAGES, catalogued, installLanguages, owned } = client
 
 const bundlePath = localeBundlePath()
 if (bundlePath === null) {
@@ -127,31 +47,10 @@ if (bundlePath === null) {
   process.exit(0)
 }
 
-const locale = loadBundle(bundlePath)
-const { LocaleRuntime } = locale
+const { LocaleRuntime, make } = loadLocaleRuntime(bundlePath)
+const makeRuntime = (scope) => make(scope)
 
-check('the harness bundle exports the runtime this slice is built on', typeof LocaleRuntime === 'function', typeof LocaleRuntime)
-
-/** The durable preference scope the app hands the runtime (a config form in the real tree). */
-function fakeScope(initial) {
-  const state = { value: initial === undefined ? undefined : { preference: initial } }
-  const subscribers = new Set()
-  return {
-    state,
-    getSnapshot: () => state,
-    subscribe: (fn) => {
-      subscribers.add(fn)
-      return () => subscribers.delete(fn)
-    },
-    set: (field, value) => {
-      state.value = { ...(state.value || {}), [field]: value }
-      for (const fn of [...subscribers]) fn()
-    },
-  }
-}
-
-/** A real runtime, built the way the plugin builds one. */
-const makeRuntime = (scope) => new LocaleRuntime({ emit: () => {}, effect: () => {} }, scope, undefined)
+check('the shipped bundle carries the catalog this slice is about', typeof installLanguages === 'function' && Array.isArray(LANGUAGES) && LANGUAGES.length > 0, JSON.stringify({ languages: LANGUAGES.map((row) => row.id) }))
 
 // ── 1. what the runtime carries by itself ────────────────────────────────────
 
@@ -183,7 +82,6 @@ const makeRuntime = (scope) => new LocaleRuntime({ emit: () => {}, effect: () =>
     report.refused.length === 0 && ids.includes('en') && ids.includes('zh') && ids.indexOf('en') === 1,
     JSON.stringify(report),
   )
-  // The guard, tested directly: a table that names a built-in KEEPS it instead of calling again.
   const builtInRow = installLanguages(runtime, [{ id: 'en', label: 'English', fallback: 'en' }])
   check(
     'a row naming a language the runtime already carries is KEPT, not refused and not re-added',
@@ -280,7 +178,7 @@ const makeRuntime = (scope) => new LocaleRuntime({ emit: () => {}, effect: () =>
   check(
     'and a stored language is held until its definition arrives, rather than losing the choice',
     tooEarly.getLocale().active === 'en' && installLanguages(tooEarly).added.includes('ko') && tooEarly.getLocale().active === 'ko',
-    JSON.stringify({ added: installLanguages(tooEarly).added, active: tooEarly.getLocale().active }),
+    JSON.stringify({ active: tooEarly.getLocale().active }),
   )
 }
 

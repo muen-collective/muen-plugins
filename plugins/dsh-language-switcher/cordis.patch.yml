@@ -1,6 +1,0 @@
-- insert:
-    - id: language-switcher
-      name: '@muen/dsh-language-switcher'
-      # Language & translation control seamed into Settings > General (settings.general.item)
-      # plus a sidebar globe for one-click language switch / on-demand translate. Neutral:
-      # no brand/client baked in.
