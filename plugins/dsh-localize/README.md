@@ -56,12 +56,23 @@ an installed bundle / DELETE), and the bundle walks the rendered tree to apply t
 text it first saw**, so a language switch is never cumulative. A `MutationObserver` re-applies the map already
 in hand, so late-rendered text is translated without another request.
 
+**The reviewer** (`skills/localize-review/SKILL.md`) is the gate, and it ships inside this package so the
+served text is the repo's text. It judges four axes (accuracy, register, context, completeness), gives one of
+three verdicts (`approved` / `flagged` with a reason / `missing`), and records every attempt — including
+rejections — in the **review memory** (`<profile>/localize-memory/<plugin>/<lang>.json`), keyed by the **hash of
+the English source**. That key is the point: a renamed key cannot invalidate a verdict, a changed English source
+or a changed translation asks for review again, and an approval made under an older prompt comes back as stale
+rather than silently trusted. The memory also answers the founder's question — *what still needs review?* — and
+makes the cross-plugin consistency check a read instead of a re-scan.
+
 ## Verify
 
 ```
 node verify/catalog.mjs   # the languages we own, against the HARNESS'S OWN LocaleRuntime (22 checks)
 node verify/mount.mjs     # the bundle, the globe and its activation (27 checks)
 node verify/overlay.mjs   # the store, the scan, the DOM walk and the route (62 checks)
+node verify/memory.mjs    # the review memory: hashing, re-review scope, attempts, the gate's data (36)
+node verify/review.mjs    # the reviewer skill and its registration (21)
 ```
 
 Both suites load the shipped `lib/client.js` rather than a copy of it, and `verify/catalog.mjs`

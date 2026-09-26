@@ -10,7 +10,9 @@
 // The scan (`lib/scan.js`) finds the source strings to translate; it is a host module because it reads
 // a bundle's text and must never EXECUTE it.
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+
+import { fileURLToPath } from 'node:url'
 
 import { overlayRootFor, ROW_ID } from './paths.js'
 import { listOverlays, mergeOverlays, overlaysFor, readOverlay, removeOverlay, writeOverlay } from './overlay.js'
@@ -18,6 +20,56 @@ import { scanStrings } from './scan.js'
 
 const name = 'localize'
 const inject = ['webServer']
+
+/**
+ * THE SKILL THAT SHIPS HERE (epic 65 L5). The reviewer travels inside this package — its own copy, read
+ * at apply time — so the host serves the same text that is in the repo, and the gate has one owner.
+ */
+const SKILLS = [
+  {
+    name: 'localize-review',
+    description:
+      'Review a plugin\'s translations and record per-key verdicts — approved, flagged or missing — with the reason, in the profile\'s review memory.',
+    whenToUse:
+      'Use when the user asks to review, audit or check translations for a plugin or a language ("review the Korean", "audit the ko file", "is this translation right"), or when a translation change needs a verdict before it ships.',
+    file: fileURLToPath(new URL('../skills/localize-review/SKILL.md', import.meta.url)),
+  },
+]
+
+/** Register the shipped skills. One that cannot be read is skipped; a plugin that fails to load is worse. */
+function mountSkill(ctx) {
+  const skills = typeof ctx.get === 'function' ? ctx.get('skills') : undefined
+  if (!skills || typeof skills.register !== 'function') return false
+  let mounted = false
+  for (const skill of SKILLS) {
+    let content
+    try {
+      content = readFileSync(skill.file, 'utf8')
+    } catch (error) {
+      if (ctx.logger && typeof ctx.logger.warn === 'function') {
+        ctx.logger.warn('localize: the skill file could not be read at ' + skill.file + ': ' + String((error && error.message) || error))
+      }
+      continue
+    }
+    ctx.effect(
+      () =>
+        skills.register({
+          name: skill.name,
+          description: skill.description,
+          whenToUse: skill.whenToUse,
+          invocation: { modelInvocable: true, userInvocable: true },
+          source: 'runtime',
+          provider: 'localize',
+          path: skill.file,
+          resourceBase: { kind: 'directory', path: dirname(skill.file) },
+          content,
+        }),
+      'localize: skill ' + skill.name,
+    )
+    mounted = true
+  }
+  return mounted
+}
 
 /** The one route. `kind: 'exact'`, and the prefix carries NO trailing slash (the 175d2a7 lesson). */
 const OVERLAY_PATH = '/plugins/localize/overlay'
@@ -65,6 +117,7 @@ function readJsonBody(req) {
 
 function apply(ctx) {
   const root = () => overlayRootFor()
+  mountSkill(ctx)
   const server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined
   if (server === undefined || server === null) return
 
@@ -142,4 +195,4 @@ function apply(ctx) {
 }
 
 export default { name, inject, apply }
-export { apply, OVERLAY_PATH, ROW_ID }
+export { apply, SKILLS, mountSkill, OVERLAY_PATH, ROW_ID }
