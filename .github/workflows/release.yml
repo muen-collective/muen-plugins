@@ -2,7 +2,13 @@ name: Release
 on:
   push:
     tags:
+      # TWO TAG FORMS, both handled by scripts/pack-all.mjs: `vX.Y.Z` (version-only,
+      # exactly one plugin may carry it) and `<plugin>-vX.Y.Z` (names its plugin, so
+      # several plugins may sit at the same version — which is the normal state of a
+      # monorepo, and was the reason the first two market releases here could not be
+      # tagged).
       - 'v*'
+      - '*-v*'
 permissions:
   contents: write
 jobs:

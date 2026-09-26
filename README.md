@@ -60,8 +60,10 @@ plugins/
 1. `plugins/<new-slug>/` with `package.json` (declare `dsh.bundle.patch` + `dsh.client` if it has UI),
    `cordis.patch.yml` (row `id`/`name` = `@muen/<new-slug>`), `lib/`, `README.md`.
 2. Bump `version`. Add `script`s to the root `package.json` (`pack:<slug>`).
-3. To publish: tag a `v*` Release (the `release.yml` packs every plugin and attaches the `.tgz`),
-   then open a PR to `awesome-dsh-plugin/awesome-dsh-plugin` adding `data/plugins/muen-collective__muen-plugins--plugins-<slug>.yml`.
+3. To publish: tag a Release and the `release.yml` workflow packs THAT plugin and attaches its `.tgz`
+   (see "Publish" below for the two tag forms), then open a PR to
+   `awesome-dsh-plugin/awesome-dsh-plugin` adding
+   `data/plugins/muen-collective__muen-plugins--plugins-<slug>.yml`.
 
 ### Forking a community plugin (to improve the UI)
 
@@ -82,9 +84,14 @@ register a plugin:
 
 1. Push this repo to GitHub and make it **public**; add the **`dsh-plugin`** topic. The repo must be
    **≥1 day old and ≥10 commits** (CI checks this).
-2. Optionally tag a Release (`v*`): `release.yml` runs `node scripts/pack-all.mjs` and attaches each
-   `.tgz` to the GitHub Release (the market prefers a published npm package or a Release tarball over
-   build-from-source).
+2. Tag a Release. `release.yml` runs `node scripts/pack-all.mjs` and attaches that plugin's `.tgz` to
+   the GitHub Release (the market prefers a published npm package or a Release tarball over
+   build-from-source). There are **two tag forms**:
+   - **`<plugin>-vX.Y.Z`** — names its plugin, e.g. `dsh-assets-v0.1.0`. `plugins/<plugin>/package.json`
+     must carry `X.Y.Z`. **This is the form to use**: several plugins here legitimately sit at `0.1.0`
+     before their first release, and this form does not care.
+   - **`vX.Y.Z`** — version-only, kept for the tags already out there. Exactly one plugin in the repo
+     may carry `X.Y.Z`, or the release fails as ambiguous rather than guessing.
 3. **Open a PR** to `awesome-dsh-plugin/awesome-dsh-plugin` adding ONE file
    `data/plugins/muen-collective__muen-plugins--plugins-<slug>.yml`. Example:
    ```yaml
