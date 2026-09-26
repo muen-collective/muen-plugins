@@ -941,6 +941,68 @@ export function apply(ctx, config = {}) {
   }
 
   /**
+   * RE-UPLOAD ONE KEPT INPUT, and answer the fresh handle (epic 64 S6).
+   *
+   * THE PATH IS DERIVED FROM THE HASH, NEVER FROM THE CALLER. The body names a door and the
+   * sha256 the upload copy was stored under; the file is found by scanning this provider's own
+   * `uploads/` for a name that starts with that hash. A caller cannot ask for a path, so this
+   * route cannot read a file the library never kept — the same rule the bytes route keeps.
+   *
+   * A HASH NOTHING KEPT is `404 no-copy`, which is a different answer from a provider that
+   * refused: one means the picture was never copied, the other means it was and could not
+   * travel. The session's own value stays as it is in both cases; the surface decides what to
+   * say about it.
+   */
+  const providerRestore = async (provider, req, res) => {
+    if ((req.method || 'GET').toUpperCase() !== 'POST') {
+      methodNotAllowed(res, 'POST')
+      return
+    }
+    if (!provider.upload || typeof provider.upload !== 'object') {
+      send(res, 501, { error: 'unsupported', detail: 'this provider has no upload path yet' })
+      return
+    }
+    const body = await readJsonBody(req)
+    if (body === undefined || typeof body.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(body.sha256)) {
+      send(res, 400, { error: 'bad-hash', detail: 'a sha256 of the kept copy is required' })
+      return
+    }
+    const uploadsRoot = join(provider.data(root.root).root, 'uploads')
+    let name = null
+    try {
+      const { readdir } = await import('node:fs/promises')
+      const names = await readdir(uploadsRoot)
+      name = names.find((entry) => entry.startsWith(body.sha256 + '.')) || null
+    } catch {
+      name = null
+    }
+    if (name === null) {
+      send(res, 404, { error: 'no-copy', detail: 'no kept copy of ' + body.sha256 })
+      return
+    }
+    let bytes
+    try {
+      bytes = await readFile(join(uploadsRoot, name))
+    } catch {
+      send(res, 404, { error: 'no-copy', detail: 'the kept copy has gone: ' + name })
+      return
+    }
+    const key = await providerKeyValue(provider)
+    if (key.error) {
+      send(res, key.error === 'no-key' ? 400 : 500, { error: key.error })
+      return
+    }
+    const type = /\.[a-z0-9]+$/.exec(name) ? 'image/' + (/png$/.test(name) ? 'png' : /jpe?g$/.test(name) ? 'jpeg' : 'octet-stream') : 'application/octet-stream'
+    const uploaded = await uploadFile(provider, { key: key.key, name: body.door ? String(body.door) + '-' + name : name, type, bytes })
+    if (uploaded.error) {
+      const status = uploaded.error === 'invalid-key' ? 401 : uploaded.error === 'no-api-balance' ? 402 : uploaded.error === 'too-large' ? 413 : 502
+      send(res, status, uploaded)
+      return
+    }
+    send(res, 200, { ...uploaded, door: body.door === undefined ? null : String(body.door), sha256: body.sha256, bytes: bytes.length })
+  }
+
+  /**
    * The provider's own key, resolved for a run.
    *
    * The pane never holds a key (§12 rule 2), so the host reads it here and puts it in one
@@ -1412,6 +1474,14 @@ export function apply(ctx, config = {}) {
     // The upload a door's image control calls before a run: a file in, a URL out.
     if (action === 'asset') {
       await providerAsset(provider, req, res)
+      return
+    }
+
+    // RE-UPLOAD WHAT A SESSION KEPT (epic 64 S6): a resumed form's image doors must hold a
+    // FRESH handle, because the one the record carries is a provider handle that may be dead
+    // (RunningHub's file is not hosted, Krea's asset link has its own lifetime).
+    if (action === 'restore') {
+      await providerRestore(provider, req, res)
       return
     }
 

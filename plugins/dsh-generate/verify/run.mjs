@@ -1194,6 +1194,70 @@ check(
 )
 respond = () => ({ status: 200, body: { id: 'asset-1', image_url: 'https://assets.krea.ai/asset-1.png' } })
 
+// ── a resumed session's inputs go back through the provider (epic 64 S6) ─────
+//
+// A record's image door holds a PROVIDER HANDLE, and by the time a session is resumed that
+// handle may be dead (RunningHub's file is not hosted; Krea's asset link has its own lifetime).
+// The kept copy is what makes it fresh. Three rules: the file is found by the HASH and never
+// by a path a caller sends; a hash nothing kept is `no-copy` rather than a provider failure;
+// and what travels is the kept bytes, not whatever the body said.
+
+/** A JSON POST through the shipped handler. */
+async function callJson(path, body) {
+  const req = Readable.from([Buffer.from(JSON.stringify(body))])
+  req.method = 'POST'
+  req.url = path
+  req.headers = { 'content-type': 'application/json' }
+  const res = fakeRes()
+  await handler(req, res)
+  return res
+}
+
+{
+  const KEPT = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x11, 0x22, 0x33, 0x44])
+  const keptName = sha256Of(KEPT) + '.png'
+  writeFileSync(join(uploadsDir, keptName), KEPT)
+
+  respond = () => ({ status: 200, body: { id: 'asset-2', image_url: 'https://assets.krea.ai/resumed.png' } })
+  calls.length = 0
+  const restored = await callJson(PROVIDERS_PATH + '/krea/restore', { door: 'image_url', sha256: sha256Of(KEPT) })
+  check(
+    'a resumed image door is re-uploaded from the copy the library kept, and answered a fresh handle',
+    restored.statusCode === 200 && json(restored).url === 'https://assets.krea.ai/resumed.png' && json(restored).door === 'image_url' && json(restored).sha256 === sha256Of(KEPT),
+    JSON.stringify({ status: restored.statusCode, body: json(restored) }),
+  )
+  check(
+    'and what travels to the provider is the KEPT bytes, not something the body named',
+    calls.length === 1 && calls[0].url === BASE + '/assets' && calls[0].method === 'POST',
+    JSON.stringify(calls.map((row) => ({ url: row.url, method: row.method }))),
+  )
+
+  const noCopy = await callJson(PROVIDERS_PATH + '/krea/restore', { door: 'image_url', sha256: 'b'.repeat(64) })
+  check(
+    'a hash nothing kept is its OWN answer, not a provider failure',
+    noCopy.statusCode === 404 && json(noCopy).error === 'no-copy',
+    JSON.stringify({ status: noCopy.statusCode, body: json(noCopy) }),
+  )
+  const badHash = await callJson(PROVIDERS_PATH + '/krea/restore', { door: 'image_url', sha256: '../../etc/passwd' })
+  check(
+    'and a sha256 that is not one is refused before any file is looked for',
+    badHash.statusCode === 400 && json(badHash).error === 'bad-hash',
+    JSON.stringify({ status: badHash.statusCode, body: json(badHash) }),
+  )
+  calls.length = 0
+  const hostile = await callJson(PROVIDERS_PATH + '/krea/restore', { door: 'image_url', sha256: sha256Of(KEPT), path: '/etc/passwd' })
+  // WHAT TRAVELLED, not what came back: the answer echoes the hash it was given, so only the
+  // bytes in the request prove which file was read.
+  const hostileForm = calls.length > 0 && calls[calls.length - 1].body && typeof calls[calls.length - 1].body.get === 'function' ? calls[calls.length - 1].body : null
+  const hostileFile = hostileForm ? hostileForm.get('file') : null
+  const hostileBytes = hostileFile && typeof hostileFile.arrayBuffer === 'function' ? Buffer.from(await hostileFile.arrayBuffer()) : null
+  check(
+    'a PATH in the body is ignored: what travels is the bytes the HASH names',
+    hostile.statusCode === 200 && hostileBytes !== null && Buffer.compare(hostileBytes, KEPT) === 0,
+    JSON.stringify({ status: hostile.statusCode, got: hostileBytes ? hostileBytes.length : null, wanted: KEPT.length, same: hostileBytes ? Buffer.compare(hostileBytes, KEPT) === 0 : null }),
+  )
+}
+
 // The route-written run, not only the provider-written one: this is the check that the
 // handler passes the PROVIDER's directory rather than the plugin root, which is where a
 // first cut of the route put every record.
