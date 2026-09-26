@@ -17,6 +17,12 @@
  *      last one left off — the harness does not restore tabs in this shell;
  *   6. the search narrows what is on screen over the name, the prompt and the context.
  *
+ *   7. EVERY FOLDER CONTROL REACHES THE HOST. This one is here because the suites were
+ *      blind to it: A3 deleted the `post` helper and left its call sites, so `+ Folder`,
+ *      the Finder link, the row's remove and the typed add all drew and did nothing —
+ *      every press threw `ReferenceError: post is not defined` inside the handler. So
+ *      these checks PRESS the controls and read what the pane asked the host for.
+ *
  *   node verify/views.mjs
  */
 import { miniReact, textOf, collect, loadClient, recordingCtx, reporter, net, settle } from './harness.mjs'
@@ -43,6 +49,9 @@ const foldersBody = {
   root: '/p/assets',
   recordsRoot: '/p/generate',
 }
+
+// The registry the pane reads is mutable, because section 7 renders the empty room too.
+let folders = foldersBody
 
 const catalogBody = {
   assets: [
@@ -112,12 +121,18 @@ net.fetch = async (url, options) => {
   if (options && options.method === 'POST') {
     const body = JSON.parse(options.body)
     posted.push({ url: href, body })
+    // THE STUB WRITES WHAT THE HOST WRITES. A POST that changed nothing on the next read
+    // would make "the folder a person added is on screen" unfalsifiable, and that is the
+    // claim behind the founder's report: the press worked, so the folder is there.
+    if (href.includes('/folders') && body.action === 'add' && typeof body.path === 'string') {
+      folders = { ...folders, folders: [...folders.folders, { path: body.path, label: body.path.split('/').filter(Boolean).pop() }] }
+    }
     if (href.includes('/view')) view = { ...view, ...body }
     return { ok: true, json: async () => view }
   }
   if (href.includes('/catalog')) return { ok: true, json: async () => catalogBody }
   if (href.includes('/detail')) return { ok: true, json: async () => (String(url).includes('hand-added') ? looseDetail : detailBody) }
-  if (href.includes('/folders')) return { ok: true, json: async () => foldersBody }
+  if (href.includes('/folders')) return { ok: true, json: async () => folders }
   if (href.includes('/view')) return { ok: true, json: async () => view }
   return { ok: false, status: 404, json: async () => ({}) }
 }
@@ -303,6 +318,124 @@ async function render(passes = 4) {
   mini.reset()
   tree = pane({ locale: { bind: () => t } })
   check('and a term nothing matches says so', collect(tree, (node) => node.props && node.props['data-assets-none'] === 'yes').length === 1, '')
+}
+
+// ── 7. every folder control reaches the host ───────────────────────────────
+//
+// THE DEFECT THIS SECTION EXISTS FOR (founder, 2026-09-26, twice: *"+folder in assets plugin
+// not working"*): A3 deleted the `post` helper and left its four call sites, so every folder
+// control drew and did nothing — the press threw `ReferenceError: post is not defined` INSIDE
+// the click handler, and the suites stayed green because not one of them pressed a control;
+// they READ the tree. So these press.
+
+{
+  /**
+   * Press a control and answer WHY it failed, or null when it worked.
+   *
+   * A press that throws is a FAILED CHECK and not a crashed suite, because "the control threw"
+   * is exactly the defect this section exists for: the missing `post` was a `ReferenceError`
+   * inside the handler, so a reporter that let it escape would report the regression as a
+   * stack trace instead of the one line a person reads.
+   */
+  const pressInto = async (node) => {
+    posted.length = 0
+    if (!node) return 'no control on screen'
+    try {
+      await node.props.onClick()
+      await settle()
+      return null
+    } catch (error) {
+      await settle()
+      return 'the press threw: ' + String((error && error.message) || error)
+    }
+  }
+  const foldersPost = () => posted.filter((entry) => entry.url.includes('/folders'))
+  const addControl = (tree) => {
+    const holder = collect(tree, (node) => node.props && node.props['data-assets-add'] === 'yes')[0]
+    return holder ? collect(holder, (node) => typeof node.props.onClick === 'function')[0] : undefined
+  }
+
+  // THE LIVE BRANCH IS THE `Button` ONE: the real primitives export `Button`, so the control
+  // a person presses is that component — not the plain `<button>` fallback the six sections
+  // above happen to draw, which is why this section loads a second client with it named. The
+  // stub forwards `data-*` because the primitive spreads its rest props onto a native button,
+  // and that is how a check finds the control rather than matching its copy.
+  const Button = (props) => {
+    const forwarded = {}
+    for (const [key, value] of Object.entries(props)) if (key.startsWith('data-')) forwarded[key] = value
+    return mini.React.createElement('button', { type: 'button', disabled: props.disabled === true, onClick: props.onClick, ...forwarded }, props.children)
+  }
+  const live = await loadClient({ React: mini.React, stubs: { Button } })
+  const second = recordingCtx('en')
+  live.exports.apply(second.ctx)
+  const pane2 = second.seen.slots.find((slot) => slot.options.name === 'sidebar.right.pane.tab').component
+  const render2 = async (passes = 4) => {
+    mini.clear()
+    let tree = null
+    for (let pass = 0; pass < passes; pass += 1) {
+      mini.reset()
+      tree = pane2({ locale: { bind: () => t } })
+      mini.runEffects()
+      await settle()
+    }
+    mini.reset()
+    return pane2({ locale: { bind: () => t } })
+  }
+
+  folders = foldersBody
+  let tree = await render2()
+  const add = addControl(tree)
+  check('`+ Folder` is a control a person can press', !!add && typeof add.props.onClick === 'function', add ? textOf(add).join('') : 'none')
+  const choseWhy = await pressInto(add)
+  check('and pressing it asks the host for the folder dialog', choseWhy === null && foldersPost().length === 1 && foldersPost()[0].body.action === 'choose', choseWhy || JSON.stringify(posted))
+
+  tree = await render2()
+  const row = collect(tree, (node) => node.props && node.props['data-assets-folder'] === '/Users/someone/Desktop/yammaman')[0]
+  check('a folder the library holds is a link to where it lives', !!row, row ? String(row.props.title) : 'none')
+  const revealWhy = await pressInto(row)
+  check('and pressing it asks for that folder in the file browser', revealWhy === null && foldersPost().length === 1 && foldersPost()[0].body.action === 'reveal' && foldersPost()[0].body.path === '/Users/someone/Desktop/yammaman', revealWhy || JSON.stringify(posted))
+
+  tree = await render2()
+  const remove = collect(tree, (node) => node.props && node.props['aria-label'] === EN['pane.remove'])[0]
+  check('the row carries a remove beside the link', !!remove, remove ? String(remove.props.title) : 'none')
+  const removeWhy = await pressInto(remove)
+  check('and pressing it asks the host to drop that folder', removeWhy === null && foldersPost().length === 1 && foldersPost()[0].body.action === 'remove' && foldersPost()[0].body.path === '/Users/someone/Desktop/yammaman', removeWhy || JSON.stringify(posted))
+
+  // THE HOST WITH NO DIALOG: on anything but macOS the head control cannot open a picker, so
+  // the typed field is the way in — and it must reach the host like every other control.
+  folders = { ...foldersBody, folders: [], canChoose: false }
+  tree = await render2()
+  const field = collect(tree, (node) => node.props && node.props['aria-label'] === EN['pane.path.use'] && typeof node.props.onChange === 'function')[0]
+  check('with no folder dialog the pane asks for the path instead', !!field, field ? String(field.props.placeholder) : 'none')
+  if (field) {
+    field.props.onChange({ target: { value: '/Users/someone/Desktop/yammaman' } })
+    mini.reset()
+    tree = pane2({ locale: { bind: () => t } })
+    const addPath = collect(tree, (node) => node.props && node.props['data-assets-add-path'] === 'yes' && typeof node.props.onClick === 'function')[0]
+    check('and its own Add control is a press away from the host', !!addPath, addPath ? textOf(addPath).join('') : 'none')
+    const typedWhy = await pressInto(addPath)
+    check('pressing it adds the path a person typed', typedWhy === null && foldersPost().length === 1 && foldersPost()[0].body.action === 'add' && foldersPost()[0].body.path === '/Users/someone/Desktop/yammaman', typedWhy || JSON.stringify(posted))
+    // AND THE PANE LOOKS AGAIN. `post` re-reads the registry it just wrote, on the SAME hook
+    // slots a press leaves behind — which is the difference between "the folder was added"
+    // and "the folder shows up", and the half a person would report as still broken.
+    mini.reset()
+    tree = pane2({ locale: { bind: () => t } })
+    mini.runEffects()
+    await settle()
+    mini.reset()
+    tree = pane2({ locale: { bind: () => t } })
+    const shown = textOf(tree).join(' ')
+    check('and the folder is on screen without a reload', shown.includes('yammaman'), shown.slice(0, 120))
+  }
+
+  // AND THE FALLBACK, because the defect was branch-independent: where the primitives name no
+  // `Button`, the same act is a plain `<button>`.
+  folders = foldersBody
+  tree = await render()
+  const fallback = addControl(tree)
+  check('the fallback control is a plain button, and pressable', !!fallback && fallback.type === 'button', fallback ? String(fallback.type) : 'none')
+  const fallbackWhy = await pressInto(fallback)
+  check('and it reaches the host as well', fallbackWhy === null && foldersPost().length === 1 && foldersPost()[0].body.action === 'choose', fallbackWhy || JSON.stringify(posted))
 }
 
 note('the live layer is the founder’s eyes: the grid, the badges and the metadata block on a running app')

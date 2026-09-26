@@ -217,16 +217,25 @@ them.
 ```
 node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room   31
 node verify/intake.mjs     # A2: the folders, the records, the filters, the carrier       63
-node verify/views.mjs      # A3: the grid, the tile, the metadata block, the carrier       37
+node verify/views.mjs      # A3: the grid, the tile, the metadata block, and EVERY
+                           #     folder control pressed through to the host               49
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36
-node verify/sync.mjs       # A5: off by default, content-addressed, failure-safe              33
+node verify/sync.mjs       # A5: off by default, content-addressed, failure-safe              38
 ```
 
 The suites share `verify/harness.mjs`: a reporter, the server fakes, and enough React to render a
 component twice (hooks in call order, effects honoured with their dependencies) — so "what does a person see"
 is checked as text and props rather than in dialects.
+
+A control that DRAWS is not a control that WORKS, and the suites had only ever checked the first
+half: A3 deleted the `post` helper every folder action calls and left its call sites, so `+ Folder`,
+the Finder link, a row's remove and the typed path all rendered and did nothing — each press threw
+`ReferenceError: post is not defined` inside the handler, invisibly (founder, 2026-09-26, twice:
+*"+folder in assets plugin not working"*). `views` section 7 now **presses** all four, in both the
+`Button` branch the app really draws and the plain-`<button>` fallback, and reads back what the pane
+asked the host for — plus that the folder a person just added is on screen without a reload.
 
 `mount` drives the shipped client half in a stubbed loader and a recording ctx, then **renders the pane three
 ways** against a stubbed host — answering, unreachable, and empty — because "no folders yet" is a claim about

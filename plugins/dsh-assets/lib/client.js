@@ -833,6 +833,37 @@ window.__ModuleLoader__.load({
       const select = (path) => {
         patchView({ selected: selectedPath === path ? null : path })
       }
+
+      /**
+       * EVERY FOLDER ACTION GOES THROUGH HERE, and it must exist: `+ Folder`, the typed-path
+       * add, the Finder link on a row and the row's remove all call it. It was deleted with
+       * the list that used it in A3 (`0badc39`, 2026-09-26) while these call sites stayed, so
+       * every press threw `ReferenceError: post is not defined` inside the click handler — the
+       * button rendered and did nothing at all, which is the bug the founder reported twice
+       * (2026-09-26). The suites missed it because they read the tree and never pressed the
+       * control; `verify/views.mjs` now presses it.
+       *
+       * A refused call is a state, not a throw: the answer's status is what the pane shows,
+       * and the registry is re-read only when the host actually wrote something.
+       */
+      const post = async (body) => {
+        setBusy(true)
+        setFailed(null)
+        try {
+          const answer = await fetch(FOLDERS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          if (!answer.ok) throw new Error('http-' + answer.status)
+          const result = await answer.json()
+          reloadRegistry()
+          reloadCatalog()
+          return result
+        } catch (error) {
+          setFailed(String((error && error.message) || error))
+          return null
+        } finally {
+          setBusy(false)
+        }
+      }
+
       if (registry.phase === 'loading' && catalog.phase === 'loading') {
         return h(
           'div',
@@ -899,7 +930,7 @@ window.__ModuleLoader__.load({
                   }),
                   h('span', { style: S.muted }, t('pane.path.hint')),
                   Button
-                    ? h(Button, { variant: 'primary', size: 'sm', disabled: busy || typed.trim() === '', onClick: async () => { await post({ action: 'add', path: typed.trim() }); setTyped('') } }, t('pane.path.use'))
+                    ? h(Button, { variant: 'primary', size: 'sm', disabled: busy || typed.trim() === '', 'data-assets-add-path': 'yes', onClick: async () => { await post({ action: 'add', path: typed.trim() }); setTyped('') } }, t('pane.path.use'))
                     : null,
                 ),
             failed ? h('span', { style: S.error }, t('pane.add.failed') + ' ' + failed) : null,
@@ -970,7 +1001,7 @@ window.__ModuleLoader__.load({
               'div',
               { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
               h('input', { style: S.input, value: typed, placeholder: t('pane.path.placeholder'), 'aria-label': t('pane.path.use'), onChange: (event) => setTyped(event.target.value) }),
-              Button ? h(Button, { variant: 'primary', size: 'sm', disabled: busy || typed.trim() === '', onClick: async () => { await post({ action: 'add', path: typed.trim() }); setTyped('') } }, t('pane.path.use')) : null,
+              Button ? h(Button, { variant: 'primary', size: 'sm', disabled: busy || typed.trim() === '', 'data-assets-add-path': 'yes', onClick: async () => { await post({ action: 'add', path: typed.trim() }); setTyped('') } }, t('pane.path.use')) : null,
             ),
         failed ? h('span', { style: S.error }, t('pane.add.failed') + ' ' + failed) : null,
 
