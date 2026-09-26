@@ -84,6 +84,7 @@ import { readChosenFolder, writeChosenFolder } from './library-path.js'
 import { CAN_CHOOSE, chooseFolder, revealFile, revealFolder } from './folder-actions.js'
 import { resolveDataRoot } from './paths.js'
 import { listRunRecords, readRunRecord, unitOf, valuesOf, whereIs } from './run-record.js'
+import { keepUpload } from './uploads.js'
 
 /** Matches the row id in cordis.patch.yml. */
 export const name = 'generate'
@@ -920,13 +921,20 @@ export function apply(ctx, config = {}) {
       return
     }
     const uploaded = await uploadFile(provider, { key: key.key, name, type, bytes })
+    // THE INPUT IS KEPT (epic 64 S2), and **it can never fail the upload**: the handle the
+    // provider answers is what the form needs, and a full disk is reported beside that
+    // answer rather than turned into a person who cannot generate. The copy is content-
+    // addressed and written once; it is the only durable record of what a person picked,
+    // because a provider's handle is not one (RunningHub's file is not hosted, and Krea's
+    // asset link has its own lifetime).
+    const kept = await keepUpload({ root: provider.data(root.root).root, name, type, bytes })
     if (uploaded.error) {
       const status =
         uploaded.error === 'invalid-key' ? 401 : uploaded.error === 'no-api-balance' ? 402 : uploaded.error === 'too-large' ? 413 : 502
-      send(res, status, uploaded)
+      send(res, status, { ...uploaded, kept })
       return
     }
-    send(res, 200, uploaded)
+    send(res, 200, { ...uploaded, kept })
   }
 
   /**

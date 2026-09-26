@@ -35,8 +35,8 @@ import { join } from 'node:path'
 /** One download: generous for a picture, short enough that a stuck host gives up. */
 const TIMEOUT_MS = 30000
 
-/** What a content type means on disk, when the URL says nothing. */
-const EXT_BY_TYPE = {
+/** What a content type means on disk, when the URL says nothing. Shared with `lib/uploads.js`. */
+export const EXT_BY_TYPE = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
@@ -48,8 +48,13 @@ const EXT_BY_TYPE = {
   'audio/wav': 'wav',
 }
 
-/** A path segment nobody can climb out of, or lie to a filesystem with. */
-function safe(part, fallback = 'unknown') {
+/**
+ * A path segment nobody can climb out of, or lie to a filesystem with.
+ *
+ * Exported because a kept upload (epic 64 S2, `lib/uploads.js`) is named under the same
+ * rule: one sanitiser in this plugin, not two that drift.
+ */
+export function safe(part, fallback = 'unknown') {
   const text = String(part === undefined || part === null ? '' : part)
     .trim()
     .toLowerCase()

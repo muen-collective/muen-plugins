@@ -23,6 +23,7 @@
  *
  *   node verify/run.mjs
  */
+import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { Readable } from 'node:stream'
@@ -1109,6 +1110,89 @@ check(
   tooBig.statusCode === 413 && json(tooBig).error === 'too-large',
   JSON.stringify({ status: tooBig.statusCode, body: json(tooBig) }),
 )
+
+// ── the picked file is KEPT (epic 64 S2) ─────────────────────────────────────
+//
+// The handle a provider answers is not a durable record of what went in: RunningHub's guide
+// says the file is not hosted, and Krea's asset link has its own lifetime. So the route keeps
+// the bytes under the provider's own root, content-addressed, and answers the hash beside the
+// handle. The claims: the copy is there and is byte-identical; the same bytes are written
+// ONCE however many times they are picked; the file's NAME is provenance and never the path;
+// the extension describes the bytes rather than the name; and a failed provider upload still
+// keeps the input, because a full disk or a refused key must not erase what a person picked.
+
+const sha256Of = (buffer) => createHash('sha256').update(buffer).digest('hex')
+const uploadsDir = join(dataRoot, 'krea', 'uploads')
+/** A response's kept-copy block, or an empty one — so a missing field FAILS a check instead of throwing. */
+const keptOf = (res) => json(res).kept || {}
+/** The uploads directory as it stands, or an empty list when the copy was never written. */
+const uploadsNow = () => { try { return readdirSync(uploadsDir) } catch { return [] } }
+/** A kept file's bytes, or null when it is not where the route said it was. */
+const keptBytes = (name) => { try { return readFileSync(join(uploadsDir, name)) } catch { return null } }
+const keptName = sha256Of(FILE_BYTES) + '.png'
+// The Krea shape back on the wire: the RunningHub cases above left their own answer installed.
+respond = () => ({ status: 200, body: { id: 'asset-1', image_url: 'https://assets.krea.ai/asset-1.png' } })
+check(
+  'the picked file is kept under the provider\'s own root, byte for byte',
+  (() => {
+    try {
+      const kept = readFileSync(join(uploadsDir, keptName))
+      return Buffer.compare(kept, FILE_BYTES) === 0
+    } catch {
+      return false
+    }
+  })(),
+  (() => { try { return uploadsNow().join(',') } catch { return 'no uploads directory' } })(),
+)
+check(
+  'and the answer carries the hash beside the provider\'s handle',
+  !!json(uploaded).kept &&
+    keptOf(uploaded).sha256 === sha256Of(FILE_BYTES) &&
+    keptOf(uploaded).file === join(dataRoot, 'krea', 'uploads', keptName) &&
+    keptOf(uploaded).existed === false,
+  JSON.stringify(keptOf(uploaded)),
+)
+
+calls.length = 0
+const again = await callBytes(handler, ASSET_PATH, FILE_BYTES, { 'content-type': 'image/png', 'x-file-name': 'a%20different%20name.png' })
+check(
+  'the same bytes picked twice are written ONCE, and the second answer says so',
+  again.statusCode === 200 &&
+    keptOf(again).sha256 === sha256Of(FILE_BYTES) &&
+    keptOf(again).existed === true &&
+    uploadsNow().length === 1,
+  JSON.stringify({ kept: json(again).kept, files: uploadsNow() }),
+)
+
+const HOSTILE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x99])
+const hostile = await callBytes(handler, ASSET_PATH, HOSTILE, { 'content-type': 'image/png', 'x-file-name': '../../../../etc/passwd.png' })
+check(
+  "a hostile file name is kept for provenance and never becomes the path",
+  hostile.statusCode === 200 &&
+    keptOf(hostile).sha256 === sha256Of(HOSTILE) &&
+    uploadsNow().includes(sha256Of(HOSTILE) + '.png') &&
+    keptOf(hostile).name === '../../../../etc/passwd.png',
+  JSON.stringify({ kept: json(hostile).kept, files: uploadsNow() }),
+)
+
+const byType = await callBytes(handler, ASSET_PATH, Buffer.from([1, 2, 3, 4]), { 'content-type': 'image/jpeg', 'x-file-name': 'photo-without-extension' })
+check(
+  'the extension describes the bytes, not what the file was named',
+  byType.statusCode === 200 && String(keptOf(byType).file || '').endsWith('.jpg'),
+  JSON.stringify(keptOf(byType)),
+)
+
+respond = () => ({ status: 500, body: { message: 'boom' } })
+const REFUSED = Buffer.from([9, 9, 9, 9])
+const refusedKeep = await callBytes(handler, ASSET_PATH, REFUSED, { 'content-type': 'image/png', 'x-file-name': 'kept-anyway.png' })
+check(
+  'a failed provider upload still keeps the input and says where it is',
+  refusedKeep.statusCode === 502 &&
+    keptOf(refusedKeep).sha256 === sha256Of(REFUSED) &&
+    (keptBytes(sha256Of(REFUSED) + '.png') || Buffer.alloc(0)).length === REFUSED.length,
+  JSON.stringify({ status: refusedKeep.statusCode, kept: json(refusedKeep).kept }),
+)
+respond = () => ({ status: 200, body: { id: 'asset-1', image_url: 'https://assets.krea.ai/asset-1.png' } })
 
 // The route-written run, not only the provider-written one: this is the check that the
 // handler passes the PROVIDER's directory rather than the plugin root, which is where a

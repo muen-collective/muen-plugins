@@ -185,6 +185,14 @@ to be left out while the surface had four controls, because a text box posting a
 `additionalProperties: false` cannot work; the fix was the control, not a flattened field. `max` is Krea's
 own `maxItems`, which is why the add control disappears at one moodboard and stops at ten style references.
 
+**The picked file is kept on this machine** (epic 64 S2). The handle a provider answers is not a durable
+record of what went in — RunningHub's guide says the file is not hosted, and Krea's asset link has its own
+lifetime — so the route hashes the bytes and writes them once under the provider's own root before the
+answer goes back, and the answer carries the hash beside the handle. That copy is what a restored session
+re-uploads from; without it a reopened form would hold a dead handle and the session could not say what it
+was given. The profile is the right home (epic 64 §8): an upload is an input to a form, not a picture the
+person made, and it has to survive the save folder being changed.
+
 **And the image doors really upload.** Krea's `image_url` and a style reference's `url` each take *"an
 external URL, base64 data URI, or uploaded asset URL"*, but a real photograph inlined as a data URI is far
 past the 1024 characters those fields allow — so a picked file goes to `POST /assets` and the door carries
@@ -511,7 +519,7 @@ Four rules from §12 are structure here rather than style:
 | `POST /plugins/generate/providers/<id>/payload` | the gate's preview: `{ name, values }` → the exact body, what is still empty, what is refused. Free: no key, no network, nothing spent |
 | `POST /plugins/generate/providers/<id>/run` | `{ name, values, confirmed: true }` → `{ jobId, status }`; anything without the flag is refused by name |
 | `GET /plugins/generate/providers/<id>/run?job=<id>` | one poll → `{ state, status, urls, error }`, and the run's file gains the outcome on a terminal state |
-| `POST /plugins/generate/providers/<id>/asset` | the upload an image door calls: the body IS the file, `X-File-Name` and `Content-Type` say what it is → `{ url, asset }`. Refused with `501` for a provider that declares no `upload` |
+| `POST /plugins/generate/providers/<id>/asset` | the upload an image door calls: the body IS the file, `X-File-Name` and `Content-Type` say what it is → `{ url, asset, kept }`. **The picked file is KEPT** (epic 64 S2) at `<provider>/uploads/<sha256>.<ext>` — content-addressed, written once however many times it is picked, the extension from the content type rather than the name, and `kept` answers `{ sha256, file, bytes, name, type, ext, existed }` beside the provider's handle. **A failed copy never fails the upload**: `kept` carries the error and the provider's answer stands, because a full disk must not stop a person from generating. Refused with `501` for a provider that declares no `upload` |
 
 One job at a time. The host posts the body with the provider's key from the credential store and answers with a
 job id; the pane polls the host every two seconds, which asks Krea and writes the outcome back. The strip says
