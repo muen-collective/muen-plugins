@@ -23,9 +23,19 @@ and the run are not faked here.
 | `/plugins/generate/providers/<id>/key` | one provider's key: `GET` its state, `POST` to link or replace, `DELETE` to unlink |
 | `/plugins/generate/providers/<id>/workflows` | one provider's installed workflows — one disk read, no key, no network |
 | `/plugins/generate/providers/<id>/workflow?name=` | one workflow, whole: the doors, labels, bounds and `ui.order` a surface renders |
+| `/plugins/generate/providers/<id>/result?job=&i=` | **the bytes of a finished run's own file** (epic 64 S1): the path comes from that run's record (`outcome.saved[i].file`), never from the query, so a caller names *which* output and cannot ask for a file this host never wrote. `404 no-result` (the run saved nothing) and `404 missing-file` (it saved it and the file has since moved) are different answers, because the asset library draws them apart |
+| `/plugins/generate/providers/<id>/state?name=` | the per-workflow values the surface saves as a person edits: `GET` them back (or `{}`), `POST { name, values }` to store. **Broken until 2026-09-26** — see the note under the table |
 | `settings.section` | exactly ONE settings page, id `generate`, listing every provider in the Models → Providers shape: a row per provider with a credential dot and its key state, one open editor card at a time, the API key as the primary field, and the install prompt where Models puts a model list |
 | the client locale registry | namespace `generate`, en + zh |
 | `ctx.tools` | `rh_workflow_graph` (read an app's doors) and `rh_adapter_validate` (check a written adapter) |
+
+**The state route was dead, and its failure looked like a decision.** Two faults stacked: it read
+`provider.root`, which no provider has (a provider's own directory is `provider.data(root.root).root`), and it
+read `req.body`, which no seam sets — every POST answered `400 missing-name` and every GET threw before it
+reached the disk. So the "remember the last values" behaviour never worked, which is why the founder concluded
+the form should open clean (the rule that stands: a measured optimum belongs in the skill, the adapter's
+`ui.defaults` and the handoff, never in what the last person typed). Both faults are fixed, and
+`verify/result.mjs` holds the round trip so the route cannot quietly die again.
 
 **The prefix route is registered WITHOUT a trailing slash, and that is a contract.** The harness matches a
 prefix as `pathname === prefix || pathname.startsWith(prefix + '/')` (`@deepseek-ai/dsh-host-webserver`,

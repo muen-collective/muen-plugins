@@ -69,8 +69,8 @@
  *
  * @module @muen/dsh-generate
  */
-import { readFileSync } from 'node:fs'
-import { readFile, statfs } from 'node:fs/promises'
+import { createReadStream, readFileSync } from 'node:fs'
+import { readFile, stat, statfs } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -83,6 +83,7 @@ import { readHidden, withHidden, writeHidden } from './hidden.js'
 import { readChosenFolder, writeChosenFolder } from './library-path.js'
 import { CAN_CHOOSE, chooseFolder, revealFile, revealFolder } from './folder-actions.js'
 import { resolveDataRoot } from './paths.js'
+import { readRunRecord } from './run-record.js'
 
 /** Matches the row id in cordis.patch.yml. */
 export const name = 'generate'
@@ -112,6 +113,30 @@ const TIMEOUT_MS = 15000
 
 /** Refuse a body past this — a key is tens of bytes, and the route is reachable. */
 const MAX_BODY_BYTES = 4096
+
+/**
+ * What a saved file's own extension means on the wire, for the one route that serves
+ * bytes (epic 64 S1). The inverse of `library.js`'s `EXT_BY_TYPE`, written out here
+ * rather than imported from the downloader: this is a route's concern, and the record
+ * already carries the extension `libraryPath` chose.
+ */
+const TYPE_BY_EXT = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  avif: 'image/avif',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  bin: 'application/octet-stream',
+}
+
+/** A job id is what this plugin itself wrote: the record file's own stem, nothing else. */
+const JOB_ID_PATTERN = /^(?=.*[A-Za-z0-9])[A-Za-z0-9._-]{1,128}$/
 
 /**
  * The floor a provider's upload route is allowed even without a documented limit, and the
@@ -1142,14 +1167,23 @@ export function apply(ctx, config = {}) {
   const providerState = async (provider, req, res) => {
     const method = (req.method || 'GET').toUpperCase()
     const url = new URL(req.url || '/', 'http://127.0.0.1')
+    // THE BODY IS THIS ROUTE'S JOB TO READ. Every other POST route in this file calls
+    // `readJsonBody` itself; this one used to read `req.body`, which no seam ever sets — so
+    // a write answered 400 `missing-name` no matter what the page sent, and the surface's
+    // per-value save could never land. Found by verify/result.mjs, 2026-09-26.
+    const body = method === 'POST' ? await readJsonBody(req) : undefined
+    if (method === 'POST' && body === undefined) {
+      send(res, 400, { error: 'bad-request', detail: 'a JSON body is required' })
+      return
+    }
     const name = method === 'GET'
       ? str(url.searchParams.get('name'))
-      : str((req.body && req.body.name) || '')
+      : str(body && body.name)
     if (!name) {
       send(res, 400, { error: 'missing-name', detail: 'a workflow name is required' })
       return
     }
-    const stateDir = join(provider.root, 'state')
+    const stateDir = join(provider.data(root.root).root, 'state')
     const file = join(stateDir, name + '.json')
 
     if (method === 'GET') {
@@ -1163,7 +1197,7 @@ export function apply(ctx, config = {}) {
     }
 
     if (method === 'POST') {
-      const values = req.body && req.body.values
+      const values = body && body.values
       if (!values || typeof values !== 'object' || Array.isArray(values)) {
         send(res, 400, { error: 'missing-values', detail: 'values must be an object' })
         return
@@ -1176,6 +1210,89 @@ export function apply(ctx, config = {}) {
     }
 
     methodNotAllowed(res, 'GET,POST')
+  }
+
+  /**
+   * The bytes of a finished run's own file (epic 64 S1) — the one route the asset library
+   * and the session strip both draw from.
+   *
+   * THE PATH COMES FROM THE RECORD, NEVER FROM THE QUERY. `?job=<jobId>&i=<index>` names
+   * *which* saved output; the file is whatever the host itself wrote into that run's
+   * `outcome.saved[i].file`. So a caller cannot ask for a file this plugin never produced,
+   * and there is no path parameter to climb with. A job id is still checked against the
+   * shape the record writer uses before it is joined into a path, because a `..` in a job
+   * id would otherwise walk out of the runs directory (`readRunRecord` joins it blind).
+   *
+   * THE TWO ABSENCES ARE DIFFERENT ANSWERS. A run that saved nothing answers 404
+   * `no-result` with the provider's own reason; a run whose file has since been moved or
+   * trashed answers 404 `missing-file` with the path. The library draws those apart — one
+   * is "this run produced nothing", the other is "it was here and it is not" — and neither
+   * is the empty 404 the SPA fallback would give.
+   *
+   * `no-store`, like every other answer this plugin gives: a cached 200 would keep showing
+   * a file that has been moved, and the library's whole job is to say where a thing is.
+   */
+  const providerResult = async (provider, url, res) => {
+    const jobId = str(url.searchParams.get('job'))
+    if (!JOB_ID_PATTERN.test(jobId) || jobId.includes('..')) {
+      send(res, 400, { error: 'bad-job', detail: 'a job id is letters, digits, dot, dash or underscore' })
+      return
+    }
+    const raw = url.searchParams.get('i')
+    const index = raw === null || raw === '' ? 0 : Number(raw)
+    if (!Number.isInteger(index) || index < 0 || index > 999) {
+      send(res, 400, { error: 'bad-index', detail: 'i is the index of a saved output' })
+      return
+    }
+
+    const record = await readRunRecord(provider.data(root.root).root, jobId)
+    if (!record) {
+      send(res, 404, { error: 'no-record', detail: 'this install has no run ' + jobId })
+      return
+    }
+
+    const outcome = record.outcome && typeof record.outcome === 'object' ? record.outcome : {}
+    const saved = Array.isArray(outcome.saved) ? outcome.saved : []
+    const entry = saved[index]
+    if (!entry || typeof entry.file !== 'string' || entry.file === '') {
+      send(res, 404, {
+        error: 'no-result',
+        detail: str(outcome.error) || 'this run saved no file at index ' + index,
+        state: str(outcome.state),
+      })
+      return
+    }
+
+    const file = entry.file
+    const absolute = file.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(file)
+    if (!absolute || file.length > 4096 || file.includes('\0')) {
+      send(res, 404, { error: 'missing-file', detail: 'the record names a path this host cannot serve' })
+      return
+    }
+
+    let info
+    try {
+      info = await stat(file)
+    } catch {
+      send(res, 404, { error: 'missing-file', detail: 'the file is not where the record says: ' + file })
+      return
+    }
+    if (!info.isFile()) {
+      send(res, 404, { error: 'missing-file', detail: 'not a file: ' + file })
+      return
+    }
+
+    res.statusCode = 200
+    res.setHeader('Content-Type', TYPE_BY_EXT[str(entry.type).toLowerCase()] || 'application/octet-stream')
+    res.setHeader('Content-Length', info.size)
+    res.setHeader('Cache-Control', 'no-store')
+    const stream = createReadStream(file)
+    // A file that vanishes between the stat and the read: the headers are already gone, so
+    // the only honest end is a broken response rather than a lie with a length in it.
+    stream.on('error', () => {
+      try { res.destroy() } catch { /* the socket is already gone */ }
+    })
+    stream.pipe(res)
   }
 
   /** `/providers/<id>/<action>`, with the provider resolved before any work happens. */
@@ -1234,6 +1351,17 @@ export function apply(ctx, config = {}) {
     // time they open the same workflow.
     if (action === 'state') {
       await providerState(provider, req, res)
+      return
+    }
+
+    // The bytes of a finished run's own file (epic 64 S1). GET only, and the query names
+    // WHICH saved output rather than a path — see `providerResult`.
+    if (action === 'result') {
+      if ((req.method || 'GET').toUpperCase() !== 'GET') {
+        methodNotAllowed(res, 'GET')
+        return
+      }
+      await providerResult(provider, url, res)
       return
     }
 
