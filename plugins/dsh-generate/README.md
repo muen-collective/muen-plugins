@@ -157,6 +157,40 @@ name and type in headers. The provider says whether it can do this (`upload` on 
 as a capability in the provider list), so RunningHub's image doors draw the URL field and no pick control
 until its own run slice lands.
 
+**An empty image door is one dashed drop area and nothing else** (founder, 2026-09-25: *"the upload image
+card looks messy, make it more clean with drop area + icons below for finder or link"*. Then, the same day:
+*"we don't need finder button since click on the drop area does same thing"*, and *"i can't get url to work.
+maybe we don't need on local, user can download and upload is better"*). What is left is the shape the
+founder's reference had minus the parts he did not want: the dashed area holds one glyph and one sentence —
+*Drag & drop, or choose a file* — it takes the drop, and it is a `label` for the hidden file input, so pressing
+anywhere in it opens the dialog. A dropped file and a picked one travel the same upload. **There is no second
+control**: the Finder tile went because the area already does it, and the URL button and its dialog went with
+the founder's verdict that downloading and uploading beats pasting a link. A provider that declares no `upload`
+still gets a plain field — it is the one place a link is typed, so the frame keeps an answer for a link the
+browser refuses (the neutral mark and *That URL did not load an image.*, never a broken-image glyph). The glyph
+above the sentence is the bundle's one hand-drawn mark (`IconUpload24`): the harness's icon set has
+`IconDownloadOutline` and nothing for the other direction.
+
+**A filled door is cleared by a badge on the picture** (founder, the same day: *"to clear the upload use a badge
+close icon in the top right corner"*). The frame is the positioning context and the badge — a 20px circle
+carrying the app's own close glyph, on its own solid surface so it reads over any picture — sits at its
+top-right. The row of actions under the picture is gone with it: a cleared door goes back to the drop area,
+which is where both ways in live.
+
+**AN EMPTY SECOND IMAGE WAITS FOR THE FIRST** (founder, 2026-09-25: *"its drops in order not by left/right
+position. we can disable image 2 and message user to drop image 1 first"*). The reason is outside the panel:
+`@deepseek-ai/dsh-client-ui-attachment` listens for `drop` on `document` with no check on the drop target, so
+every file dropped anywhere in the app reaches the composer's tray in the order the drops happened — not in the
+order of the doors. A panel that let a person start with the second image would hand the composer the two
+pictures backwards. So while an earlier image door in the same form is empty, a later **empty** one takes no
+drop, opens no picker (its input is there but `disabled`), dims, and says *Drop Image 1 first* — naming the
+earlier door by its own `label`, so the sentence follows any adapter's own words. The rule looks only backwards
+and only at empty doors, so the first image door is never held back and a door that already holds a picture is
+never blocked: the guard cannot trap a value a person wants to clear. It is a guess about the composer's order,
+not a fence around the panel — a person can still drop anything onto the composer directly, and the sentence is
+what makes the two agree. The panel's own handler takes `transfer.files[0]` and never stops propagation, which
+is why one drop feeds both.
+
 Nothing here spends anything: a Krea model is a card and a surface, and the run is S5. What the model adds for
 that slice is the two facts it will need (`model` and `endpoint`), carried through the surface route so S5 does
 not have to re-derive them.
@@ -517,6 +551,18 @@ whose run is not built yet gets its preview card too, with the sentence that say
 lopsided pane that fills in later. Neither card carries a heading of its own (founder's call): the workflow's
 title and blurb head the parameters card as content.
 
+**THE QUEUE IS ONE ROW PER JOB, AND EVERY ROW STOPS ITSELF** (founder, 2026-09-25: *"the concurrency queue
+should be 1 row each so we can stop each one individually"*). `useRun` keeps the whole `runs` array, and every
+job in flight is now its own row under the preview canvas (`RunQueue` / `RunQueueRow`): the spinning glyph, the
+phase, that job's own clock, its job id and its own **Cancel**, which posts that row's own `jobId` to
+`/providers/<id>/cancel`. The band above the rows is the **account's** counts (RunningHub's `runningCount`,
+`queuedCount` and `concurrentLimit`) and the rows are this surface's own jobs: two different facts, drawn
+together and never reconciled, because the account also counts jobs this pane did not start. A settled job
+leaves the list — a result belongs in the canvas, not in a queue — and **one timer polls every job in flight**,
+so the first job can finish while the second still runs. Each start carries a client-side `localId`, so two
+presses in the air at once cannot write into the same slot. Adding a third concurrent provider needs nothing
+here: the rows come from the run state, not from the provider registry.
+
 **The aspect door shapes the preview canvas** (founder, 2026-09-23: *"the aspect controls the shape of preview
 card"*). The canvas inside the preview card takes its `aspect-ratio` from the workflow's own aspect door — the
 one `preview.aspectDoor` names, or failing that the door whose key or API field name is `aspect_ratio`, which is
@@ -534,15 +580,16 @@ the picture. There is no
 "Run again" button (founder, 2026-09-23: *"run again button can be removed"*) — the parameters card never leaves
 the screen, so the Run button under the doors is the way to run again.
 
-**The run control is a split button where the provider declares run modes** (founder, 2026-09-23:
-*"RH has option to run as plus vs ultra we can use this shadcn split button"*). RunningHub's own OpenAPI is
-where the modes come from — `POST /task/openapi/ai-app/run` takes `instanceType`, *"`default` uses 24GB VRAM;
-`plus` uses 48GB; `ultra` uses 84GB"* — so they are **provider data**, declared on the registry entry
-(`runOption`), carried to the page with the rest of the provider's identity, and drawn by a `SplitButton` kit
-component: the action, then a segment showing the current mode that opens the harness's own `Menu` (whose
-documentation names the split-button case) with one row per mode, each naming the machine it buys. The pattern
-is the shadcn ButtonGroup + DropdownMenu one; the primitives are the harness's, because this bundle carries no
-Tailwind and one external peer.
+**The run control is two buttons where the provider declares run modes** (founder, 2026-09-23: *"RH has option
+to run as plus vs ultra we can use this shadcn split button"*, corrected 2026-09-25: *"the split button is a
+little weird, make it 2 buttons: generate (filled primary) + default select (outlined primary)"*). RunningHub's
+own OpenAPI is where the modes come from — `POST /task/openapi/ai-app/run` takes `instanceType`, *"`default` uses
+24GB VRAM; `plus` uses 48GB; `ultra` uses 84GB"* — so they are **provider data**, declared on the registry entry
+(`runOption`) and carried to the page with the rest of the provider's identity. They are drawn as two controls:
+the action as the harness `Button`'s **filled `primary`** and the mode as an **outlined `outline`** button that
+shows the mode it will use and opens the harness's own `Menu` (whose documentation names the split-button case)
+with one row per mode, each naming the machine it buys. Two buttons with the ordinary gap rather than one control
+split in half: no shared border, no half-rounded corners, because the choice is not part of the press.
 
 **The mode is part of what a person confirms.** The surface sends `options` with the payload and the run, the
 host reads them through `runOptions` — the provider's own declaration, so an option nobody declared or a value
@@ -627,9 +674,42 @@ The design skill is a pass over the adapter's authored fields against the pane's
 - **The order is the work's order** — subject, references, notes — and `ui.order` beats everything.
 - **The words are the profile's**: `label`, `hint`, `title`, `blurb`, `ui.runLabel`, and `ui.expect` only when
   the wait was measured or told.
+- **A one-press fill is `ui.presets`, and it draws a sparkle over a menu** (founder, 2026-09-25: *"we should
+  add sparkles icon to fill the prompt w subject swap skill to make the work faster"*, then *"make a
+  sparkles menu, sparkles subject swap is a prompt writing skill, we can have other skill like face swap, add
+  object (add these others but greyed for now) I just want to test UI"*). A preset is `{ label, doors,
+  disabled? }`: the glyph appears at the **right end of the title row** of every door the presets fill — the
+  label stays left, `space-between` puts the control at the far edge — and opens the harness's own
+  `Menu`, one row per preset, and choosing one writes those doors and nothing else — no run, so nothing
+  spends. A preset marked `disabled: true` is drawn greyed with a *Coming soon* note and chooses nothing, which
+  is how a skill that is not written yet is shown without pretending it works. **The Duo's two greyed rows were
+  placeholders for testing the menu, and they are gone** (founder, 2026-09-25: *"in the sparkles menu, remove
+  2nd row 'coming soon' muted color"*): the profile adapter carries one row, *Subject swap*, and the capability
+  stays in validation (`lib/adapter.js`) and in `verify/start.mjs`'s own fixtures. The words come from the
+  workflow's own skill, which is why the Qwen Duo adapter authors the subject-swap template: the skill and the
+  row then say the same thing. The value stays ordinary text afterwards, editable like anything typed.
+  **PROMPT WEIGHT IS A PROPERTY OF THE WORKFLOW, NOT OF THE TASK** (founder, 2026-09-25: *"it seems like I've
+  been over prompting, Qwen 2.1 prompt is much more minimal than Qwen AIO"*). The Duo's preset is one sentence —
+  *The woman in Image 1 wears the outfit from Image 2.* — because that is the app's own example and the run the
+  founder kept, while every panel run before it had carried ~400 characters of instructions about fidelity and
+  draping. That long form was the **AIO** workflow's method, and the founder retired the AIO workflow the same
+  day (*"we can remove qwen AIO, I think Qwen 2.1 definitely replace"*): the adapter
+  (`qwen-rapid-aio-subject-swap`) is gone from the profile, so the Duo is the only Qwen 2.1 workflow in the panel
+  and the one sentence is the whole prompt. See `skills/subject-swap/SKILL.md`, which teaches it.
+- **The strip carries the way to stop a run** (founder, 2026-09-25: *"it seems like cancel button got
+  removed"*). The host's cancel action and `useRun`'s own handler were both there; the control was not drawn,
+  so a run in flight had no way out on screen. It sits at the end of the running strip — the phase, the clock
+  and the job id are what a person reads, and this is what they press — asks the host to cancel that job id,
+  and is gone the moment the run settles. A cancel spends nothing, so it needs no gate, and the pane keeps
+  polling until the provider's own status settles.
 - **Five screens carry a workflow** and only one is per-workflow: the start-page card, the pane home, the
   workflow surface, the payload gate, the run strip and result. The skill walks all five so a design does not
   fight chrome it cannot change.
+- **The surface is two cards in a 2:3 row** (founder, 2026-09-25: *"the ratio of parameters/preview try
+  2/5:3/5 of 5 column after a mobile breakpoint"*): the parameters card takes two fifths of the pane's width
+  and the preview card three, until the pane is narrower than their minima, where the wrapping row stacks them
+  and each takes its own line. A zero flex basis with the grow factors 2 and 3 is what makes the fractions
+  exact; the breakpoint is the pane's own width, because the pane is what resizes.
 - **It writes no plugin code.** A design that needs a shape the pane does not have is a plugin change, and the
   skill says so rather than inventing one.
 

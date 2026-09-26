@@ -131,6 +131,12 @@ window.__ModuleLoader__.load({
     const IconChevronDownOutline14 = icon('IconChevronDownOutlineRegular', 'IconChevronDownOutline14')
     const IconBranchOutline16 = icon('IconBranchOutlineRegular', 'IconBranchOutline16')
     const IconPlusOutline16 = icon('IconPlusOutlineRegular', 'IconPlusOutline16')
+    // THE IMAGE DOOR'S OWN GLYPHS: the link glyph on the URL button inside the drop area, and
+    // the app's close glyph on the clear badge. Two glyphs, both the app's own set — the tiles
+    // that used to sit under the area (Finder over Link) left with the founder's correction:
+    // *"we don't need finder button since click on the drop area does same thing"*.
+    const IconLinkOutline16 = icon('IconLinkOutlineRegular', 'IconLinkOutline16')
+    const IconCloseOutline16 = icon('IconCloseOutlineRegular', 'IconCloseOutline16')
 
     const h = React.createElement
 
@@ -217,20 +223,27 @@ window.__ModuleLoader__.load({
       'error.payloadRefused': 'A value cannot be sent as it stands.',
       'error.jobGone': 'That run is no longer on the provider.',
       'card.community': 'someone else\'s app',
-      'surface.image.choose': 'Add image',
-      'surface.image.placeholder': 'Paste an image URL, or add one',
+      // The image door (founder, 2026-09-25): one drop area and nothing else. The placeholder
+      // belongs to the one case that still types a link — a provider with no upload route.
+      'surface.image.placeholder': 'Paste an image URL',
       'surface.image.uploading': 'Uploading…',
       'surface.image.failed': 'That image could not be uploaded.',
-      // Once a door holds a picture the raw value steps out of the way: for every provider
-      // whose upload answers an opaque handle rather than a URL (RunningHub's `api/…`
-      // fileName), the string in the field is not a URL a person typed or could edit.
-      'surface.image.set': 'Image added',
-      'surface.image.replace': 'Replace',
+      // A link the browser refused to load. The one honest check on a pasted link.
+      'surface.image.badUrl': 'That URL did not load an image.',
+      // The prompt-writing menu (founder, 2026-09-25: *"make a sparkles menu … prompt writing
+      // skill"*): the glyph's own name, and the tag a skill that is not written yet wears.
+      'preset.open': 'Prompt skills',
+      'preset.soon': 'Coming soon',
+      // The badge on a filled door. It is its accessible name and its tooltip: the badge itself
+      // is a glyph in the picture's corner.
       'surface.image.remove': 'Remove',
-      // The empty door's card is a drop zone, and it says so — twice: once at rest, once while
-      // a file is over it and the only thing left to do is let go.
-      'surface.image.drop': 'or drop an image here',
+      // The drop area's own sentence — once at rest, once while a file is over it and the only
+      // thing left to do is let go.
+      'surface.image.drop': 'Drag & drop, or choose a file',
       'surface.image.dropNow': 'Drop the image',
+      // A door that waits its turn names the door that is next, by its own label: the drop order
+      // is the order the composer receives the pictures in (founder, 2026-09-25).
+      'surface.image.waitFor': 'Drop {label} first',
       // A list door's two controls. The add control says the door's own `addLabel` when the
       // catalogue has one (Krea's vocabulary: "Add style"), so these are the fallbacks.
       'surface.list.add': 'Add',
@@ -459,15 +472,17 @@ window.__ModuleLoader__.load({
       'error.payloadRefused': '有数值暂时无法发送。',
       'error.jobGone': '服务商上已经没有这次运行。',
       'card.community': '他人的应用',
-      'surface.image.choose': '添加图片',
-      'surface.image.placeholder': '粘贴图片链接，或添加一张图片',
+      'surface.image.placeholder': '粘贴图片链接',
       'surface.image.uploading': '正在上传…',
       'surface.image.failed': '该图片上传失败。',
-      'surface.image.set': '已添加图片',
-      'surface.image.replace': '替换',
+      'surface.image.badUrl': '该链接没有载入图片。',
+      'preset.open': '提示词技能',
+      'preset.soon': '即将推出',
       'surface.image.remove': '移除',
-      'surface.image.drop': '或将图片拖到这里',
+      'surface.image.drop': '拖拽或选择文件',
       'surface.image.dropNow': '松手即可上传',
+      // 等待中的门用前一张门自己的标签说明该先放哪一张：放入顺序就是对话里收到的顺序。
+      'surface.image.waitFor': '请先放入 {label}',
       'surface.list.add': '添加',
       'surface.list.remove': '移除',
       'pane.loading': '正在检查密钥…',
@@ -766,22 +781,18 @@ window.__ModuleLoader__.load({
        * keeps its right ones, and the segment tucks one pixel under the action's border so
        * the seam is a single hairline rather than a double line.
        */
+      /**
+       * TWO BUTTONS, NOT A SPLIT ONE (founder, 2026-09-25: *"the split button is a little weird,
+       * make it 2 buttons: generate (filled primary) + default select (outlined primary)"*). The
+       * action and the choice are the harness `Button`'s own `primary` and `outline` variants now,
+       * with the same gap any pair of buttons gets — no shared border, no half-rounded corners,
+       * which is what made the old segment read as one control split in two.
+       */
       splitButton: {
         display: 'inline-flex',
-        alignItems: 'stretch',
-        alignSelf: 'flex-start',
-      },
-      splitAction: {
-        borderTopRightRadius: 0,
-        borderBottomRightRadius: 0,
-      },
-      splitToggle: {
-        display: 'inline-flex',
         alignItems: 'center',
-        gap: 4,
-        marginLeft: -1,
-        borderTopLeftRadius: 0,
-        borderBottomLeftRadius: 0,
+        gap: 8,
+        alignSelf: 'flex-start',
       },
       /** One mode in the list: its name, then the machine that name buys. */
       menuRow: {
@@ -1585,6 +1596,14 @@ window.__ModuleLoader__.load({
        * WRAPPING FLEX ROW, not a media query: the pane is what changes width — docked,
        * split, or fullscreen — so the breakpoint is the container's own, and the two
        * cards stack in a narrow pane and stand side by side in a wide one.
+       *
+       * AND THE PAIR IS TWO TO THREE, NOT ONE TO ONE (founder, 2026-09-25: *"the ratio of
+       * parameters/preview try 2/5:3/5 of 5 column after a mobile breakpoint"*). A zero basis
+       * with the grow factors 2 and 3 is what makes that exact: the free width is what is
+       * divided, so the two cards land on 2/5 and 3/5 of the row whatever it is, and `minWidth`
+       * is what decides when the row is too narrow and the cards stack instead. With an
+       * authored basis the base widths would sit inside the ratio and neither card would be the
+       * fraction it says.
        */
       surfaceColumns: {
         display: 'flex',
@@ -1594,7 +1613,7 @@ window.__ModuleLoader__.load({
       },
       /** The parameters card: the doors, and the control that spends. */
       surfaceParams: {
-        flex: '1 1 320px',
+        flex: '2 1 0',
         minWidth: 260,
         display: 'flex',
         flexDirection: 'column',
@@ -1602,7 +1621,7 @@ window.__ModuleLoader__.load({
       },
       /** The preview card: what the run is doing and what it made. */
       surfaceOutput: {
-        flex: '1 1 300px',
+        flex: '3 1 0',
         minWidth: 240,
         display: 'flex',
         flexDirection: 'column',
@@ -1755,49 +1774,83 @@ window.__ModuleLoader__.load({
         flexWrap: 'wrap',
       },
       /**
-       * AN EMPTY IMAGE DOOR IS ONE DASHED CARD (founder, 2026-09-24: *"choose an image and paste
-       * an image url should be stacked inside a card with dashed border"*). Stacked rather than
-       * side by side, because the two are one choice — bring a picture — made two ways; the row
-       * of two controls read as two unrelated fields.
+       * THE DROP AREA (founder, 2026-09-25: *"the upload image card looks messy, make it more
+       * clean with drop area + icons below for finder or link"*). The dashes belong to the thing
+       * a file lands ON, and nothing else: the two ways in are tiles UNDER the area, so the door
+       * reads as a target with two controls rather than a card holding a stack of fields.
        */
       imageDrop: {
         display: 'flex',
         flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
         gap: 8,
         marginTop: 6,
-        padding: 12,
+        padding: '22px 12px',
         border: '1px dashed var(--dsw-alias-border-l2)',
         borderRadius: 8,
         background: 'var(--dsw-alias-bg-layer-1)',
+        cursor: 'pointer',
+        textAlign: 'center',
       },
-      /** THE SAME CARD WHILE A FILE IS OVER IT: the border lights up, so the drop lands somewhere visible. */
+      /** THE SAME AREA WHILE A FILE IS OVER IT: the border lights up, so the drop lands somewhere visible. */
       imageDropOver: {
         borderColor: 'var(--dsw-alias-brand-primary)',
         background: 'var(--dsw-alias-bg-layer-2)',
       },
       /**
-       * The pick control INSIDE a card that already carries the dashes: solid, so the border is
-       * said once. `imageBox` stays the dashed, standalone control the list door's add uses.
+       * THE AREA OF A DOOR THAT IS WAITING ITS TURN. Dimmed and with no pointer, because the
+       * honest answer to a drop here is "not yet" — the sentence inside says which door is next.
        */
-      imagePick: {
+      imageDropWait: {
+        opacity: 0.55,
+        cursor: 'not-allowed',
+      },
+      /** The area's own label: pressing anywhere in it opens the picker, so the label brings no ink. */
+      imageDropLabel: {
+        display: 'block',
+        color: 'inherit',
+        textDecoration: 'none',
+      },
+      /**
+       * ONE DOOR'S LABEL LINE, WITH THE PRESET GLYPH AT ITS FAR END (founder, 2026-09-25: *"we
+       * should add sparkles icon to fill the prompt w subject swap skill"*, then *"can you add
+       * sparkles icon to the Prompt title row above prompt input box, this trigger the menu for
+       * prompt writing skill. Put it justify right"*). The label stays left and `space-between`
+       * pushes the one control on this line to the right edge; a door with no preset still reads
+       * as a plain label, because a single child has nothing to space against.
+       */
+      doorLabelRow: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 6,
+        minWidth: 0,
+      },
+      /** The preset glyph: the app's sparkle, at the size a label can carry without shouting. */
+      presetButton: {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        padding: '8px 12px',
-        fontSize: 12,
-        color: 'var(--dsw-alias-label-primary)',
-        background: 'var(--dsw-alias-bg-layer-2)',
-        border: '1px solid var(--dsw-alias-border-l1)',
+        width: 18,
+        height: 18,
+        padding: 0,
+        color: 'var(--dsw-alias-label-tertiary)',
+        background: 'transparent',
+        border: 'none',
         borderRadius: 6,
         cursor: 'pointer',
       },
-      /** The sentence that says the card takes a dragged file. */
-      imageDropHint: {
-        fontSize: 11,
-        lineHeight: '16px',
+      /** The glyph above the sentence, in the muted ink the app gives a placeholder mark. */
+      imageDropGlyph: {
+        display: 'flex',
         color: 'var(--dsw-alias-label-tertiary)',
-        textAlign: 'center',
+      },
+      /** The area's one sentence: what to do, in the app's own secondary ink. */
+      imageDropLead: {
+        fontSize: 12,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-secondary)',
       },
       /**
        * A FILLED IMAGE DOOR IS A COLUMN: the picture, then what a person does to it
@@ -1818,6 +1871,7 @@ window.__ModuleLoader__.load({
        * A square stands in until the first load, which is also what the neutral mark uses.
        */
       imageThumbFrame: {
+        position: 'relative',
         width: '100%',
         maxWidth: 240,
         borderRadius: 8,
@@ -1842,33 +1896,29 @@ window.__ModuleLoader__.load({
         height: '100%',
         color: 'var(--dsw-alias-label-tertiary)',
       },
-      /** Replace and Remove, under the picture. */
-      imageActions: {
-        display: 'flex',
-        gap: 6,
-        alignItems: 'stretch',
-      },
       /**
-       * One action button under the picture: Replace or Remove. Both sit in the same flex row
-       * and share this style so they end up the same size — same padding, same radius, same
-       * height — regardless of whether one carries an icon and the other does not.
+       * THE CLEAR BADGE, IN THE PICTURE'S OWN TOP-RIGHT CORNER (founder, 2026-09-25: *"to clear
+       * the upload use a badge close icon in the top right corner"*). Clearing is a thing done TO
+       * the picture, so the control sits on it rather than in a row under it — and it keeps its
+       * own solid surface, because a picture can be any colour underneath.
        */
-      imageAction: {
+      imageClearBadge: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 4,
-        flex: '1 1 0',
-        padding: '5px 0',
-        fontSize: 12,
-        lineHeight: '16px',
-        color: 'var(--dsw-alias-label-secondary)',
+        width: 20,
+        height: 20,
+        padding: 0,
+        color: 'var(--dsw-alias-label-primary)',
         background: 'var(--dsw-alias-bg-layer-2)',
-        border: '1px solid var(--dsw-alias-border-l1)',
-        borderRadius: 6,
+        border: '1px solid var(--dsw-alias-border-l2)',
+        borderRadius: 10,
         cursor: 'pointer',
       },
-      /** The one-line "this door is filled" sentence that replaces the raw value. */
+      /** The line a filled door draws only while the bytes are still on their way. */
       imageSetLine: {
         fontSize: 12,
         lineHeight: '16px',
@@ -1981,6 +2031,28 @@ window.__ModuleLoader__.load({
         color: 'var(--dsw-alias-state-error-primary)',
         borderColor: 'var(--dsw-alias-state-error-primary)',
         alignItems: 'flex-start',
+      },
+      /**
+       * THE QUEUE, one row per job. The band on top is the ACCOUNT's counts and the rows
+       * under it are THIS SURFACE's jobs; they are two different facts and are never
+       * reconciled.
+       */
+      queueList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      },
+      queueRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '6px 10px',
+        fontSize: 12,
+        lineHeight: '18px',
+        color: 'var(--dsw-alias-label-secondary)',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        border: '.5px solid var(--dsw-alias-border-l1)',
+        borderRadius: 8,
       },
       // `runFigure` and `runImage` used to hold the result here. The result moved into the
       // preview card's own canvas, which the aspect door shapes — see `previewFrame`.
@@ -2884,24 +2956,28 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * A circle-with-an-X, Lucide-style, at 16px. The harness ships no circle-x, so this tiny
-     * SVG stands in for the Remove button only — never exported, never shared.
+     * An arrow-up-out-of-a-tray, Lucide-style, at 24px. The harness ships no upload glyph — its
+     * own set has `IconDownloadOutline` and nothing for the other direction — and the empty image
+     * door needs one mark that says "a file comes in here". Never exported, never shared, and the
+     * only hand-drawn mark left in this bundle.
      */
-    function IconCircleX16(props) {
+    function IconUpload24(props) {
       return h(
         'svg',
         {
-          width: 16,
-          height: 16,
-          viewBox: '0 0 16 16',
+          width: 24,
+          height: 24,
+          viewBox: '0 0 24 24',
           fill: 'none',
           stroke: 'currentColor',
           strokeWidth: 1.5,
           strokeLinecap: 'round',
+          strokeLinejoin: 'round',
           ...props,
         },
-        h('circle', { cx: 8, cy: 8, r: 7 }),
-        h('path', { d: 'M5.5 5.5l5 5M10.5 5.5l-5 5' }),
+        h('path', { d: 'M12 15.5V3.5' }),
+        h('path', { d: 'm7.5 8 4.5-4.5L16.5 8' }),
+        h('path', { d: 'M4 15.5v3A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-3' }),
       )
     }
 
@@ -2931,22 +3007,49 @@ window.__ModuleLoader__.load({
      * should edit, so a filled door shows the thumbnail with Replace and Remove, and the text
      * field returns only when the door is empty — where pasting a URL is the point.
      *
-     * AND THE EMPTY DOOR IS ONE DASHED CARD THAT TAKES A DRAGGED FILE (founder, 2026-09-24:
-     * *"choose an image and paste an image url should be stacked inside a card with dashed
-     * border, it is also a drop zone for drag and drop image"*). The picker and the URL field
-     * are the same act done two ways, so they stack; the card is the drop target, and the
-     * browser's own drag events supply the file — the same bytes the picker would have handed
-     * over, so both paths run one upload.
+     * AND THE EMPTY DOOR IS ONE DROP AREA WITH THE URL BUTTON INSIDE IT (founder, 2026-09-25:
+     * *"we don't need finder button since click on the drop area does same thing. url button should
+     * be inside the drop zone, user clicks on it to get a modal for url input, paste url then it
+     * fetches and populate the thumbnail"*). So there are no tiles under the area: the area is the
+     * picker's own label (a press anywhere in it opens the dialog), and the one other way in is a
+     * button inside it that opens `UrlDialog`. What the dialog accepts becomes the door's value and
+     * the browser fetches it into the frame.
+     *
+     * AND A PICTURE IS CLEARED BY A BADGE ON IT (founder, the same day: *"to clear the upload use
+     * a badge close icon in the top right corner"*). The row of actions under the picture is
+     * gone with that: the picture carries its own way out.
      */
-    function ImageField({ t, provider, id, doorKey, value, onChange, canUpload }) {
+    function ImageField({ t, provider, id, doorKey, value, onChange, canUpload, waitFor }) {
+      /**
+       * AN EMPTY SECOND IMAGE WAITS FOR THE FIRST (founder, 2026-09-25: *"its drops in order not by
+       * left/right position. we can disable image 2 and message user to drop image 1 first"*).
+       *
+       * The reason lives outside this panel. The harness's attachment tray takes every dropped file
+       * at `document`, in the order the drops happened — not in the order of the doors — so a panel
+       * that lets a person start with the second image hands the composer the two pictures
+       * backwards. `waitFor` is the earlier door's own label; while it is set, this door takes no
+       * drop, opens no picker, and says which door to fill instead.
+       *
+       * ONLY AN EMPTY DOOR IS HELD BACK. A door that already carries an image is never blocked, so
+       * the guard cannot trap a value a person wants to clear or replace.
+       */
+      const blocked = typeof waitFor === 'string' && waitFor !== ''
       const [phase, setPhase] = React.useState('idle')
       const [problem, setProblem] = React.useState(null)
       /** The picked file's own bytes, as a blob URL. Revoked whenever it is replaced. */
       const [preview, setPreview] = React.useState(null)
       /** The picture's own width/height, once it has loaded. Null until then: a square stands in. */
       const [ratio, setRatio] = React.useState(null)
-      /** Whether a file is currently over the card, which is what lights its border. */
+      /** Whether a file is currently over the area, which is what lights its border. */
       const [dragging, setDragging] = React.useState(false)
+      /**
+       * A URL THAT WILL NOT LOAD. Nothing here asks for a URL any more (founder, 2026-09-25:
+       * *"i can't get url to work. maybe we don't need on local, user can download and upload is
+       * better"*), but a provider with no upload route is still typed into, and a value saved by
+       * an earlier build can still be a link — so the frame keeps the one honest answer to a link
+       * the browser refuses: the neutral mark and a sentence, never a broken-image glyph.
+       */
+      const [urlBroken, setUrlBroken] = React.useState(false)
 
       // THE BLOB IS RELEASED TWICE ON PURPOSE. React runs this cleanup when `preview` changes and
       // on unmount, which is what stops a leak in the browser; the explicit calls below release
@@ -3001,7 +3104,7 @@ window.__ModuleLoader__.load({
        * on the way out, and the cost of that is one extra render, not a stuck border.
        */
       const overFile = (event) => {
-        if (!canUpload) return
+        if (!canUpload || blocked) return
         event.preventDefault()
         if (!dragging) setDragging(true)
       }
@@ -3009,7 +3112,7 @@ window.__ModuleLoader__.load({
         if (dragging) setDragging(false)
       }
       const dropFile = (event) => {
-        if (!canUpload) return
+        if (!canUpload || blocked) return
         event.preventDefault()
         setDragging(false)
         const transfer = event.dataTransfer
@@ -3023,6 +3126,7 @@ window.__ModuleLoader__.load({
         setRatio(null)
         setPhase('idle')
         setProblem(null)
+        setUrlBroken(false)
         onChange('')
       }
 
@@ -3040,27 +3144,33 @@ window.__ModuleLoader__.load({
         const node = event && event.target
         if (node && node.naturalWidth > 0 && node.naturalHeight > 0) setRatio(node.naturalWidth / node.naturalHeight)
       }
-      const filePicker = (label, extra, Icon) =>
-        h(
-          'label',
-          { style: { ...S.imagePick, ...(extra || {}) }, htmlFor: id + '-file' },
-          h(Icon || IconSparkle16, { size: 12 }),
-          h('span', null, busy ? t('surface.image.uploading') : label),
-          h('input', {
-            id: id + '-file',
-            'data-generate-upload': doorKey,
-            type: 'file',
-            accept: 'image/*',
-            style: { display: 'none' },
-            onChange: pick,
-          }),
-        )
+      /** The hidden file input both Finder and the drop area open. */
+      const fileInput = h('input', {
+        id: id + '-file',
+        'data-generate-upload': doorKey,
+        type: 'file',
+        accept: 'image/*',
+        style: { display: 'none' },
+        // A waiting door keeps its input, so the door has one shape in every state — the input is
+        // simply not open yet, which is what stops the label from raising a file dialog.
+        disabled: blocked,
+        onChange: pick,
+      })
       const failure = () =>
         phase === 'failed' ? h('div', { style: S.imageProblem, 'data-generate-upload-failed': problem || 'yes' }, t('surface.image.failed')) : null
+      /**
+       * A URL THAT WILL NOT LOAD. The browser is what fetches a pasted URL, so the only honest
+       * check is its own answer: the frame draws the neutral mark and says what happened instead
+       * of showing a broken-image glyph in the place the picture belongs.
+       */
+      const urlFailure = () =>
+        urlBroken ? h('div', { style: S.imageProblem, 'data-generate-url-failed': doorKey }, t('surface.image.badUrl')) : null
 
-      // FILLED — the picture, then the two things a person does to it, underneath. No raw value
-      // on screen, and the frame wears the picture's own aspect once it is known.
+      // FILLED — the picture with its own way out, and nothing else: no raw value on screen, and
+      // the frame wears the picture's own aspect once it is known. The badge is the only control,
+      // because the empty state (and its two ways in) is what a cleared door goes back to.
       if (filled || busy) {
+        const drawable = urlBroken ? null : thumb
         return h(
           'div',
           { style: S.imageField, 'data-generate-image': doorKey, 'data-generate-image-set': 'yes' },
@@ -3070,68 +3180,141 @@ window.__ModuleLoader__.load({
               style: { ...S.imageThumbFrame, aspectRatio: ratio === null ? '1 / 1' : String(ratio) },
               'data-generate-thumb-frame': doorKey,
             },
-            thumb
+            drawable
               ? h('img', {
-                  src: thumb,
+                  src: drawable,
                   style: S.imageThumb,
                   alt: '',
                   onLoad: readRatio,
+                  onError: () => setUrlBroken(true),
                   'data-generate-thumb': doorKey,
                 })
               : h('div', { style: S.imageThumbEmpty, 'data-generate-thumb-missing': doorKey }, h(IconSparkle16, { size: 20 })),
-          ),
-          h('div', { style: S.imageSetLine }, busy ? t('surface.image.uploading') : t('surface.image.set')),
-          h(
-            'div',
-            { style: S.imageActions },
             h(
               'button',
-              { type: 'button', style: S.imageAction, 'data-generate-image-clear': doorKey, onClick: remove },
-              h(IconCircleX16, { size: 14 }),
-              h('span', null, t('surface.image.remove')),
+              {
+                type: 'button',
+                style: S.imageClearBadge,
+                'data-generate-image-clear': doorKey,
+                'aria-label': t('surface.image.remove'),
+                title: t('surface.image.remove'),
+                onClick: remove,
+              },
+              h(IconCloseOutline16, { size: 12 }),
             ),
           ),
+          busy ? h('div', { style: S.imageSetLine, 'data-generate-image-busy': doorKey }, t('surface.image.uploading')) : null,
+          urlFailure(),
           failure(),
         )
       }
 
-      // EMPTY — ONE DASHED CARD, stacked, and a drop target: the picker, then the field a URL is
-      // pasted into, then the sentence that says a dragged file lands here too. The card wears the
-      // lit border while a file is over it, and the drag props are only attached where the
-      // provider can actually take an upload — a card that could not finish the job must not
-      // invite the drop.
-      const dropProps = canUpload
-        ? {
-            onDragOver: overFile,
-            onDragEnter: overFile,
-            onDragLeave: leaveFile,
-            onDrop: dropFile,
-          }
-        : {}
-      return h(
+      // NO UPLOAD ROUTE — the plain field alone. A provider that cannot take an upload gets no
+      // drop area: a control that cannot finish the job must not invite the act. This is the one
+      // place a link is still typed, which is why the frame keeps a bad-link answer.
+      if (!canUpload) {
+        return h(
+          'div',
+          { style: S.imageField, 'data-generate-image': doorKey, 'data-generate-drop': 'no' },
+          h('input', {
+            style: { ...S.input, marginTop: 0 },
+            id,
+            'data-generate-door': doorKey,
+            type: 'text',
+            value: '',
+            placeholder: t('surface.image.placeholder'),
+            onChange: (event) => onChange(event.target.value),
+          }),
+          urlFailure(),
+          failure(),
+        )
+      }
+
+      // EMPTY — ONE DROP AREA AND NOTHING ELSE IN IT (founder, 2026-09-25: *"we don't need finder
+      // button since click on the drop area does same thing"*, then *"i can't get url to work.
+      // maybe we don't need on local, user can download and upload is better"*). The dashes wrap
+      // the area, the area is the picker's own label, and a dropped file is the same upload a
+      // picked one is — so the door has no second control at all.
+      const dropArea = h(
         'div',
         {
-          style: dragging ? { ...S.imageDrop, ...S.imageDropOver } : S.imageDrop,
-          'data-generate-image': doorKey,
-          'data-generate-drop': canUpload ? 'yes' : 'no',
-          ...(dragging ? { 'data-generate-drag-over': 'yes' } : {}),
-          ...dropProps,
+          style: blocked ? { ...S.imageDrop, ...S.imageDropWait } : dragging ? { ...S.imageDrop, ...S.imageDropOver } : S.imageDrop,
+          'data-generate-drop': blocked ? 'wait' : 'yes',
+          ...(blocked ? { 'data-generate-drop-wait': doorKey } : {}),
+          ...(dragging && !blocked ? { 'data-generate-drag-over': 'yes' } : {}),
+          onDragOver: overFile,
+          onDragEnter: overFile,
+          onDragLeave: leaveFile,
+          onDrop: dropFile,
         },
-        canUpload ? filePicker(t('surface.image.choose'), { alignSelf: 'stretch' }, IconPlusOutline16) : null,
-        h('input', {
-          style: { ...S.input, marginTop: 0 },
-          id,
-          'data-generate-door': doorKey,
-          type: 'text',
-          // Empty by definition: a filled door took the branch above, so this field only
-          // ever draws before a value exists — the state a paste starts from.
-          value: '',
-          placeholder: t('surface.image.placeholder'),
-          onChange: (event) => onChange(event.target.value),
-        }),
-        canUpload ? h('div', { style: S.imageDropHint }, dragging ? t('surface.image.dropNow') : t('surface.image.drop')) : null,
+        h('span', { style: S.imageDropGlyph }, h(IconUpload24, null)),
+        h(
+          'div',
+          { style: S.imageDropLead },
+          blocked ? t('surface.image.waitFor').replace('{label}', waitFor) : dragging ? t('surface.image.dropNow') : t('surface.image.drop'),
+        ),
+        fileInput,
+      )
+      return h(
+        'div',
+        { style: S.imageField, 'data-generate-image': doorKey },
+        h('label', { htmlFor: id + '-file', style: S.imageDropLabel, 'data-generate-drop-label': doorKey }, dropArea),
+        urlFailure(),
         failure(),
       )
+    }
+
+    /**
+     * THE SPARKLE AND ITS MENU (founder, 2026-09-25: *"make a sparkles menu, sparkles subject swap
+     * is a prompt writing skill, we can have other skill like face swap, add object (add these
+     * others but greyed for now) I just want to test UI"*).
+     *
+     * A component rather than a builder inside the surface, because the menu owns open state and
+     * a hook may not sit inside the door loop. The rows are the harness `Menu`'s own items, so the
+     * sparkle joins the app's menus: anchored under the glyph, keyboard-walked, closed by the
+     * outside pointer. A `disabled` preset is a row with `disabled: true` — the primitive greys it
+     * and refuses the press, and the check below refuses it a second time, so a placeholder can
+     * never write anything.
+     */
+    function PresetSparkle({ t, doorKey, presets, onApply }) {
+      const [open, setOpen] = React.useState(false)
+      const items = presets.map((preset) => ({
+        id: preset.label,
+        icon: h(IconSparkle16, { size: 14 }),
+        disabled: preset.disabled === true,
+        label: h(
+          'div',
+          { style: S.menuRow, 'data-generate-preset-row': preset.label },
+          h('span', { style: S.menuRowValue, 'data-generate-preset-state': preset.disabled === true ? 'soon' : 'ready' }, preset.label),
+          preset.disabled === true ? h('span', { style: S.menuRowNote }, t('preset.soon')) : null,
+        ),
+      }))
+      return h(Menu, {
+        open,
+        side: 'bottom',
+        align: 'start',
+        items,
+        onSelect: (id) => {
+          setOpen(false)
+          const chosen = presets.find((preset) => preset.label === id)
+          if (chosen && chosen.disabled !== true) onApply(chosen)
+        },
+        onClose: () => setOpen(false),
+        anchor: h(
+          'button',
+          {
+            type: 'button',
+            style: S.presetButton,
+            'data-generate-preset': doorKey,
+            'aria-label': t('preset.open'),
+            title: t('preset.open'),
+            'aria-haspopup': 'true',
+            'aria-expanded': open ? 'true' : 'false',
+            onClick: () => setOpen((shown) => !shown),
+          },
+          h(IconSparkle16, { size: 14 }),
+        ),
+      })
     }
 
     /**
@@ -3163,7 +3346,9 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { style: S.splitButton, 'data-generate-split': 'yes' },
-        h('button', { type: 'button', style: { ...S.primary, ...S.splitAction }, disabled, onClick, ...attrs }, label),
+        // THE ACTION. Filled primary, because this is the press that spends (founder, 2026-09-25:
+        // *"make it 2 buttons: generate (filled primary) + default select (outlined primary)"*).
+        h(Button, { variant: 'primary', size: 'md', disabled, onClick, ...attrs }, label),
         h(Menu, {
           open,
           side: 'bottom',
@@ -3175,11 +3360,13 @@ window.__ModuleLoader__.load({
             onValue(id)
           },
           onClose: () => setOpen(false),
+          // THE CHOICE. Outlined primary, and it shows what is chosen rather than hiding it behind
+          // a chevron alone — the mode changes what the run uses, so it is read before the press.
           anchor: h(
-            'button',
+            Button,
             {
-              type: 'button',
-              style: { ...S.primary, ...S.splitToggle },
+              variant: 'outline',
+              size: 'md',
               disabled,
               title: t('run.mode'),
               'aria-label': t('run.mode') + ': ' + (current ? current.label : ''),
@@ -3349,6 +3536,9 @@ window.__ModuleLoader__.load({
       const keys = doorsInOrder(adapter)
       const main = keys.filter((key) => adapter.doors[key].advanced !== true)
       const advanced = keys.filter((key) => adapter.doors[key].advanced === true)
+      // The image doors in the order this form draws them, which is the order the composer's own
+      // copies arrive in — see `waitFor` below and `ImageField`'s own note.
+      const imageKeys = keys.filter((key) => adapter.doors[key].type === 'image')
       // Whether the preview card has anything to draw yet. It is the card's own fact: an
       // empty one keeps a panel's height, so opening a surface and starting a run do not
       // change the shape of the pane around them.
@@ -3392,7 +3582,7 @@ window.__ModuleLoader__.load({
        * by — so the attribute a page is read through and the key the host builds the body
        * from are the same string.
        */
-      const fieldControl = (id, doorKey, door, value, onValue, canUpload) => {
+      const fieldControl = (id, doorKey, door, value, onValue, canUpload, waitFor = null) => {
         const shared = { style: S.input, id, 'data-generate-door': doorKey, onChange: (event) => onValue(event.target.value) }
         if (door.type === 'select') {
           return h(
@@ -3454,7 +3644,7 @@ window.__ModuleLoader__.load({
           )
         }
         if (door.type === 'image') {
-          return h(ImageField, { id, doorKey, value, onChange: onValue, t, provider, canUpload })
+          return h(ImageField, { id, doorKey, value, onChange: onValue, t, provider, canUpload, waitFor })
         }
         return door.multiline === true
           ? h('textarea', { ...shared, style: { ...S.input, ...S.multiline }, rows: 4, value })
@@ -3516,18 +3706,61 @@ window.__ModuleLoader__.load({
         )
       }
 
+      /**
+       * WHICH DOOR AN EMPTY IMAGE IS WAITING ON, by that door's own label. The rule looks only
+       * BACKWARDS, so the first image door is never held back, and it looks only at EMPTY doors, so
+       * nothing already chosen is ever taken away.
+       */
+      const filledImage = (key) => {
+        const value = values[key] === undefined ? startFor(key, adapter.doors[key], adapter.defaults) : values[key]
+        return value !== undefined && value !== null && String(value) !== ''
+      }
+      const waitFor = (key) => {
+        if (adapter.doors[key].type !== 'image') return null
+        const index = imageKeys.indexOf(key)
+        if (index <= 0 || filledImage(key)) return null
+        const earlier = imageKeys.slice(0, index).find((k) => !filledImage(k))
+        return earlier === undefined ? null : adapter.doors[earlier].label
+      }
+
       const control = (key) => {
         const door = adapter.doors[key]
         if (door.type === 'list') return listControl(key, door)
         const value = values[key] === undefined ? startFor(key, door, adapter.defaults) : values[key]
-        return fieldControl('generate-door-' + key, key, door, value, set(key), canUpload)
+        return fieldControl('generate-door-' + key, key, door, value, set(key), canUpload, waitFor(key))
       }
+
+      /**
+       * THE PRESET MENU (founder, 2026-09-25: *"we should add sparkles icon to fill the prompt w
+       * subject swap skill to make the work faster"*, then *"make a sparkles menu, sparkles
+       * subject swap is a prompt writing skill, we can have other skill like face swap, add
+       * object (add these others but greyed for now) I just want to test UI"*). The sparkle sits
+       * on the label line of every door a preset fills and opens the harness's own `Menu` of the
+       * presets that fill THAT door: one row each, the preset's own label, and a preset the
+       * adapter marks `disabled` draws greyed and chooses nothing — which is how a skill that is
+       * not written yet is shown without pretending it works.
+       *
+       * One press fills the doors and nothing else: no run, no spend, so it needs no gate. The
+       * words are the workflow's own skill's, authored on the adapter, never invented here.
+       */
+      const presetsFor = (key) =>
+        (adapter.presets || []).filter((preset) => preset && preset.doors && Object.prototype.hasOwnProperty.call(preset.doors, key))
+      const applyPreset = (preset) => {
+        for (const [door, presetValue] of Object.entries(preset.doors || {})) set(door)(presetValue)
+      }
+      const labelLine = (key) =>
+        h(
+          'div',
+          { style: S.doorLabelRow },
+          h('label', { style: S.label, htmlFor: 'generate-door-' + key }, adapter.doors[key].label),
+          presetsFor(key).length > 0 ? h(PresetSparkle, { t, doorKey: key, presets: presetsFor(key), onApply: applyPreset }) : null,
+        )
 
       const doorRow = (key) =>
         h(
           'div',
           { key, 'data-generate-door-row': key },
-          h('label', { style: S.label, htmlFor: 'generate-door-' + key }, adapter.doors[key].label),
+          labelLine(key),
           control(key),
           adapter.doors[key].hint ? h('div', { style: S.hint }, adapter.doors[key].hint) : null,
         )
@@ -3553,7 +3786,7 @@ window.__ModuleLoader__.load({
                   h(
                     'div',
                     { key, style: S.imageGroupItem, 'data-generate-door-row': key },
-                    h('label', { style: S.label, htmlFor: 'generate-door-' + key }, adapter.doors[key].label),
+                    labelLine(key),
                     control(key),
                     adapter.doors[key].hint ? h('div', { style: S.hint }, adapter.doors[key].hint) : null,
                   ),
@@ -3634,7 +3867,7 @@ window.__ModuleLoader__.load({
             adapter.runnable === true
               ? h(RunOutput, { key: adapter.name + '-out', t, adapter, run })
               : h(Note, { text: t('surface.pending'), attrs: { 'data-generate-run-pending': 'yes' } }),
-            h(QueueBand, { t, run }),
+            h(RunQueue, { t, run }),
           ),
         ),
       )
@@ -3655,10 +3888,13 @@ window.__ModuleLoader__.load({
      * reads the key from the credential store, builds the body, posts it, and answers with
      * a job id.
      *
-     * ONE RUN AT A TIME, and the state owns it. A run in flight keeps its job id and its
-     * start time, so the phase, the elapsed seconds and the failure all belong to the same
-     * attempt. Krea's own message is shown verbatim on a failure, because a sentence this
-     * plugin invented about someone else's error helps nobody.
+     * MANY RUNS AT ONCE, AND EACH ONE OWNS ITSELF. The array is the state: a run in flight
+     * keeps its own job id and its own start time, so the phase, the elapsed seconds and the
+     * failure belong to that attempt and to no other. The latest run is the one the output
+     * column draws; every one in flight is a row in the queue under it (founder, 2026-09-25:
+     * *"the concurrency queue should be 1 row each so we can stop each one individually"*).
+     * Krea's own message is shown verbatim on a failure, because a sentence this plugin
+     * invented about someone else's error helps nobody.
      *
      * THE STATE IS A HOOK AND THE VIEW IS TWO PIECES (founder, 2026-09-23: *"2 column
      * parameters + output preview"*): the control that spends sits at the foot of the
@@ -3672,6 +3908,14 @@ window.__ModuleLoader__.load({
        * shown in the output column. Pressing Generate always starts a new run.
        */
       const [runs, setRuns] = React.useState([])
+      /**
+       * EVERY RUN GETS A NAME OF ITS OWN (founder, 2026-09-25: *"the concurrency queue
+       * should be 1 row each so we can stop each one individually"*). A start is an async
+       * round trip, so two presses in the air at once would both write into whatever slot
+       * happened to be last when the first answer landed; `localId` is what an answer is
+       * matched against, and it is also the row's React key.
+       */
+      const runSeq = React.useRef(0)
       /** The most recent run — the one the output column and controls draw. */
       const run = runs.length > 0 ? runs[runs.length - 1] : { phase: 'form' }
       /**
@@ -3685,41 +3929,46 @@ window.__ModuleLoader__.load({
       /** Whether the LATEST run is still going. New runs are always allowed. */
       const inFlight = run.phase === 'starting' || run.phase === 'queued' || run.phase === 'running'
 
-      /** ASK to cancel the latest run. */
-      const [cancelBusy, setCancelBusy] = React.useState(false)
-      const cancel = async () => {
-        if (!inFlight || cancelBusy) return
-        setCancelBusy(true)
+      /**
+       * ASK to cancel ONE run, named by its own job id (founder, 2026-09-25: *"the
+       * concurrency queue should be 1 row each so we can stop each one individually"*).
+       * The first cut read the latest run's id off the closure, so a second job in flight
+       * had no way to be stopped. The route has always taken a job id (lib/index.js's
+       * cancel action), so the row that was pressed is the row that stops. One ask is in
+       * the air at a time; `cancelBusy` is the id being asked about.
+       */
+      const [cancelBusy, setCancelBusy] = React.useState(null)
+      const cancel = async (jobId) => {
+        if (typeof jobId !== 'string' || jobId === '' || cancelBusy !== null) return
+        setCancelBusy(jobId)
         try {
           await fetch(providerUrl(provider, 'cancel'), {
             method: 'POST',
             headers: { 'content-type': 'application/json', accept: 'application/json' },
-            body: JSON.stringify({ jobId: run.jobId }),
+            body: JSON.stringify({ jobId }),
           })
         } catch {
           // Network failure — the poll will settle the state.
         } finally {
-          setCancelBusy(false)
+          setCancelBusy(null)
         }
       }
 
       // Start a new run. Always allowed — the host queues them.
       const confirm = async () => {
-        setRuns((prev) => [...prev, { phase: 'starting', startedAt: Date.now() }])
+        runSeq.current += 1
+        const localId = 'run-' + runSeq.current
+        setRuns((prev) => [...prev, { localId, phase: 'starting', startedAt: Date.now() }])
         const started = await postRun(provider, adapter.name, values, options)
-        if (!started.ok) {
-          setRuns((prev) => {
-            const copy = [...prev]
-            copy[copy.length - 1] = { phase: 'failed', error: started.error, detail: started.detail, startedAt: Date.now(), finishedAt: Date.now() }
-            return copy
-          })
-          return
-        }
-        setRuns((prev) => {
-          const copy = [...prev]
-          copy[copy.length - 1] = { phase: 'queued', jobId: started.jobId, startedAt: Date.now() }
-          return copy
-        })
+        setRuns((prev) =>
+          prev.map((r) =>
+            r.localId !== localId
+              ? r
+              : started.ok
+                ? { ...r, phase: 'queued', jobId: started.jobId }
+                : { ...r, phase: 'failed', error: started.error, detail: started.detail, finishedAt: Date.now() },
+          ),
+        )
       }
 
       // QUEUE BAND. The host reads the account's queue while a job is in flight.
@@ -3746,51 +3995,66 @@ window.__ModuleLoader__.load({
         if (!anyInFlight) setQueue(null)
       }, [anyInFlight])
 
-      // THE POLL. One per run, keyed by jobId. Each run settles independently.
+      /**
+       * THE POLL: ONE TIMER, EVERY JOB IN FLIGHT (founder, 2026-09-25: *"the concurrency
+       * queue should be 1 row each so we can stop each one individually"*). The first cut
+       * polled only the latest run, so a second and a third job were invisible until the
+       * one before them settled. Each id is now read and settled on its own terms, and the
+       * effect re-arms when the set of in-flight ids changes — which is exactly when the
+       * set of rows to poll changes too.
+       */
+      const pollIds = runs
+        .filter((r) => typeof r.jobId === 'string' && r.jobId !== '' && (r.phase === 'queued' || r.phase === 'running'))
+        .map((r) => r.jobId)
+      const pollKey = pollIds.join(',')
       React.useEffect(() => {
-        const jobId = run.jobId
-        if (typeof jobId !== 'string' || jobId === '') return undefined
+        const ids = pollKey === '' ? [] : pollKey.split(',')
+        if (ids.length === 0) return undefined
         let live = true
-        let settled = false
+        const settled = new Set()
         const tick = async () => {
-          if (settled) return
-          const read = await readRun(provider, jobId)
-          if (!live) return
-          if (!read.ok) {
-            settled = true
-            setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: 'failed', finishedAt: Date.now(), error: read.error } : r)))
-            return
+          for (const jobId of ids) {
+            if (settled.has(jobId)) continue
+            const read = await readRun(provider, jobId)
+            if (!live) return
+            if (!read.ok) {
+              settled.add(jobId)
+              setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: 'failed', finishedAt: Date.now(), error: read.error } : r)))
+              continue
+            }
+            if (read.state === 'cancelled') {
+              settled.add(jobId)
+              setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: 'cancelled', finishedAt: Date.now() } : r)))
+              continue
+            }
+            if (read.state === 'done') {
+              settled.add(jobId)
+              setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: 'done', finishedAt: Date.now(), urls: read.urls, saved: read.saved } : r)))
+              continue
+            }
+            if (read.state === 'failed') {
+              settled.add(jobId)
+              setRuns((prev) => prev.map((r) =>
+                r.jobId === jobId
+                  ? { ...r, phase: 'failed', finishedAt: Date.now(), status: read.status, message: read.error && read.error.message ? String(read.error.message) : null }
+                  : r,
+              ))
+              continue
+            }
+            setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: read.state } : r)))
           }
-          if (read.state === 'cancelled') {
-            settled = true
-            setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: 'cancelled', finishedAt: Date.now() } : r)))
-            return
-          }
-          if (read.state === 'done') {
-            settled = true
-            setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: 'done', finishedAt: Date.now(), urls: read.urls, saved: read.saved } : r)))
-            return
-          }
-          if (read.state === 'failed') {
-            settled = true
-            setRuns((prev) => prev.map((r) =>
-              r.jobId === jobId
-                ? { ...r, phase: 'failed', finishedAt: Date.now(), status: read.status, message: read.error && read.error.message ? String(read.error.message) : null }
-                : r,
-            ))
-            return
-          }
-          setRuns((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, phase: read.state } : r)))
         }
         tick()
         const timer = setInterval(tick, 2000)
         return () => { live = false; clearInterval(timer) }
-      }, [run.jobId])
+      }, [pollKey, provider])
 
       const elapsed = run.startedAt ? Math.max(0, Math.round(((run.finishedAt || Date.now()) - run.startedAt) / 1000)) : 0
       return {
         ...run,
         elapsed,
+        // Every run, oldest first, so the queue list can draw one row per job.
+        runs,
         confirm,
         inFlight,
         anyInFlight,
@@ -3888,6 +4152,21 @@ window.__ModuleLoader__.load({
               h('span', { style: S.runPhase }, t('run.phase.' + run.phase)),
               h('span', { style: S.runMeta, 'data-generate-run-elapsed': String(run.elapsed) }, run.elapsed + 's'),
               run.jobId ? h('span', { style: S.runMeta, 'data-generate-run-job': run.jobId }, t('run.job') + ' ' + run.jobId) : null,
+              // STOP IT (founder, 2026-09-25: *"it seems like cancel button got removed"*). The
+              // host route and `useRun`'s own `cancel` were both there; the control was not drawn,
+              // so a run in flight had no way out on screen. It sits at the strip's end because the
+              // phase, the clock and the job id are what a person reads, and this is what they press.
+              h(
+                'button',
+                {
+                  type: 'button',
+                  style: { ...S.ghost, marginLeft: 'auto' },
+                  'data-generate-run-cancel': run.jobId || 'yes',
+                  disabled: run.cancelBusy !== null,
+                  onClick: () => run.cancel(run.jobId),
+                },
+                run.cancelBusy === run.jobId ? t('run.canceling') : t('run.cancel'),
+              ),
             )
           : null,
         run.phase === 'failed'
@@ -3967,6 +4246,78 @@ window.__ModuleLoader__.load({
         typeof q.running === 'number' ? h('span', { 'data-generate-queue-running': String(q.running) }, t('queue.running').replace('{n}', String(q.running))) : null,
         typeof q.queued === 'number' && q.queued > 0 ? h('span', { 'data-generate-queue-queued': String(q.queued) }, t('queue.queued').replace('{n}', String(q.queued))) : null,
         typeof q.limit === 'number' ? h('span', { 'data-generate-queue-limit': String(q.limit) }, t('queue.limit').replace('{n}', String(q.limit))) : null,
+      )
+    }
+
+    /**
+     * THE QUEUE, ONE ROW PER JOB (founder, 2026-09-25: *"the concurrency queue should be
+     * 1 row each so we can stop each one individually"*).
+     *
+     * Before this slice only the latest run had a face on screen: a second and third press
+     * against a provider that allows three at once were invisible, and the one Cancel in
+     * the strip could only ever reach the last of them. Every run in flight is now its own
+     * row, with its own phase, its own clock, its own id and its own Stop.
+     *
+     * THE COUNTS AND THE ROWS ARE TWO DIFFERENT FACTS. The band above the rows is the
+     * ACCOUNT's queue, which counts jobs this pane did not start (another tab, the
+     * provider's own site); the rows are this surface's own jobs, in the order they were
+     * started. They are drawn together and never reconciled — a provider that will not
+     * answer leaves the band out and the rows intact.
+     *
+     * ONLY WHAT IS IN FLIGHT IS A ROW. A settled run is a result, and a result belongs in
+     * the canvas and, next, in the strip under it — not in a queue.
+     */
+    function RunQueue({ t, run }) {
+      const all = Array.isArray(run.runs) ? run.runs : []
+      const rows = all.filter((r) => r.phase === 'starting' || r.phase === 'queued' || r.phase === 'running')
+      const band = h(QueueBand, { t, run })
+      if (rows.length === 0) return band
+      return h(
+        'div',
+        { style: S.queueList, 'data-generate-queue-list': String(rows.length) },
+        band,
+        ...rows.map((row) =>
+          h(RunQueueRow, {
+            key: row.localId || row.jobId || String(row.startedAt),
+            t,
+            row,
+            anyBusy: run.cancelBusy !== null,
+            cancelBusy: run.cancelBusy,
+            onCancel: run.cancel,
+          }),
+        ),
+      )
+    }
+
+    /**
+     * One job in the queue: what it is doing, how long it has been doing it, which job it
+     * is, and the way to stop THIS one. A job still in `starting` has no id to stop yet,
+     * so its Stop is drawn disabled rather than silently doing nothing.
+     */
+    function RunQueueRow({ t, row, cancelBusy, anyBusy, onCancel }) {
+      const elapsed = row.startedAt ? Math.max(0, Math.round(((row.finishedAt || Date.now()) - row.startedAt) / 1000)) : 0
+      return h(
+        'div',
+        { style: S.queueRow, 'data-generate-queue-row': row.jobId || 'starting' },
+        h(
+          'span',
+          { style: S.runSpin, 'aria-hidden': true },
+          h(IconLoadingOutline16, { size: 12, className: 'dsh-generate-spin' }),
+        ),
+        h('span', { style: S.runPhase }, row.phase === 'starting' ? t('run.starting') : t('run.phase.' + row.phase)),
+        h('span', { style: S.runMeta, 'data-generate-queue-elapsed': String(elapsed) }, elapsed + 's'),
+        row.jobId ? h('span', { style: S.runMeta, 'data-generate-queue-job': row.jobId }, t('run.job') + ' ' + row.jobId) : null,
+        h(
+          'button',
+          {
+            type: 'button',
+            style: { ...S.ghost, marginLeft: 'auto' },
+            'data-generate-queue-stop': row.jobId || 'starting',
+            disabled: anyBusy || !row.jobId,
+            onClick: () => onCancel(row.jobId),
+          },
+          cancelBusy === row.jobId ? t('run.canceling') : t('run.cancel'),
+        ),
       )
     }
 

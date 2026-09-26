@@ -28,11 +28,23 @@ never invents a control, never invents a number, and never writes plugin code.
   `aspect_ratio` — or whatever the adapter's `preview.aspectDoor` names — decides: `9:16` is a
   portrait canvas, `16:9` landscape, `1:1` square. Never hard-code a shape, and never invent an
   aspect door for a workflow that has none: that workflow gets a square canvas.
-- **A provider that declares run modes gets the split run control.** Its `runOption` (the
-  registry's, never the adapter's — RunningHub's `instanceType` is the one today) becomes the
-  segment beside the action, and the chosen mode travels with the run, because it
-  changes what the run uses. A provider that declares none gets the plain button: never draw a
-  segment that opens an empty list.
+- **A provider that declares run modes gets two buttons, not a split one.** Its `runOption` (the
+  registry's, never the adapter's — RunningHub's `instanceType` is the one today) becomes a second
+  control beside the action: the action is the harness `Button`'s **filled `primary`**, the choice is
+  an **outlined `outline`** button showing the mode it will use, and the chosen mode travels with the
+  run, because it changes what the run uses. A provider that declares none gets the plain action
+  button: never draw a control that opens an empty list.
+- **A one-press fill is a sparkle over a menu, and it is authored data.** `ui.presets: [{ label, doors }]`
+  puts a sparkle at the **right end of the title row** of every door the presets fill (the label stays left);
+  it opens a menu with one row per
+  preset, and choosing one writes those doors' values and nothing else — no run, so nothing spends.
+  A skill that is not written yet can still get a row, marked `disabled: true`: the menu greys it,
+  says so, and choosing it writes nothing. **Do not leave a placeholder in a shipped adapter.** The
+  Duo carried two greyed rows for a UI test and the founder had them gone the same day (*"in the
+  sparkles menu, remove 2nd row 'coming soon' muted color"*), so every row is now a skill that is
+  written. Author these when a workflow's own skill already contains the words a person would
+  otherwise retype (the Qwen Duo adapter carries the subject-swap template from the `subject-swap`
+  skill). Never invent a preset's words: take them from the skill.
 - **Copy is the profile's language, and data.** Labels are authored words. The plugin's own
   sentences come from `ctx.locale` under namespace `generate`.
 - **The visual layer is the harness's own.** `--dsw-alias-*` tokens only: no EVA token name, no
@@ -68,7 +80,7 @@ The pane draws five controls. Which one a door gets is not a choice — it comes
 
 | Control | A door gets it when | What a person does |
 |---|---|---|
-| `image` | the field holds a picture | drops a file or picks one; the door becomes a URL |
+| `image` | the field holds a picture | drops a file or picks one; the door becomes a URL. An empty door is **one dashed drop area** and nothing else — pressing it opens the file dialog, dropping on it uploads, and there is no second control (a local user downloads and uploads rather than pasting links). A filled door is the picture with a **clear badge in its own top-right corner**. **A workflow with more than one image door fills them in order**: while an earlier door is empty, a later empty one takes no drop, opens no picker, dims, and says *Drop Image 1 first*, naming the earlier door by its own label. The composer's attachment tray takes dropped files in the order the drops happened, so this is what keeps the two pictures in the same order everywhere. Never block the first image door, and never block a door that already holds a picture |
 | `text` | the field is a string | types, or writes several lines when `multiline` |
 | `number` | the field is a number | steps within the app's own `min`/`max`/`step` |
 | `select` | the field has `options` | picks one of the app's own options |
@@ -129,8 +141,9 @@ them.
 | the start-page card | the surface's own label (**Generate**) and one line | a workflow list, a thumbnail, stats |
 | the header | **the DSH strip's own pattern, one row lower**, and **drawn only while a workflow is open** — with nothing open the pane goes straight from the separator to the grid, because the start screen needs no plus beside it. When it is drawn: a tab per open workflow, each **as wide as its name** (never capped, never ellipsised — the row scrolls), and an add control that reads plus-then-**Add** (never a bare plus: the DSH strip's own add sits directly above it) and wears the same selected border a tab does while the start screen is the view. The row draws **no separator of its own** — the header carrying the DSH strip already draws the hairline above it, and a second one stacked on that reads as one thick rule — and it takes the DSH strip's own 10px above and below the tabs. There is **no "All workflows" tab** — the start screen is not a tab; the plus shows it (as DSH's own add button opens the guide), and a card on that grid is what opens a workflow's tab. A tab is named by its workflow's **title**, never by the adapter's file name, and carries a `×` that shows **only while that tab is selected, hovered or focused** — the DSH strip's own rule, so an unselected tab is its name and no glyph. The open tab draws a border and the others draw none — do not add a fill, an underline or an icon to a tab, do not draw a tab's close on an unselected tab (it waits for the selection, the hover or the focus), do not add a tab for the start screen, and do not give a surface a back button of its own: the plus IS the way back | a tab for the start screen, a second way back inside a surface, a tab named after a file |
 | the pane home | one block per provider, in registry order, minus the hidden ones, drawn on the page's own background with no card, no separator and nothing to fold, centred on the page as a 380px column: a caption line carries the status light and the provider's name, the facts line under it carries the wallet balance (11px, in the muted caption ink, and no count line beside it) and the add and refresh glyphs, and the block holds its workflows as the guide's own entry cards. The add glyph opens the install snippet as a **popover** anchored under it, so opening one never moves a card | a workflow's doors |
-| the workflow surface | two cards that wrap: the parameters card (the workflow's title and blurb, the doors as controls in `ui.order` primary first, the app's tooltip under each, advanced doors behind one disclosure, the app's own bounds and options on every control, the run control at its foot) and the preview card (the run's state and its result) | a node id, a field name, an engine metadata row (the `title` may name the engine; nothing else renders model metadata), a panel that is not a `Card`, a card heading of its own, a way-out button (the header owns it) |
+| the workflow surface | two cards that wrap, **two fifths of the pane for the parameters and three for the preview**: the parameters card (the workflow's title and blurb, the doors as controls in `ui.order` primary first, the app's tooltip under each, advanced doors behind one disclosure, the app's own bounds and options on every control, the run control at its foot) and the preview card (the run's state and its result). The row wraps into stacked full-width cards when the pane is too narrow for both minima — never a fixed pixel split | a node id, a field name, an engine metadata row (the `title` may name the engine; nothing else renders model metadata), a panel that is not a `Card`, a card heading of its own, a way-out button (the header owns it) |
 | the run strip and result | `queued`/`running` with the spinning loading glyph, the elapsed time, the job id; a failure shows the provider's message verbatim beside the job id (the form never left the screen, so the run control is the way to try again — there is no Run again button); a finished run draws the result with a link to it | a progress bar with no number behind it, a Run again button |
+| the queue, under the preview | **one row per job in flight**, in the order the jobs were started: the spinning glyph, the phase, that job's own clock, its job id and its own **Cancel**, which stops that row and no other. The account's counts sit above the rows as a band. A settled job leaves the list | a row for a job that has finished, an aggregate count standing in for a per-job row, one shared Cancel that always takes the newest job, a second timer per row |
 
 The empty and failure states are part of the design, not an afterthought: a provider whose
 list answered nothing says so inside its own block, a workflow that cannot run says which door is

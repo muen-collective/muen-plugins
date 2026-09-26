@@ -178,7 +178,25 @@ const PRIMITIVES = {
             'span',
             { 'data-stub': 'menu-list' },
             (props.items || []).map((item) =>
-              REACT.createElement('button', { key: item.id, type: 'button', 'data-menu-item': item.id, onClick: () => props.onSelect(item.id) }, item.label),
+              REACT.createElement(
+                'button',
+                {
+                  key: item.id,
+                  type: 'button',
+                  'data-menu-item': item.id,
+                  // The real row is a `MenuItemButton`, which carries `disabled` and refuses the
+                  // press; the stub keeps the flag AND the refusal, so a check can prove a greyed
+                  // row does nothing rather than only that it is marked.
+                  disabled: item.disabled === true,
+                  ...(item.disabled === true ? { 'data-menu-item-disabled': 'yes' } : {}),
+                  icon: item.icon,
+                  onClick: () => {
+                    if (item.disabled === true) return
+                    props.onSelect(item.id)
+                  },
+                },
+                item.label,
+              ),
             ),
           )
         : null,
@@ -504,6 +522,10 @@ const KREA_FILE = {
   // The authored starting values, as `readAdapter` flattens them out of the file's
   // `ui` block: megapixels opens at 2 even though the app declares 1.
   defaults: { megapixels: 2 },
+  // One-press fills, the same flattening: the label names the glyph and the doors are what
+  // one press writes (founder, 2026-09-25: *"we should add sparkles icon to fill the prompt w
+  // subject swap skill to make the work faster"*).
+  presets: [{ label: 'Subject swap', doors: { value: 'Swap the outfit from image 2 onto the person in image 1.' } }],
   doors: {
     value: { nodeId: '63', fieldName: 'value', type: 'text', label: 'Prompt', primary: true, multiline: true },
     aspectRatio: {
@@ -608,6 +630,15 @@ const ARRAYS = {
   runnable: true,
   order: ['prompt', 'image_url', 'styles', 'image_style_references', 'moodboards'],
   defaults: {},
+  // The prompt-writing menu as the founder described it (2026-09-25: *"sparkles subject swap is a
+  // prompt writing skill, we can have other skill like face swap, add object (add these others but
+  // greyed for now)"*): one written skill and two placeholders. The placeholders carry a value no
+  // one wrote, so a row that applies them anyway is visible rather than looking like a no-op.
+  presets: [
+    { label: 'Subject swap', doors: { prompt: 'Swap the outfit from image 2 onto the person in image 1.' } },
+    { label: 'Face swap', doors: { prompt: 'the face-swap words nobody wrote' }, disabled: true },
+    { label: 'Add object', doors: { prompt: 'the add-object words nobody wrote' }, disabled: true },
+  ],
   doors: {
     prompt: { type: 'text', label: 'Prompt', multiline: true, primary: true, required: true },
     image_url: { type: 'image', label: 'Source image', advanced: true },
@@ -705,6 +736,12 @@ function stubHost({
    * can open — which is the case the thumbnail rule exists for, so a case can ask for it.
    */
   assetUrl = UPLOADED_URL,
+  /**
+   * The values the host has on file for this workflow. The surface reads them when it mounts,
+   * which is the only way a door can hold a value with no picked bytes in hand — the state a
+   * reopened RunningHub workflow is in, where the door carries an opaque `api/…` handle.
+   */
+  savedValues = {},
 } = {}) {
   const calls = []
   // The runs this stub was asked to start, and how many times a job was polled: the two
@@ -777,7 +814,9 @@ function stubHost({
       if (String(url).endsWith('/run') && (init.method || 'GET').toUpperCase() === 'POST') {
         const posted = JSON.parse((init && init.body) || '{}')
         runs.push(posted)
-        return ok({ jobId: 'job-1', status: 'queued' })
+        // One id per start, so two jobs at once carry two names. The first run is still
+        // `job-1`, which is what the single-run checks above rely on.
+        return ok({ jobId: 'job-' + runs.length, status: 'queued' })
       }
       // One poll. `jobStates` is the script: the last entry answers every later poll.
       if (String(url).includes('/run?job=')) {
@@ -871,9 +910,13 @@ function stubHost({
         chosenPath = postedPath
         return ok(libraryAnswer())
       }
+      // The per-workflow values the host has on file. The surface reads them on mount, so a
+      // fixture can open a door that already holds a value with no picked bytes in hand.
+      if (String(url).includes('/state?name=')) {
+        return ok(savedValues)
+      }
       // Every provider's workflow route answers, because the pane and the open card
-      // read one list per provider: RunningHub carries the units, the rest are empty.
-      // A failure case fails them all, which is what "the list could not be read"
+      // read one list per provider: RunningHub carries the units, the rest are empty.      // A failure case fails them all, which is what "the list could not be read"
       // means once there is more than one provider. The path is split rather than
       // matched with a regex: the client runs in a VM, and a cross-realm string does
       // not answer the outer realm's `RegExp` here (measured 2026-09-23).
@@ -2552,6 +2595,32 @@ check(
     })(),
     'a wrapping row of two columns is the responsive shape a resizable pane needs',
   )
+  // TWO TO THREE, NOT ONE TO ONE (founder, 2026-09-25: *"the ratio of parameters/preview try
+  // 2/5:3/5 of 5 column after a mobile breakpoint"*). The zero basis is what makes that exact:
+  // flex divides the FREE width by the grow factors, so 2 and 3 land on 2/5 and 3/5 of the row.
+  // An authored basis would sit inside the ratio and neither card would be the fraction it says.
+  check(
+    'the parameters and preview cards stand in a 2:3 ratio, and stack only when the pane is narrow',
+    (() => {
+      const params = byAttr(opened.tree, 'data-generate-card', 'params')
+      const preview = byAttr(opened.tree, 'data-generate-card', 'preview')
+      if (!params || !preview) return false
+      const p = params.props.style
+      const o = preview.props.style
+      return (
+        p.flex === '2 1 0' &&
+        o.flex === '3 1 0' &&
+        // The minima are the breakpoint: below their sum the row wraps and each card takes its
+        // own line, which is what makes a narrow pane stack them.
+        typeof p.minWidth === 'number' &&
+        typeof o.minWidth === 'number'
+      )
+    })(),
+    JSON.stringify({
+      params: byAttr(opened.tree, 'data-generate-card', 'params').props.style.flex,
+      preview: byAttr(opened.tree, 'data-generate-card', 'preview').props.style.flex,
+    }),
+  )
   check(
     'a workflow whose run is not built yet still gets its preview card, and says so in it',
     (() => {
@@ -2897,6 +2966,27 @@ check(
       })(),
       'enabled at queued',
     )
+    // STOP IT (founder, 2026-09-25: *"it seems like cancel button got removed"*). The route and
+    // `useRun`'s own handler were both there and no control was drawn, so a run in flight had no
+    // way out on screen. The strip carries it while the run is in flight, and only then.
+    {
+      const cancel = byAttr(started, 'data-generate-run-cancel', 'job-1')
+      check(
+        'the strip carries a Cancel while the run is in flight',
+        !!cancel && textIn(cancel) === 'Cancel' && cancel.props.disabled === false,
+        cancel ? textIn(cancel) : 'no cancel control',
+      )
+      const callsBefore = stub.calls.length
+      if (cancel) cancel.props.onClick()
+      await settle(paneSlot.component, props, 'pane-run')
+      check(
+        'pressing it asks the host to cancel that job',
+        stub.calls.length === callsBefore + 1 &&
+          String(stub.calls.at(-1).url).endsWith('/cancel') &&
+          JSON.parse(String(stub.calls.at(-1).body)).jobId === 'job-1',
+        JSON.stringify(stub.calls.slice(callsBefore).map((call) => ({ url: call.url, method: call.method }))),
+      )
+    }
 
     // One poll by hand, which is what the interval would have done two seconds later.
     const poll = timers[timers.length - 1]
@@ -2921,6 +3011,11 @@ check(
         )
       })(),
       JSON.stringify(nodesOf(done).filter((node) => node.props && node.props['data-generate-result']).map((node) => node.props['data-generate-result'])),
+    )
+    check(
+      'a settled run carries no Cancel: the strip is the only place the control lives',
+      !byAttr(done, 'data-generate-run-cancel', 'job-1') && !byAttr(done, 'data-generate-run-strip', 'running'),
+      JSON.stringify(nodesOf(done).filter((node) => node.props && node.props['data-generate-run-cancel']).map((node) => node.props['data-generate-run-cancel'])),
     )
     check(
       'the pane says where the bytes were saved, from the host\'s own answer',
@@ -2966,6 +3061,146 @@ check(
         stub.runs[1].confirmed === true &&
         stub.runs[1].values.prompt === 'a cinematic glass cabin',
       JSON.stringify(stub.runs.map((run) => run.values)),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// ── the concurrency queue: one row per job, each stoppable on its own ────────
+//
+// Founder, 2026-09-25: *"the concurrency queue should be 1 row each so we can stop each one
+// individually"*. The first cut drew only the newest run, and the one Cancel read that run's
+// id off the closure, so a second job in flight had no face and no way out. `jobStates:
+// ['queued']` is what keeps every job in flight — the single-run scenarios above settle on
+// their first poll, which is exactly the state this slice is not about.
+{
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: MODEL_UNIT.name, provider: 'krea' }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['queued'] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let typed = await settle(paneSlot.component, props, 'pane-queue')
+    const door = nodesOf(typed).find((node) => node.props && node.props['data-generate-door'] === 'prompt')
+    if (door) door.props.onChange({ target: { value: 'a cinematic glass cabin' } })
+    typed = await settle(paneSlot.component, props, 'pane-queue')
+    // TWO PRESSES WITH NO AWAIT BETWEEN THEM, which is the race the per-run identity
+    // exists for: a double press puts both starts in the air at once, and a write into
+    // whatever slot happens to be last lands both answers in the newest one, leaving the
+    // first job stuck as `starting` with no id of its own.
+    const control = byAttr(typed, 'data-generate-run', MODEL_UNIT.name)
+    if (control) {
+      control.props.onClick()
+      control.props.onClick()
+    }
+    // The same walk key every time: the harness keys component state by that path, so a
+    // fresh key would throw the run state away between presses.
+    typed = await settle(paneSlot.component, props, 'pane-queue')
+    check(
+      'two presses at once are two jobs, each holding its own job id',
+      (() => {
+        const rows = nodesOf(typed).filter((node) => node.props && node.props['data-generate-queue-row'])
+        return (
+          !!byAttr(typed, 'data-generate-queue-list', '2') &&
+          rows.map((row) => row.props['data-generate-queue-row']).join(',') === 'job-1,job-2'
+        )
+      })(),
+      JSON.stringify(nodesOf(typed).filter((node) => node.props && node.props['data-generate-queue-row']).map((node) => node.props['data-generate-queue-row'])),
+    )
+    const third = byAttr(typed, 'data-generate-run', MODEL_UNIT.name)
+    if (third) third.props.onClick()
+    typed = await settle(paneSlot.component, props, 'pane-queue')
+    check(
+      'three presses against a provider that allows three are three jobs',
+      stub.runs.length === 3 && stub.runs.every((run) => run.confirmed === true),
+      JSON.stringify(stub.runs.map((run) => run.values)),
+    )
+    check(
+      'the queue draws one row per job in flight, in the order they were started',
+      (() => {
+        const rows = nodesOf(typed).filter((node) => node.props && node.props['data-generate-queue-row'])
+        return (
+          !!byAttr(typed, 'data-generate-queue-list', '3') &&
+          rows.map((row) => row.props['data-generate-queue-row']).join(',') === 'job-1,job-2,job-3' &&
+          rows.every((row) => textIn(row).includes(row.props['data-generate-queue-row']))
+        )
+      })(),
+      JSON.stringify(nodesOf(typed).filter((node) => node.props && node.props['data-generate-queue-row']).map((node) => node.props['data-generate-queue-row'])),
+    )
+    check(
+      'every row carries its own Stop, so any one of them can be stopped',
+      ['job-1', 'job-2', 'job-3'].every((jobId) => {
+        const stop = byAttr(typed, 'data-generate-queue-stop', jobId)
+        return !!stop && stop.props.disabled === false && textIn(stop) === 'Cancel'
+      }),
+      JSON.stringify(nodesOf(typed).filter((node) => node.props && node.props['data-generate-queue-stop']).map((node) => node.props['data-generate-queue-stop'])),
+    )
+    // STOP THE ONE THAT WAS PRESSED, not the newest. This is the whole point of a row each:
+    // the route has always taken a job id, and now the control sends that row's own.
+    const stopSecond = byAttr(typed, 'data-generate-queue-stop', 'job-2')
+    const callsBefore = stub.calls.length
+    if (stopSecond) stopSecond.props.onClick()
+    const stopped = await settle(paneSlot.component, props, 'pane-queue')
+    check(
+      'Stop on a row cancels THAT job, not the newest one',
+      (() => {
+        const posted = stub.calls.slice(callsBefore).find((call) => String(call.url).endsWith('/cancel'))
+        return !!posted && JSON.parse(String(posted.body)).jobId === 'job-2'
+      })(),
+      JSON.stringify(stub.calls.slice(callsBefore).map((call) => ({ url: call.url, body: call.body }))),
+    )
+    check(
+      'and the other two rows are still there, still stoppable',
+      !!byAttr(stopped, 'data-generate-queue-list', '3') &&
+        !!byAttr(stopped, 'data-generate-queue-row', 'job-1') &&
+        !!byAttr(stopped, 'data-generate-queue-row', 'job-3') &&
+        !!byAttr(stopped, 'data-generate-queue-stop', 'job-3'),
+      JSON.stringify(nodesOf(stopped).filter((node) => node.props && node.props['data-generate-queue-row']).map((node) => node.props['data-generate-queue-row'])),
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+}
+
+// ── each job settles on its own poll ─────────────────────────────────────────
+//
+// The other half of "1 row each": the timer covers every job in flight, not only the
+// newest, so the first job can finish while the second still runs. `jobStates: ['done',
+// 'queued']` is the script — the first poll answers `done`, every later one `queued` — so a
+// timer that only read the newest job would leave the first one queued forever.
+{
+  const props = {
+    t,
+    useTabInfo: () => ({ tab: { navigation: { params: { unit: MODEL_UNIT.name, provider: 'krea' }, revision: 1 } } }),
+  }
+  const stub = stubHost({ units: [], kreaUnits: [MODEL_UNIT], file: MODEL, jobStates: ['done', 'queued'] })
+  const real = globalThis.fetch
+  globalThis.fetch = stub.fetch
+  try {
+    let typed = await settle(paneSlot.component, props, 'pane-queue-settle')
+    const door = nodesOf(typed).find((node) => node.props && node.props['data-generate-door'] === 'prompt')
+    if (door) door.props.onChange({ target: { value: 'a cinematic glass cabin' } })
+    typed = await settle(paneSlot.component, props, 'pane-queue-settle')
+    const control = byAttr(typed, 'data-generate-run', MODEL_UNIT.name)
+    if (control) {
+      control.props.onClick()
+      control.props.onClick()
+    }
+    typed = await settle(paneSlot.component, props, 'pane-queue-settle')
+    check(
+      'the first job settles while the second is still in flight: the second keeps its row',
+      (() => {
+        const rows = nodesOf(typed).filter((node) => node.props && node.props['data-generate-queue-row'])
+        return (
+          !!byAttr(typed, 'data-generate-queue-list', '1') &&
+          rows.length === 1 &&
+          rows[0].props['data-generate-queue-row'] === 'job-2'
+        )
+      })(),
+      JSON.stringify(nodesOf(typed).filter((node) => node.props && node.props['data-generate-queue-row']).map((node) => node.props['data-generate-queue-row'])),
     )
   } finally {
     globalThis.fetch = real
@@ -3032,9 +3267,34 @@ check(
       JSON.stringify({ run: !!byAttr(tree, 'data-generate-run', 'outfit-swap'), pending: !!byAttr(tree, 'data-generate-run-pending', 'yes') }),
     )
     check(
-      'it draws the split control too: RunningHub declares its own machines',
-      !!byAttr(tree, 'data-generate-split', 'yes') && !!byAttr(tree, 'data-generate-mode-toggle', 'yes'),
-      JSON.stringify(byAttr(tree, 'data-generate-mode') ? byAttr(tree, 'data-generate-mode').props : 'no segment'),
+      'it draws two buttons, not a split one: the action filled, the choice outlined',
+      (() => {
+        const pair = byAttr(tree, 'data-generate-split', 'yes')
+        const action = byAttr(tree, 'data-generate-run', RH_RUNNER_FILE.name)
+        const toggle = byAttr(tree, 'data-generate-mode-toggle', 'yes')
+        if (!pair || !action || !toggle) return false
+        // Both are the harness `Button` (the stub keeps its `variant`), so the pair is the app's
+        // own two button families rather than half-rounded halves of one control.
+        const variantOf = (node) => {
+          const button = byAttr(node, 'data-stub', 'button')
+          return button ? button.props.variant : 'no button'
+        }
+        const kids = nodesOf(pair)
+        return (
+          variantOf(action) === 'primary' &&
+          variantOf(toggle) === 'outline' &&
+          // Two buttons with the ordinary gap, not one control split in half: no shared border,
+          // no half-rounded corners.
+          pair.props.style.gap === 8 &&
+          kids.indexOf(action) !== -1 &&
+          kids.indexOf(action) < kids.indexOf(toggle) &&
+          textIn(action).trim() === RH_RUNNER_FILE.runLabel
+        )
+      })(),
+      JSON.stringify({
+        action: byAttr(tree, 'data-generate-run', RH_RUNNER_FILE.name) ? byAttr(byAttr(tree, 'data-generate-run', RH_RUNNER_FILE.name), 'data-stub', 'button').props.variant : 'none',
+        toggle: byAttr(tree, 'data-generate-mode-toggle', 'yes') ? byAttr(byAttr(tree, 'data-generate-mode-toggle', 'yes'), 'data-stub', 'button').props.variant : 'none',
+      }),
     )
     check(
       "its image doors draw the pick control the provider's upload earns",
@@ -3049,23 +3309,103 @@ check(
       !!byAttr(tree, 'data-generate-image-group', 'person+garment'),
       JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-image-group']).map((node) => node.props['data-generate-image-group'])),
     )
+    // THE DROP ORDER IS THE ONLY ORDER THERE IS (founder, 2026-09-25: *"its drops in order not by
+    // left/right position. we can disable image 2 and message user to drop image 1 first"*). The
+    // composer's tray takes every dropped file at `document`, in the order the drops happened, so
+    // an empty second image door waits for the first: no drop target, no picker, and a sentence
+    // that names the door to fill. Everything here is about the EMPTY state.
+    check(
+      'an empty second image door waits for the first, and names the door to fill',
+      (() => {
+        const wait = byAttr(tree, 'data-generate-drop-wait', 'garment')
+        return (
+          !!wait &&
+          !byAttr(tree, 'data-generate-drop-wait', 'person') &&
+          !!byAttr(tree, 'data-generate-drop', 'yes') &&
+          textIn(wait).includes(EN['surface.image.waitFor'].replace('{label}', 'Person photo'))
+        )
+      })(),
+      JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-drop-wait']).map((node) => ({ door: node.props['data-generate-drop-wait'], text: textIn(node) }))),
+    )
+    check(
+      'its picker is closed too, not only its drop area',
+      (() => {
+        const waiting = byAttr(tree, 'data-generate-upload', 'garment')
+        const first = byAttr(tree, 'data-generate-upload', 'person')
+        return !!waiting && waiting.props.disabled === true && !!first && first.props.disabled !== true
+      })(),
+      JSON.stringify({
+        garment: String((byAttr(tree, 'data-generate-upload', 'garment') || { props: {} }).props.disabled),
+        person: String((byAttr(tree, 'data-generate-upload', 'person') || { props: {} }).props.disabled),
+      }),
+    )
+    // Fill the first image the way a person does, and the second door opens again.
+    {
+      const first = byAttr(tree, 'data-generate-upload', 'person')
+      if (first) first.props.onChange({ target: { files: [{ name: 'person.png', type: 'image/png' }], value: '/tmp/person.png' } })
+      tree = await settle(paneSlot.component, props, 'pane-rh-run')
+      check(
+        'once the first image is in, the second door is an ordinary drop area',
+        !byAttr(tree, 'data-generate-drop-wait', 'garment') &&
+          !!byAttr(tree, 'data-generate-thumb', 'person') &&
+          !(byAttr(tree, 'data-generate-upload', 'garment') || { props: {} }).props.disabled,
+        JSON.stringify({
+          wait: !!byAttr(tree, 'data-generate-drop-wait', 'garment'),
+          thumb: !!byAttr(tree, 'data-generate-thumb', 'person'),
+        }),
+      )
+    }
     // A HANDLE WITH NO PICKED BYTES. A surface that remounts while its door already holds one has
     // no blob to draw, and RunningHub's `api/…` handle is not addressable — so the door says a
     // picture is set and draws the neutral mark. Never an `<img>` with a src no browser can open.
-    const personField = byAttr(tree, 'data-generate-door', 'person')
-    if (personField) personField.props.onChange({ target: { value: OPAQUE_HANDLE } })
-    tree = await settle(paneSlot.component, props, 'pane-rh-run')
-    check(
-      'a handle with no picked bytes draws the neutral mark, never a broken image',
-      !byAttr(tree, 'data-generate-thumb', 'person') &&
-        !!byAttr(tree, 'data-generate-thumb-missing', 'person') &&
-        !byAttr(tree, 'data-generate-door', 'person'),
-      JSON.stringify({
-        thumb: !!byAttr(tree, 'data-generate-thumb', 'person'),
-        missing: !!byAttr(tree, 'data-generate-thumb-missing', 'person'),
-        field: !!byAttr(tree, 'data-generate-door', 'person'),
-      }),
-    )
+    // The state comes from the host (the values on file), which is the only way a door holds a
+    // value with nothing picked: the URL dialog refuses a shape that is not a URL.
+    {
+      const savedStub = {
+        ...stubWithUpload,
+        fetch: async (url, init) => {
+          if (String(url).includes('/state?name=')) return { ok: true, status: 200, json: async () => ({ person: OPAQUE_HANDLE }) }
+          return stubWithUpload.fetch(url, init)
+        },
+      }
+      globalThis.fetch = savedStub.fetch
+      const saved = await settle(paneSlot.component, props, 'pane-rh-saved')
+      check(
+        'a handle with no picked bytes draws the neutral mark, never a broken image',
+        !byAttr(saved, 'data-generate-thumb', 'person') &&
+          !!byAttr(saved, 'data-generate-thumb-missing', 'person') &&
+          !byAttr(saved, 'data-generate-door', 'person'),
+        JSON.stringify({
+          thumb: !!byAttr(saved, 'data-generate-thumb', 'person'),
+          missing: !!byAttr(saved, 'data-generate-thumb-missing', 'person'),
+          field: !!byAttr(saved, 'data-generate-door', 'person'),
+        }),
+      )
+    }
+    // THE GUARD LOOKS ONLY AT EMPTY DOORS. This is the reason it cannot trap a value: a second door
+    // that already holds an image stays interactive while the first is empty, so a person can
+    // always clear or replace what is there.
+    {
+      const heldStub = {
+        ...stubWithUpload,
+        fetch: async (url, init) => {
+          if (String(url).includes('/state?name=')) return { ok: true, status: 200, json: async () => ({ garment: OPAQUE_HANDLE }) }
+          return stubWithUpload.fetch(url, init)
+        },
+      }
+      globalThis.fetch = heldStub.fetch
+      const held = await settle(paneSlot.component, props, 'pane-rh-held')
+      check(
+        'a door that already holds an image is never held back, even with the first one empty',
+        !byAttr(held, 'data-generate-drop-wait', 'garment') &&
+          !!byAttr(held, 'data-generate-image-clear', 'garment') &&
+          !(byAttr(held, 'data-generate-upload', 'garment') || { props: {} }).props.disabled,
+        JSON.stringify({
+          wait: !!byAttr(held, 'data-generate-drop-wait', 'garment'),
+          clear: !!byAttr(held, 'data-generate-image-clear', 'garment'),
+        }),
+      )
+    }
   } finally {
     globalThis.fetch = real
   }
@@ -3234,6 +3574,141 @@ check(
     if (disclosure) disclosure.props.onClick()
     tree = await settle(paneSlot.component, props, 'pane-arrays')
 
+    // THE SPARKLE AND ITS MENU (founder, 2026-09-25: *"make a sparkles menu, sparkles subject swap
+    // is a prompt writing skill, we can have other skill like face swap, add object (add these
+    // others but greyed for now) I just want to test UI"*). The glyph sits on the label line of a
+    // door the presets fill and opens a menu of them; a greyed row is drawn and chooses nothing.
+    {
+      const sparkle = byAttr(tree, 'data-generate-preset', 'prompt')
+      const promptField = () => byAttr(tree, 'data-generate-door', 'prompt')
+      check(
+        'a preset door wears the sparkle, and only a door the presets fill wears one',
+        !!sparkle &&
+          sparkle.props['aria-label'] === 'Prompt skills' &&
+          sparkle.props['aria-haspopup'] === 'true' &&
+          // Only the prompt door gets one: the image and list doors beside it have no preset.
+          nodesOf(tree).filter((node) => node.props && node.props['data-generate-preset'] !== undefined).length === 1,
+        JSON.stringify(nodesOf(tree).filter((node) => node.props && node.props['data-generate-preset'] !== undefined).map((node) => node.props['data-generate-preset'])),
+      )
+      // THE GLYPH SITS AT THE FAR END OF THE PROMPT'S TITLE ROW (founder, 2026-09-25: *"add
+      // sparkles icon to the Prompt title row above prompt input box … Put it justify right"*):
+      // the label is the row's first child, the glyph its last, and the row spaces them apart.
+      check(
+        'the prompt\'s title row carries the sparkle, justified to its right end',
+        (() => {
+          const row = byAttr(tree, 'data-generate-door-row', 'prompt')
+          if (!row || !sparkle) return false
+          const kids = (node) => (Array.isArray(node.children) ? node.children : node.children === undefined ? [] : [node.children])
+          const line = kids(row)[0]
+          if (!line) return false
+          const lineKids = kids(line)
+          const label = lineKids[0]
+          const last = lineKids[lineKids.length - 1]
+          return (
+            line.props.style.justifyContent === 'space-between' &&
+            !!label &&
+            label.type === 'label' &&
+            textIn(label).trim() === 'Prompt' &&
+            // The glyph lives in the row's LAST child (the menu it anchors renders around it), so
+            // the label is first, the control is last, and the row is what spaces them apart.
+            !!last &&
+            last !== label &&
+            nodesOf(last).includes(sparkle)
+          )
+        })(),
+        JSON.stringify({
+          justify: (() => {
+            const row = byAttr(tree, 'data-generate-door-row', 'prompt')
+            if (!row) return 'no row'
+            const kids = Array.isArray(row.children) ? row.children : [row.children]
+            return kids[0] ? kids[0].props.style.justifyContent : 'no line'
+          })(),
+        }),
+      )
+      if (sparkle) sparkle.props.onClick()
+      tree = await settle(paneSlot.component, props, 'pane-arrays')
+      const menu = byAttr(tree, 'data-stub', 'menu')
+      const rows = nodesOf(tree).filter((node) => node.props && node.props['data-generate-preset-row'] !== undefined)
+      const stateOf = (label) => {
+        const row = rows.find((node) => node.props['data-generate-preset-row'] === label)
+        const mark = row ? nodesOf(row).find((node) => node.props && node.props['data-generate-preset-state'] !== undefined) : null
+        return mark ? mark.props['data-generate-preset-state'] : 'missing'
+      }
+      check(
+        'the sparkle opens a menu of the prompt skills, in the adapter\'s order',
+        !!menu &&
+          menu.props['data-menu-open'] === 'yes' &&
+          rows.map((row) => row.props['data-generate-preset-row']).join(',') === 'Subject swap,Face swap,Add object' &&
+          stateOf('Subject swap') === 'ready' &&
+          stateOf('Face swap') === 'soon' &&
+          stateOf('Add object') === 'soon',
+        JSON.stringify(rows.map((row) => row.props['data-generate-preset-row'] + ':' + stateOf(row.props['data-generate-preset-row']))),
+      )
+      check(
+        'the unwritten skills say so, and their rows are disabled',
+        ['Face swap', 'Add object'].every((label) => {
+          const row = byAttr(tree, 'data-menu-item', label)
+          return !!row && row.props.disabled === true && row.props['data-menu-item-disabled'] === 'yes' && textIn(row).includes('Coming soon')
+        }),
+        JSON.stringify(['Face swap', 'Add object'].map((label) => {
+          const row = byAttr(tree, 'data-menu-item', label)
+          return row ? { disabled: row.props.disabled, text: textIn(row) } : 'no row'
+        })),
+      )
+      // A GREYED ROW CHOOSES NOTHING, even if its press is driven by hand: the words stay empty
+      // and the menu stays open, because nothing was chosen.
+      const runsBefore = stub.runs.length
+      const greyed = byAttr(tree, 'data-menu-item', 'Face swap')
+      if (greyed) greyed.props.onClick()
+      tree = await settle(paneSlot.component, props, 'pane-arrays')
+      check(
+        'pressing a greyed skill writes nothing, and leaves the menu open',
+        String((promptField() || { props: {} }).props.value) === '' &&
+          (byAttr(tree, 'data-stub', 'menu') || { props: {} }).props['data-menu-open'] === 'yes',
+        JSON.stringify({ value: (promptField() || { props: {} }).props.value }),
+      )
+      // …and the client refuses it a second time, for a primitive that ever calls through: the
+      // greyed id goes straight to the menu's own `onSelect`, which is what the real row would
+      // invoke. Two walls, because "disabled" is a promise the primitive keeps and the surface
+      // must not depend on.
+      const menuNode = byAttr(tree, 'data-stub', 'menu')
+      if (menuNode && typeof menuNode.props.onSelect === 'function') menuNode.props.onSelect('Face swap')
+      tree = await settle(paneSlot.component, props, 'pane-arrays')
+      check(
+        'a greyed skill stays empty even when the menu hands its id straight back',
+        String((promptField() || { props: {} }).props.value) === '',
+        JSON.stringify((promptField() || { props: {} }).props.value),
+      )
+      // THE WRITTEN ONE FILLS, and runs nothing: no run, so nothing spends. The menu is reopened
+      // first, because the direct call above closed it the way a choice would.
+      const reopen = byAttr(tree, 'data-generate-preset', 'prompt')
+      if (reopen) reopen.props.onClick()
+      tree = await settle(paneSlot.component, props, 'pane-arrays')
+      const chosen = byAttr(tree, 'data-menu-item', 'Subject swap')
+      if (chosen) chosen.props.onClick()
+      tree = await settle(paneSlot.component, props, 'pane-arrays')
+      check(
+        'choosing it writes the prompt, runs nothing, and closes the menu',
+        String((promptField() || { props: {} }).props.value) === 'Swap the outfit from image 2 onto the person in image 1.' &&
+          stub.runs.length === runsBefore &&
+          (byAttr(tree, 'data-stub', 'menu') || { props: {} }).props['data-menu-open'] === 'no',
+        JSON.stringify({
+          value: (promptField() || { props: {} }).props.value,
+          runs: stub.runs.length - runsBefore,
+          menu: (byAttr(tree, 'data-stub', 'menu') || { props: {} }).props['data-menu-open'],
+        }),
+      )
+      // The prompt stays ordinary text afterwards: the sparkle fills, it does not lock.
+      const afterFill = promptField()
+      if (afterFill) afterFill.props.onChange({ target: { value: 'a person in a red dress' } })
+      tree = await settle(paneSlot.component, props, 'pane-arrays')
+      check(
+        'the filled words are the field\'s own: they can be edited like any others',
+        String((promptField() || { props: {} }).props.value) === 'a person in a red dress',
+        JSON.stringify((promptField() || { props: {} }).props.value),
+      )
+    }
+
     check(
       'a list door starts empty, offering the add control the catalogue names and no rows',
       !!byAttr(tree, 'data-generate-list-add', 'styles') &&
@@ -3318,9 +3793,19 @@ check(
     // the URL the provider's asset API answered — never the browser's own file path.
     const upload = byAttr(tree, 'data-generate-upload', 'image_url')
     check(
-      'an image door offers the pick control beside the URL field, and starts empty',
-      !!upload && (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value === '',
-      JSON.stringify({ upload: !!upload, value: (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value }),
+      'an empty image door is one drop area and nothing else, and carries no value yet',
+      !!upload &&
+        !!byAttr(tree, 'data-generate-drop', 'yes') &&
+        // The URL route is GONE (founder, 2026-09-25: *"i can't get url to work. maybe we don't
+        // need on local, user can download and upload is better"*): no second control, no field.
+        !byAttr(tree, 'data-generate-url-open', 'image_url') &&
+        !byAttr(tree, 'data-generate-door', 'image_url'),
+      JSON.stringify({
+        upload: !!upload,
+        drop: !!byAttr(tree, 'data-generate-drop', 'yes'),
+        urlButton: !!byAttr(tree, 'data-generate-url-open', 'image_url'),
+        field: !!byAttr(tree, 'data-generate-door', 'image_url'),
+      }),
     )
     const blobsBefore = blobUrls.length
     if (upload) upload.props.onChange({ target: { files: [{ name: 'photo.png', type: 'image/png' }], value: 'C:\\fakepath\\photo.png' } })
@@ -3384,19 +3869,35 @@ check(
       String((byAttr(tree, 'data-generate-thumb-frame', 'image_url') || { props: { style: {} } }).props.style.aspectRatio) === String(900 / 1200),
       JSON.stringify((byAttr(tree, 'data-generate-thumb-frame', 'image_url') || { props: { style: {} } }).props.style.aspectRatio),
     )
-    // ORDER: the picture first, then Replace and Remove under it — the actions are the frame's
-    // LATER sibling inside the door, not a column beside it.
+    // THE BADGE, INSIDE THE PICTURE (founder, 2026-09-25: *"to clear the upload use a badge close
+    // icon in the top right corner"*). The row of actions under the picture is gone: the control
+    // lives in the frame's own top-right corner and the frame is what positions it.
     {
       const door = byAttr(tree, 'data-generate-image', 'image_url')
       const kids = door ? (Array.isArray(door.children) ? door.children : [door.children]) : []
       const has = (node, attr) => nodesOf(node).some((child) => child.props && child.props[attr] !== undefined)
       const frameAt = kids.findIndex((kid) => has(kid, 'data-generate-thumb-frame'))
-      const actionsAt = kids.findIndex((kid) => has(kid, 'data-generate-image-clear'))
       const doorStyle = (door || { props: { style: {} } }).props.style
+      const frameNode = byAttr(tree, 'data-generate-thumb-frame', 'image_url')
+      const badge = byAttr(tree, 'data-generate-image-clear', 'image_url')
+      const badgeStyle = (badge || { props: { style: {} } }).props.style
       check(
-        'Replace and Remove sit under the picture, and the door is a column',
-        doorStyle.flexDirection === 'column' && frameAt !== -1 && actionsAt > frameAt,
-        JSON.stringify({ flexDirection: doorStyle.flexDirection, frameAt, actionsAt }),
+        'the clear badge sits in the picture frame, at its top-right corner',
+        doorStyle.flexDirection === 'column' &&
+          frameAt !== -1 &&
+          has(kids[frameAt], 'data-generate-image-clear') &&
+          !!frameNode &&
+          frameNode.props.style.position === 'relative' &&
+          badgeStyle.position === 'absolute' &&
+          badgeStyle.top === 6 &&
+          badgeStyle.right === 6,
+        JSON.stringify({
+          flexDirection: doorStyle.flexDirection,
+          frameAt,
+          inFrame: frameAt === -1 ? false : has(kids[frameAt], 'data-generate-image-clear'),
+          framePosition: (frameNode || { props: { style: {} } }).props.style.position,
+          badge: { position: badgeStyle.position, top: badgeStyle.top, right: badgeStyle.right },
+        }),
       )
     }
     // REMOVE puts the control back the way it started, and lets the blob go.
@@ -3404,50 +3905,54 @@ check(
     if (clear) clear.props.onClick()
     tree = await settle(paneSlot.component, props, 'pane-arrays')
     check(
-      'removing the picture restores the empty pick state, drops the blob and clears the value',
+      'removing the picture restores the empty door, drops the blob and clears the value',
       !byAttr(tree, 'data-generate-thumb', 'image_url') &&
-        !!byAttr(tree, 'data-generate-door', 'image_url') &&
-        (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value === '' &&
+        !!byAttr(tree, 'data-generate-drop', 'yes') &&
+        // …and the drop area is the whole way back in, with no second control beside it.
+        !byAttr(tree, 'data-generate-url-open', 'image_url') &&
+        !byAttr(tree, 'data-generate-door', 'image_url') &&
         revokedBlobUrls.includes(blobUrls.at(-1).url),
       JSON.stringify({
         thumb: !!byAttr(tree, 'data-generate-thumb', 'image_url'),
-        value: (byAttr(tree, 'data-generate-door', 'image_url') || { props: {} }).props.value,
+        drop: !!byAttr(tree, 'data-generate-drop', 'yes'),
         revoked: revokedBlobUrls,
       }),
     )
-    // AN EMPTY DOOR IS ONE DASHED CARD, STACKED, AND A DROP ZONE (founder, 2026-09-24:
-    // *"choose an image and paste an image url should be stacked inside a card with dashed
-    // border, it is also a drop zone for drag and drop image"*). The picker and the URL field
-    // are one act made two ways, so they share a card; the card is the drop target, and a
-    // dropped file must travel the same upload a picked one does.
+    // AN EMPTY DOOR IS ONE DASHED AREA AND NOTHING ELSE (founder, 2026-09-25: the tiles went
+    // first — *"we don't need finder button since click on the drop area does same thing"* — and
+    // the URL button went the same day: *"i can't get url to work. maybe we don't need on local,
+    // user can download and upload is better"*).
     {
-      const card = byAttr(tree, 'data-generate-image', 'image_url')
-      const cardStyle = (card || { props: { style: {} } }).props.style
+      const door = byAttr(tree, 'data-generate-image', 'image_url')
+      const drop = byAttr(tree, 'data-generate-drop', 'yes')
+      const dropStyle = (drop || { props: { style: {} } }).props.style
       check(
-        'an empty image door is one dashed card holding both ways in, stacked',
-        !!card &&
-          cardStyle.flexDirection === 'column' &&
-          /dashed/.test(String(cardStyle.border)) &&
-          !!byAttr(tree, 'data-generate-door', 'image_url') &&
+        'an empty image door is one dashed drop area with no second control in it',
+        !!door &&
+          door.props.style.flexDirection === 'column' &&
+          !!drop &&
+          /dashed/.test(String(dropStyle.border)) &&
+          // The only button the area holds is its own label's, and the picker is that label.
+          (drop ? nodesOf(drop).filter((node) => node.props && node.props.type === 'button').length === 0 : false) &&
           !!byAttr(tree, 'data-generate-upload', 'image_url'),
-        JSON.stringify({ flexDirection: cardStyle.flexDirection, border: cardStyle.border }),
+        JSON.stringify({ drop: !!drop, border: dropStyle.border }),
       )
       check(
-        'and it is a drop zone: the card takes the drag events and says so',
-        !!card &&
-          card.props['data-generate-drop'] === 'yes' &&
-          typeof card.props.onDrop === 'function' &&
-          typeof card.props.onDragOver === 'function' &&
-          typeof card.props.onDragLeave === 'function',
-        JSON.stringify({ drop: (card || { props: {} }).props['data-generate-drop'], onDrop: typeof (card || { props: {} }).props.onDrop }),
+        'and the drop area is a drop zone: it takes the drag events and says so',
+        !!drop &&
+          drop.props['data-generate-drop'] === 'yes' &&
+          typeof drop.props.onDrop === 'function' &&
+          typeof drop.props.onDragOver === 'function' &&
+          typeof drop.props.onDragLeave === 'function',
+        JSON.stringify({ drop: (drop || { props: {} }).props['data-generate-drop'], onDrop: typeof (drop || { props: {} }).props.onDrop }),
       )
-      // A FILE OVER THE CARD LIGHTS IT, and says what letting go does.
-      if (card && card.props.onDragOver) card.props.onDragOver({ preventDefault: () => {} })
+      // A FILE OVER THE AREA LIGHTS IT, and says what letting go does.
+      if (drop && drop.props.onDragOver) drop.props.onDragOver({ preventDefault: () => {} })
       tree = await settle(paneSlot.component, props, 'pane-arrays')
-      const over = byAttr(tree, 'data-generate-image', 'image_url')
+      const over = byAttr(tree, 'data-generate-drop', 'yes')
       const overStyle = (over || { props: { style: {} } }).props.style
       check(
-        'a file over the card lights the border and changes the sentence',
+        'a file over the area lights the border and changes the sentence',
         !!over &&
           over.props['data-generate-drag-over'] === 'yes' &&
           overStyle.borderColor === 'var(--dsw-alias-brand-primary)' &&
@@ -3464,8 +3969,7 @@ check(
         stub.assets.length === assetsBeforeDrop + 1 &&
           stub.assets.at(-1).name === 'dropped.png' &&
           blobUrls.length === blobsBeforeDrop + 1 &&
-          !!byAttr(tree, 'data-generate-thumb', 'image_url') &&
-          !byAttr(tree, 'data-generate-image', 'image_url').props['data-generate-drag-over'],
+          !!byAttr(tree, 'data-generate-thumb', 'image_url'),
         JSON.stringify({ assets: stub.assets.map((row) => row.name), made: blobUrls.length - blobsBeforeDrop, thumb: !!byAttr(tree, 'data-generate-thumb', 'image_url') }),
       )
       // Back to empty for the checks that follow.
@@ -3527,13 +4031,21 @@ for (const key of [
   'surface.advanced.hide',
   'surface.pending',
   'card.community',
-  'surface.image.choose',
-  // The image door and the list doors (2026-09-23): a picked file uploads, and a Krea array
-  // field is a list of rows. A key missing here would put a raw id on a control a person
-  // uses every time they touch a style reference.
   'surface.image.placeholder',
   'surface.image.uploading',
   'surface.image.failed',
+  // The image door's drop sentence and its one failure line, plus the sparkle menu's own words
+  // (founder, 2026-09-25: *"make a sparkles menu … prompt writing skill"*).
+  'surface.image.badUrl',
+  'surface.image.drop',
+  // The sentence a waiting image door carries (founder, 2026-09-25: *"we can disable image 2 and
+  // message user to drop image 1 first"*). It names another door, so a missing key would put a
+  // raw id where the door to fill belongs.
+  'surface.image.waitFor',
+  'run.cancel',
+  'run.canceling',
+  'preset.open',
+  'preset.soon',
   'surface.list.add',
   'surface.list.remove',
   // The dashboard and its add control (founder, 2026-09-25). `pane.section.empty` is the
@@ -3584,7 +4096,18 @@ const VALID = {
     a: { nodeId: '1', fieldName: 'a', type: 'text', label: 'A' },
     b: { nodeId: '2', fieldName: 'b', type: 'text', label: 'B' },
   },
-  ui: { runLabel: 'Run it', order: ['a', 'b'] },
+  ui: {
+    runLabel: 'Run it',
+    order: ['a', 'b'],
+    // One usable preset, one with no label, and one a person cannot press yet: the surface needs
+    // the label (it is the glyph's accessible name), so the projection keeps the first and the
+    // greyed one — and drops the one with nothing to call it.
+    presets: [
+      { label: 'Fill A', doors: { a: 'hello' } },
+      { labels: 'no' },
+      { label: 'Not written', doors: { b: '' }, disabled: true },
+    ],
+  },
   provenance: { checkedAgainst: 'apiCallDemo', dryRun: 'ok' },
 }
 
@@ -3647,6 +4170,14 @@ try {
         adapter.runLabel === 'Run it' &&
         adapter.order.join(',') === 'a,b' &&
         Object.keys(adapter.doors).join(',') === 'a,b' &&
+        // The one-press fills ride the same flattened shape, a preset with no label is dropped
+        // (a glyph with no name), and a greyed one travels with its own flag.
+        adapter.presets.length === 2 &&
+        adapter.presets[0].label === 'Fill A' &&
+        adapter.presets[0].doors.a === 'hello' &&
+        adapter.presets[0].disabled === undefined &&
+        adapter.presets[1].label === 'Not written' &&
+        adapter.presets[1].disabled === true &&
         adapter.source === undefined &&
         adapter.provenance === undefined
       )

@@ -256,6 +256,11 @@ export function validateAdapter(adapter, { app }) {
           ui.presets.forEach((preset, index) => {
             if (!preset || typeof preset !== 'object') return add('ui', `ui.presets[${index}] is not an object`)
             if (str(preset.label) === null) add('ui', `ui.presets[${index}].label is required`)
+            // A preset a person cannot press yet still has to say so: `disabled` is a boolean, and
+            // a row that is greyed chooses nothing (founder, 2026-09-25).
+            if (preset.disabled !== undefined && typeof preset.disabled !== 'boolean') {
+              add('ui', `ui.presets[${index}].disabled must be true or false`)
+            }
             for (const key of Object.keys(preset.doors || {})) {
               if (!keys.has(key)) add('ui', `ui.presets[${index}] sets "${key}", which no door declares`)
             }
@@ -437,6 +442,19 @@ export async function readAdapter(dir, name, { readText = readFile, withSource =
   // The authored starting values ride the same flattened shape as `order`: the page
   // draws doors and needs no knowledge of the file's `ui` block, only of what it says.
   const defaults = read.ui && typeof read.ui.defaults === 'object' && read.ui.defaults !== null && !Array.isArray(read.ui.defaults) ? read.ui.defaults : {}
+  // One-press fills. The shape is flattened for the same reason `defaults` is: the surface
+  // draws a sparkle on a door's label and needs the preset's words and doors, not the file.
+  // `disabled` is what a skill that is not written yet carries: the row is drawn greyed and
+  // chooses nothing (founder, 2026-09-25: *"add these others but greyed for now"*).
+  const presets = Array.isArray(read.ui && read.ui.presets)
+    ? read.ui.presets
+        .filter((preset) => preset && typeof preset === 'object' && str(preset.label) !== null)
+        .map((preset) => ({
+          label: str(preset.label),
+          doors: preset.doors && typeof preset.doors === 'object' ? preset.doors : {},
+          ...(preset.disabled === true ? { disabled: true } : {}),
+        }))
+    : []
   return {
     adapter: {
       name: wanted,
@@ -450,6 +468,7 @@ export async function readAdapter(dir, name, { readText = readFile, withSource =
       expect: str(read.ui && read.ui.expect) || '',
       order,
       defaults,
+      presets,
       doors: read.doors,
       // `source` — the app id, the revision, the app's own name — is for the HOST's own
       // callers, and only when one asks: the payload a run posts is addressed by `appId`,
