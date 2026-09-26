@@ -300,13 +300,18 @@ const renderPane = async (fetchImpl) => {
 }
 
 {
-  const text = await renderPane(() =>
+  const text = await renderPane((url) =>
     Promise.resolve({
       ok: true,
-      json: () => Promise.resolve({ folders: [{ path: '/Users/someone/Desktop/yammaman', label: 'yammaman', addedAt: '2026-09-26T00:00:00.000Z' }], root: '/p/assets', recordsRoot: '/p/generate' }),
+      json: () =>
+        Promise.resolve(
+          String(url).includes('/catalog')
+            ? { assets: [], counts: { context: [{ value: 'yammaman', count: 0 }], date: [] }, total: 0, folders: [] }
+            : { folders: [{ path: '/Users/someone/Desktop/yammaman', label: 'yammaman', addedAt: '2026-09-26T00:00:00.000Z' }], root: '/p/assets', recordsRoot: '/p/generate' },
+        ),
     }),
   )
-  check('with a folder added, the pane lists it instead of the empty state', text.includes('/Users/someone/Desktop/yammaman') && !text.includes('No folders yet'), text.slice(0, 160))
+  check('with a folder added, the pane lists it instead of the empty state', text.includes('yammaman') && !text.includes('No folders yet'), text.slice(0, 160))
 }
 
 // ── the chip renders ────────────────────────────────────────────────────────

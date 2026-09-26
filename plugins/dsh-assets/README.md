@@ -49,7 +49,13 @@ absent and neither reaches across.
 
 | Route | What it answers |
 |---|---|
-| `GET /plugins/assets/folders` | the registry as stored, plus **where the library is looking**: the state root and the records root, each with the rule that answered (`override` · `profile` · `home`). An empty library says where it looked rather than shrugging |
+| `GET /plugins/assets/folders` | the registry as stored, plus **where the library is looking** — the state root and the records root, each with the rule that answered (`override` · `profile` · `home`) — and `canChoose`, whether this host has a folder dialog. An empty library says where it looked rather than shrugging |
+| `POST /plugins/assets/folders` | `{ action: 'choose' }` opens the OS folder dialog (a cancelled dialog answers the unchanged registry, not an error); `{ action: 'add', path, label? }` adds a typed absolute path; `{ action: 'remove', path }` takes one out. Adding one twice answers `already: true`; removing one that is not there answers 404 |
+| `GET /plugins/assets/catalog?context=&date=` | the tiles, the two filter groups with their counts, and the roots it looked in. A record's own settled date wins over a file's mtime; counts are over **everything scanned**, so a filter row does not move its own number |
+
+The two filters are the MVP's, and the founder chose them: *"I'd ship context + date and let the search box cover
+the rest"* (2026-09-26). **Context is the label of the project folder an asset lives in**; the date tree is
+year → month → day, each row carrying its count.
 
 **The prefix carries no trailing slash**, and that is a contract: the harness matches a prefix as
 `pathname === prefix || pathname.startsWith(prefix + '/')` and appends the slash itself, so a registered
@@ -69,17 +75,21 @@ trailing slash makes only the bare path match and everything below it answer 404
 ## Verify
 
 ```
-node verify/mount.mjs
+node verify/mount.mjs      # A1: the card, the registrations, the copy, the empty room
+node verify/intake.mjs     # A2: the folders, the records, the two filters
 ```
 
-One suite so far. It drives the shipped client half in a stubbed loader and a recording ctx, then **renders the
-pane three ways** against a stubbed host — answering, unreachable, and empty — because "no folders yet" is a
-claim about this machine and has to be read as text. A skip is printed as a skip; a disagreement fails the run.
-Nothing here spends coins or touches a provider.
+`mount` drives the shipped client half in a stubbed loader and a recording ctx, then **renders the pane three
+ways** against a stubbed host — answering, unreachable, and empty — because "no folders yet" is a claim about
+this machine and has to be read as text. `intake` drives the shipped host half against temp directories: an
+empty registry, adding by dialog and by path, the refusals, a file matched to a run by its **exact** path, a
+loose file listed beside it, the counts, the filters, and a half-written record that must not empty the grid.
+A skip is printed as a skip; a disagreement fails the run. Nothing here spends coins or touches a provider.
 
 ## Not built yet
 
-The grid, the tile, the metadata block (A3); the intake proxy that keeps a preview beside the record (S9 of
+The grid, the tile and the metadata block (A3) — the pane currently draws a plain list, deliberately, so the
+data is checked before it is dressed; the intake proxy that keeps a preview beside the record (S9 of
 epic 64); the review layer. The plan of record is `docs/plans/63-assets-library-epic.md` in the dsh-mitsu
 workspace, and the surface reference is hand-me-up-os's own `AssetPanel.tsx`
 (`repeat(auto-fit, minmax(240px, 1fr))`, no breakpoints, a grid/list toggle, a filled context badge beside an

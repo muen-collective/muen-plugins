@@ -16,7 +16,8 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "verify:mount": "node verify/mount.mjs"
+    "verify:mount": "node verify/mount.mjs",
+    "verify:intake": "node verify/intake.mjs"
   },
   "dsh": {
     "bundle": {
