@@ -116,6 +116,16 @@ white pill **slides** under the selected segment (placed arithmetically from `--
 `title` — and each filter is `Menu`, the anchored list Settings uses for a choice, which takes its own
 `anchor`, closes on a choice or an outside press, and hands the keyboard back to the trigger that opened it.
 
+**THE MENUS ARE THE APP'S RAISED CARD, NOT ITS TRANSLUCENT ONE** (founder, 2026-09-26: *"the dropdown menu
+is grey instead of white"*). The `Menu` primitive's card is `--dsw-specific-menu` — `#30313680` in dark, 50%
+alpha behind a `blur(40px)` backdrop filter — which is right over a dialog and muddy over photographs, and this
+pane is full of them: the thumbnails bled through and the card read as dirty grey. Both filter menus now take
+the app's own raised surface instead — solid `--dsw-alias-bg-layer-2`, a real `--dsw-alias-border-l3` hairline
+with the shadow's own stroke silenced so there is exactly one ring, and no blur — which is the same answer the
+Generate popover uses. It reaches **only this plugin's menus**, because `Menu` puts `listClassName` on the card
+itself: a sanctioned hook, unlike the structural selectors the height fix needed. The comparison that settled
+it, over the same thumbnails: `10-scratch/20260926-assets-menu-surface.svg` in the workspace.
+
 **THE FIELD AND THE SWITCH ARE ONE HEIGHT** (founder, 2026-09-26: *"can match height of segmented
 control with search input and then center icons"*). The search field is the app's own **`Input`** — 32px by
 its own CSS, magnifier and brand focus ring included — instead of a hand-rolled `<input>` at 31px, and the
@@ -296,7 +306,8 @@ node verify/views.mjs      # A3: the grid, the tile, the metadata block, EVERY f
                            #     control pressed through to the host, the bar, the two
                            #     columns, hover, a count in words, the segmented view
                            #     switch, the dropdown filters, the Gallery view, the
-                           #     bar's one height and its centred glyphs                104
+                           #     bar's one height, its centred glyphs, and the menus'
+                           #     solid card                                             106
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36

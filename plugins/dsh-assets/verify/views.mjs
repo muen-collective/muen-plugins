@@ -655,6 +655,20 @@ async function render(passes = 4) {
   mini.reset()
   tree = pane({ locale: { bind: () => t } })
   const menu = collect(tree, (node) => node.props && node.props.role === 'menu')[0]
+  // THE MENU CARD IS SOLID (founder, 2026-09-26: *"the dropdown menu is grey instead of white"*). The
+  // primitive's card is 50% alpha + a 40px backdrop blur — right over a dialog, muddy over photographs,
+  // which is what the pane is full of. These two menus take the app's raised surface instead, and it
+  // reaches ONLY them because `Menu` puts `listClassName` on the card. Both halves are checked: the glue
+  // (this plugin passes the class) and the rule (the sheet asks for an opaque card).
+  const menuCards = collect(tree, (node) => node.props && node.props.role === 'menu')
+  check('the open dropdown card carries this plugin’s own class', menuCards.length === 1 && menuCards[0].props.className === 'dsh-assets-menu', menuCards.map((node) => String(node.props.className)).join(',') || 'no card')
+  const sheetText = sheets.text.join('\n')
+  check(
+    'and the sheet makes it opaque — the app’s raised surface, not the translucent menu token',
+    /\.dsh-assets-menu \{ background: var\(--dsw-alias-bg-layer-2\); backdrop-filter: none; border: 0\.5px solid var\(--dsw-alias-border-l3\);/.test(sheetText),
+    (sheetText.match(/\.dsh-assets-menu \{[^\n]*/) || ['no rule'])[0],
+  )
+
   const rows = collect(tree, (node) => node.props && node.props.role === 'menuitem')
   // `All` plus the one context in the fixture, and `All` plus the two days: the rows are the catalog's own counts.
   check('it opens the app’s menu, not a panel written here', !!menu && rows.length === 2, rows.length + ' rows')

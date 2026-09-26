@@ -291,15 +291,19 @@ export async function loadClient({ React, stubs = {} }) {
           ),
         ),
       ),
-    Menu: ({ open, anchor, items = [], selectedId, onSelect }) =>
+    Menu: ({ open, anchor, items = [], selectedId, onSelect, listClassName }) =>
       React.createElement(
         'div',
         { 'data-menu-open': open ? 'yes' : 'no', 'data-menu-selected': selectedId === undefined ? '' : String(selectedId) },
         anchor,
         open
           ? React.createElement(
+              // The real primitive puts `listClassName` on the dropdown CARD (`clsx(css.list,
+              // listClassName, …)`, role="menu"), which is the sanitised way to restyle a menu
+              // without touching every other menu in the app. The stub keeps that shape so a check
+              // can see which card this plugin owns.
               'div',
-              { role: 'menu' },
+              { role: 'menu', className: listClassName },
               ...items.map((item) =>
                 React.createElement(
                   'button',

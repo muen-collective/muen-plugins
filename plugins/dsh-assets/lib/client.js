@@ -553,6 +553,12 @@ window.__ModuleLoader__.load({
             open,
             side: 'bottom',
             align: 'start',
+            // THE CARD IS SOLID (founder, 2026-09-26: *"the dropdown menu is grey instead of white"*).
+            // The primitive's own card is `--dsw-specific-menu` — #30313680 in dark, 50% alpha with a
+            // 40px backdrop blur — so over this pane's thumbnails the pictures bleed through and it
+            // reads as dirty grey. `listClassName` is the primitive's own hook for the card, which
+            // means the rule in this bundle's sheet reaches ONLY these two menus and never the app's.
+            listClassName: 'dsh-assets-menu',
             items,
             selectedId: isSet ? String(value) : ALL,
             onSelect: (picked) => {
@@ -1500,7 +1506,13 @@ window.__ModuleLoader__.load({
           // The glyphs were riding the text baseline (the primitive's tab is a plain button with 16px
           // side padding, laid out for words). A flex box centres a 14px mark in a 28px segment, and 10px
           // of side padding keeps a comfortable target without the word-shaped gutter.
-          '.dsh-assets-views > button { display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; }\n'
+          '.dsh-assets-views > button { display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; }\n' +
+          // The card the primitive draws is translucent on purpose, and the app reads it through a
+          // backdrop blur. That is right over a dialog and wrong over photographs: the founder called
+          // it *"grey instead of white"*. So these two menus take the app's own raised surface —
+          // solid `bg-layer-2`, a real `border-l3` hairline (the shadow's own stroke is silenced so
+          // there is exactly one ring), no blur — which is the same answer the Generate popover uses.
+          '.dsh-assets-menu { background: var(--dsw-alias-bg-layer-2); backdrop-filter: none; border: 0.5px solid var(--dsw-alias-border-l3); --dsw-elevation-stroke-color: transparent; }\n'
         document.head.appendChild(style)
         return () => {
           style.remove()
