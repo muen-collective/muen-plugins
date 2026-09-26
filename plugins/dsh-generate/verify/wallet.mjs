@@ -1109,7 +1109,14 @@ check(
 
 async function live(url) {
   try {
-    const response = await realFetch(url.replace(/\/$/, '') + '/plugins/generate/providers', { headers: { accept: 'application/json' } })
+    // BOUNDED, ALWAYS. A live probe against an address that is not answering can wait far past any timeout a
+    // person would give it, and a suite that hangs is worse than one that skips: `check-plugin-suites.mjs`
+    // caught THIS call hanging on pass 4 of 6 (3s, 3s, 3s, then 563s wall against 7.5s of CPU). Three seconds
+    // is ample for a local route; anything slower is a skip, not a verdict.
+    const response = await realFetch(url.replace(/\/$/, '') + '/plugins/generate/providers', {
+      headers: { accept: 'application/json' },
+      signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
+    })
     if (response.status === 404) {
       skip(
         'live: the wallet route answers on the running app',
