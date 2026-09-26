@@ -116,6 +116,17 @@ white pill **slides** under the selected segment (placed arithmetically from `--
 `title` — and each filter is `Menu`, the anchored list Settings uses for a choice, which takes its own
 `anchor`, closes on a choice or an outside press, and hands the keyboard back to the trigger that opened it.
 
+**THE FIELD AND THE SWITCH ARE ONE HEIGHT** (founder, 2026-09-26: *"can match height of segmented
+control with search input and then center icons"*). The search field is the app's own **`Input`** — 32px by
+its own CSS, magnifier and brand focus ring included — instead of a hand-rolled `<input>` at 31px, and the
+switch is compacted to **2px of padding around the primitive's 28px tab**, which is that same 32. Its
+sliding indicator moves with the padding (the pill is positioned from it, so 3px of padding under the old
+number would leave it a pixel low), and the glyphs are **flex-centred** in their segments with 10px of side
+padding — the primitive's tab is a plain button laid out for words, so a 14px mark rode the text baseline.
+The selectors for that are structural (a CSS module's names are hashed), reached through the class this
+bundle owns plus the parts' own roles, so a reshape in the primitive is cosmetic and visible rather than
+silent. The two filter triggers stay the app's compact `Button` (28px).
+
 **THE THIRD VIEW IS GALLERY** — Finder's own word (*"finder also calls it gallery, that's my ignorance"*,
 after calling it filmstrip): its View menu is Icons · List · Columns · **Gallery**, and Lucide's glyph for
 the same shape is `gallery-thumbnails`.
@@ -284,7 +295,8 @@ node verify/intake.mjs     # A2: the folders, the records, the filters, the carr
 node verify/views.mjs      # A3: the grid, the tile, the metadata block, EVERY folder
                            #     control pressed through to the host, the bar, the two
                            #     columns, hover, a count in words, the segmented view
-                           #     switch, the dropdown filters and the Gallery view         97
+                           #     switch, the dropdown filters, the Gallery view, the
+                           #     bar's one height and its centred glyphs                104
 node verify/preview.mjs    # S9: the preview a tile asks for, made once                   34
 node verify/handoff.mjs    # S7: an asset is a way back into its run (three facts)        28
 node verify/inspect.mjs    # A4: zoom is arithmetic, and the stage uses it                    36

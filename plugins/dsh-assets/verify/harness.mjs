@@ -258,6 +258,11 @@ export async function loadClient({ React, stubs = {} }) {
     IconCloseOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'close', ...props }),
     IconWarningOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'warning', ...props }),
     IconChevronDownOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'chevronDown', ...props }),
+    IconSearchOutlineRegular: (props) => React.createElement('svg', { 'data-stub-icon': 'search', ...props }),
+    // The app's own field: a flex wrap holding an optional icon and the input itself, with the caller's
+    // props landing on the INPUT (that is where `data-assets-search` has to arrive for a suite to press it).
+    Input: ({ icon, className, ...rest }) =>
+      React.createElement('span', { className }, icon === null || icon === undefined ? null : React.createElement('span', { 'data-stub-input-icon': 'yes' }, icon), React.createElement('input', rest)),
     // THE APP'S OWN CONTROLS, stubbed to the contract the primitives document — not to mine:
     // `SegmentedControl` is a tablist with one `role="tab"` per option (the real one slides a white
     // pill arithmetically from `--dsh-segment-count`/`--dsh-segment-index`), and `Menu` renders its

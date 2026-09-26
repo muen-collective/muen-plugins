@@ -35,6 +35,7 @@ window.__ModuleLoader__.load({
     const IconWarningOutline16 = icon('IconWarningOutlineRegular', 'IconWarningOutline16')
     // The bar's filters wear the app's own disclosure chevron (polish pass, 2026-09-26).
     const IconChevronDownOutline16 = icon('IconChevronDownOutlineRegular', 'IconChevronDown16')
+    const IconSearchOutline16 = icon('IconSearchOutlineRegular', 'IconSearchOutline16')
     // The Generate surface's own glyph, which is what tells a person where this control goes
     // (epic 64 S7).
     const IconSparkle16 = icon('IconSparkleRegular', 'IconSparkle16')
@@ -50,6 +51,11 @@ window.__ModuleLoader__.load({
     // a Tailwind package the shell does not ship to plugins, and this bundle declares exactly one peer.
     const SegmentedControl = primitives.SegmentedControl
     const Menu = primitives.Menu
+    // The search field is the app's OWN `Input` (32px tall by its own CSS, focus ring and all) rather
+    // than a hand-rolled `<input>`: the founder's ask was that it and the switch agree on a height, and
+    // the way to agree with the design system is to use it (2026-09-26: *"can match height of segmented
+    // control with search input and then center icons"*).
+    const Input = primitives.Input
     const h = React.createElement
 
     const ASSETS_ID = '@muen/dsh-assets'
@@ -691,7 +697,7 @@ window.__ModuleLoader__.load({
       return h(
         'span',
         { style: { display: 'inline-flex', flex: '0 0 auto' }, 'data-assets-view': view },
-        h(SegmentedControl, { id: 'assets-view', value: view, options, onChange: onView, label: t('pane.view') }),
+        h(SegmentedControl, { id: 'assets-view', value: view, options, onChange: onView, label: t('pane.view'), className: 'dsh-assets-views' }),
       )
     }
 
@@ -1237,8 +1243,11 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: S.bar, 'data-assets-bar': 'yes' },
-          h('input', {
-            style: { ...S.input, flex: '1 1 200px', width: 'auto', maxWidth: 340 },
+          h(Input, {
+            // The width lives on the wrapper (the primitive puts `...rest` on the inner input, and
+            // `className` on its own flex wrap), so the field fills the row's leftover space.
+            className: 'dsh-assets-search',
+            icon: IconSearchOutline16 ? h(IconSearchOutline16, { size: 16 }) : null,
             value: search,
             placeholder: t('pane.search.placeholder'),
             'aria-label': t('pane.search.placeholder'),
@@ -1474,7 +1483,24 @@ window.__ModuleLoader__.load({
         style.textContent =
           '@keyframes dsh-assets-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }\n' +
           '.dsh-assets-skeleton { animation: dsh-assets-skeleton 1.4s ease-in-out infinite; }\n' +
-          '@media (prefers-reduced-motion: reduce) { .dsh-assets-skeleton { animation: none; } }\n'
+          '@media (prefers-reduced-motion: reduce) { .dsh-assets-skeleton { animation: none; } }\n' +
+          // THE BAR'S TWO CONTROLS ARE THE SAME HEIGHT (founder, 2026-09-26: *"can match height of
+          // segmented control with search input and then center icons"*). The field is the app's own
+          // `Input`, which its own CSS pins at 32px; the switch is the app's `SegmentedControl`, whose
+          // 28px tab plus 3px of padding comes to 34. So the padding drops to 2 — 2 + 28 + 2 = 32, the
+          // input's own number — and the indicator, which is positioned from that padding (`top: 3px`,
+          // `height: calc(100% - 6px)`, and a width that subtracts 6), is moved with it. THE SELECTORS
+          // ARE STRUCTURAL ON PURPOSE: a CSS module's class names are hashed and cannot be named from
+          // here, so the control is reached through the class this bundle owns and the parts through
+          // their roles — an indicator is the one `aria-hidden` span, a segment is a button. If the
+          // primitive ever reshapes itself the damage is cosmetic and visible, not silent.
+          '.dsh-assets-search { flex: 1 1 200px; max-width: 340px; }\n' +
+          '.dsh-assets-views { padding: 2px; }\n' +
+          '.dsh-assets-views > span[aria-hidden="true"] { top: 2px; left: 2px; height: calc(100% - 4px); width: calc((100% - 4px - 2px * (var(--dsh-segment-count) - 1)) / var(--dsh-segment-count)); }\n' +
+          // The glyphs were riding the text baseline (the primitive's tab is a plain button with 16px
+          // side padding, laid out for words). A flex box centres a 14px mark in a 28px segment, and 10px
+          // of side padding keeps a comfortable target without the word-shaped gutter.
+          '.dsh-assets-views > button { display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; }\n'
         document.head.appendChild(style)
         return () => {
           style.remove()

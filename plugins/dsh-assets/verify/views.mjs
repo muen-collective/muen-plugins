@@ -25,7 +25,7 @@
  *
  *   node verify/views.mjs
  */
-import { miniReact, textOf, collect, loadClient, recordingCtx, reporter, net, settle } from './harness.mjs'
+import { miniReact, textOf, collect, loadClient, recordingCtx, reporter, net, settle, sheets } from './harness.mjs'
 
 const { check, note, finish } = reporter('verify:views — epic 63 A3 (the grid, the tile, the metadata block)')
 const mini = miniReact()
@@ -548,6 +548,37 @@ async function render(passes = 4) {
   let tree = await render()
   const bar = collect(tree, (node) => node.props && node.props['data-assets-bar'] === 'yes')[0]
   check('the search, the layouts and the filters share one bar', !!bar, bar ? 'drawn' : 'absent')
+  // ONE HEIGHT FOR THE BAR'S TWO CONTROLS (founder, 2026-09-26: *"can match height of segmented control
+  // with search input and then center icons"*). The field is the app's own `Input` — 32px by its own CSS —
+  // and the switch is compacted to 2px of padding around the primitive's 28px tab, which is that same 32.
+  // The geometry lives in injected CSS, so what is checked is the sheet's own rule and the pieces it names.
+  const search = collect(tree, (node) => node.props && node.props['data-assets-search'] === 'yes')[0]
+  check('the search field is the app’s own Input, wearing its magnifier', !!search && collect(tree, (node) => node.props && node.props['data-stub-icon'] === 'search').length === 1, search ? 'drawn' : 'none')
+  const sheet = sheets.text.join('\n')
+  const viewList = collect(tree, (node) => node.props && node.props.role === 'tablist')[0]
+  check('the switch wears that class, so the sheet has something to reach', !!viewList && viewList.props.className === 'dsh-assets-views', viewList ? String(viewList.props.className) : 'none')
+  check('and so does the field’s wrapper', collect(tree, (node) => node.props && node.props.className === 'dsh-assets-search').length === 1, 'no wrapper class')
+  check(
+    'both controls carry a class the sheet can pin to one height — and the field is stretched, not sized by hand',
+    /\.dsh-assets-search \{ flex: 1 1 200px/.test(sheet),
+    (sheet.match(/\.dsh-assets-search[^\n]*/) || ['no rule'])[0],
+  )
+  check(
+    'the switch is 2px of padding around the primitive’s 28px tab — the input’s own 32',
+    /\.dsh-assets-views \{ padding: 2px; \}/.test(sheet),
+    (sheet.match(/\.dsh-assets-views \{[^\n]*/) || ['no rule'])[0],
+  )
+  check(
+    'and the sliding indicator moved onto that padding, so the pill is not 1px off-centre',
+    /top: 2px; left: 2px; height: calc\(100% - 4px\)/.test(sheet),
+    (sheet.match(/span\[aria-hidden[^\n]*/) || ['no rule'])[0],
+  )
+  check(
+    'the segments centre their glyphs instead of riding the text baseline',
+    /\.dsh-assets-views > button \{ display: inline-flex; align-items: center; justify-content: center;/.test(sheet),
+    (sheet.match(/\> button \{[^\n]*/) || ['no rule'])[0],
+  )
+
   const summary = collect(tree, (node) => node.props && node.props['data-assets-summary'] === 'yes')[0]
   check('the count is a sentence, not an uppercase group title', !!summary && textOf(summary).join('') === '2 assets', summary ? textOf(summary).join('') : 'none')
   check('and it never counts a collapsed tree in a title', !textOf(tree).join(' ').includes('CONTEXT ·'), textOf(tree).join(' ').slice(0, 60))
