@@ -1,0 +1,22 @@
+# dsh-composer-race bundle patch: mounts the composer-race plugin into the host
+# composition of a dsh profile.
+#
+# Client-only. The host half registers nothing (no routes, no settings namespace,
+# no store); the browser half adds one hidden marker inside the composer card and
+# one stylesheet, and rides two harness facts that are not per-build class names:
+# the card's `[data-composer-card]` attribute and the `:has()` selector the
+# shipped CSS already uses.
+#
+# Install: `dsh plugin --profile <name> add <this package>` (a local path, or npm
+# once published). The command pnpm-installs the package into the profile and
+# reconciles it into the profile's `dsh.profile.bundles` layer list.
+- insert:
+    - id: composer-race
+      name: '@muen/dsh-composer-race'
+      # Neutral by construction and EVA by default: the two dots take their ink from EVA
+      # Unit 01's brand triad (`--primary` purple, `--secondary` green) with their hexes as
+      # fallbacks, so the look holds under any theme and in a profile that never loaded the
+      # EVA tokens. A profile retunes it with four variables on the card — `--muen-race-ink-a`,
+      # `--muen-race-ink-b`, `--muen-race-ring`, `--muen-race-duration` / `-b` — rather than a
+      # config block here. Read the README before setting the inks to a status colour:
+      # DESIGN.md Resolved #2 keeps `--secondary` for identity and `--success` for status.

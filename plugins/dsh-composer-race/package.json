@@ -1,0 +1,36 @@
+{
+  "name": "@muen/dsh-composer-race",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A race light around the composer edge while the addressed agent is working. Client-only: one hidden marker inside the composer card plus one stylesheet keyed on [data-composer-card] and :has(). The two dots follow the selected theme — EVA Dark purple+green, EVA Light dark-blue+light-blue, Regular the theme's own accent — via [data-muen-race-theme] on the marker.",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muen-collective/muen-plugins.git",
+    "directory": "plugins/dsh-composer-race"
+  },
+  "license": "MIT",
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ]
+}
