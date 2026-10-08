@@ -9,6 +9,9 @@
   },
   "type": "module",
   "main": "lib/index.js",
+  "scripts": {
+    "verify:status-label": "node verify/status-label.mjs"
+  },
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",

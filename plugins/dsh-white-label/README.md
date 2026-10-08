@@ -55,11 +55,21 @@ The seam is two edits, not one: the `renderSlot("conversation.hero.tagline", …
 
 ## Run-status label
 
-One text field — **Settings → Brand → Status label** — replaces the line the conversation shows while a turn runs. DSH ships that line as `chat.deepDiving`: **"Deep diving..."** in English, **"深度求索中..."** in Chinese. The label is persisted as `statusLabel` in the same durable `white-label-brand` namespace, capped at 40 characters, and **empty keeps the shipped copy**.
+One text field — **Settings → Brand → Status label** — replaces the line the conversation shows while a turn runs. DSH ships that line as `chat.deepDiving`, and the harness moved it once already, so there are two shapes to keep working:
 
-Unlike the tagline, this one has no seam to use and none to add. The copy is a dictionary entry inside `@deepseek-ai/dsh-client-ui-chat`, and the Client locale service keeps one dictionary per `(namespace, locale)` pair: a second `locale.register("chat", "en", …)` throws `locale namespace "chat" already has locale "en"`, and registering *first* is worse — it makes ui-chat's own registration throw and takes the chat view down with it. So the plugin rewrites the one text node the status row renders, under a deliberately narrow matcher: an element carrying **both** `role="status"` and `aria-live="polite"` whose first child still holds the shipped copy. Another plugin's status row, a row holding text we did not write, and a brand with no label set are left exactly as they render — and while no label is set, no observer runs at all.
+- **Old (≤0.1.x):** one visible text node inside a single `role="status"` / `aria-live="polite"` element, copy **"Deep diving..."** (zh **"深度求索中..."**), clock a sibling span.
+- **New (0.2.x, `RunningStatus`):** a `div[data-chat-running]` box holding a visually-hidden a11y status span ("Deep diving", no dots), the visible label inside a `TextShimmer` — **"Deep diving"**, then **"Deep diving for 12s ···"** once the clock ticks, i.e. the duration is *part of the string* and re-renders every second — and a shimmer sweep copy of the string in a `data-shimmer-text` attribute.
 
-This is the same route the community plugin `alingalingling/ui-status-label` takes, and it retires the moment DSH exposes a status extension point of its own. `tests/white-label-status-label.test.mjs` pins the three behaviours that matter: the shipped copy is replaced in both languages, a foreign row is untouched, and clearing the label restores the shipped copy and stands the observer down.
+The label is persisted as `statusLabel` in the same durable `white-label-brand` namespace, capped at 40 characters, and **empty keeps the shipped copy**.
+
+Unlike the tagline, this one has no seam to use and none to add. The copy is a dictionary entry inside `@deepseek-ai/dsh-client-ui-chat`, and the Client locale service keeps one dictionary per `(namespace, locale)` pair: a second `locale.register("chat", "en", …)` throws `locale namespace "chat" already has locale "en"`, and registering *first* is worse — it makes ui-chat's own registration throw and takes the chat view down with it. So the plugin rewrites the strings the row renders, under deliberately narrow matchers:
+
+- **Old shape:** an element carrying **both** `role="status"` and `aria-live="polite"` whose first child still holds the exact shipped copy.
+- **New shape:** only carriers **inside the harness's own `[data-chat-running]` box** whose text starts with the shipped prefix (`Deep diving` / `深度求索中`). The brand label replaces the prefix and keeps the duration tail ("Staring intently… for 12s ···"), so the clock survives; the `data-shimmer-text` attribute is rewritten with it, or the sweep would flash the shipped phrase.
+
+Another plugin's status row, a row holding text we did not write, and a brand with no label set are left exactly as they render — and while no label is set, no observer runs at all. The run clock rewrites the label every second, so the observer re-applies off each resulting mutation; every write is idempotent.
+
+This is the same route the community plugin `alingalingling/ui-status-label` takes, and it retires the moment DSH exposes a status extension point of its own. `verify/status-label.mjs` (`pnpm verify:status-label`) drives the real client bundle against **both** shapes: the shipped copy is replaced in both languages on both, the duration tail survives, a mid-turn re-render is re-patched with the new tail, a foreign row is untouched, and clearing the label restores the shipped copy and stands the observer down.
 
 ## Install
 

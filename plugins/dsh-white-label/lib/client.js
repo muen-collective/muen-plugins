@@ -510,10 +510,24 @@ const BRAND_CSS = [
 // ── status label: replacing the shipped run-status line ────────────────────
 //
 // WHAT IT REPLACES: the conversation's run-status row — the line that reads
-// "Deep diving..." (zh: "深度求索中...") from the moment a turn starts until its
-// first token, and again while tools run and output streams. That copy is a
-// hardcoded entry inside @deepseek-ai/dsh-client-ui-chat (`chat.deepDiving`),
-// rendered by one `role="status"` / `aria-live="polite"` element.
+// "Deep diving..." from the moment a turn starts until its first token, and
+// again while tools run and output streams. That copy is a hardcoded entry
+// inside @deepseek-ai/dsh-client-ui-chat (`chat.deepDiving`).
+//
+// TWO SHAPES EXIST, and both must keep working — the harness moved the line
+// once already, and that move is why a saved label silently stopped applying
+// (measured 2026-10-08 on dsh-client-ui-chat 0.2.1-alpha.1):
+//
+//   • OLD (≤0.1.x conversation client): one visible text node inside a single
+//     `role="status"` / `aria-live="polite"` element, exact copy
+//     "Deep diving..." (zh "深度求索中..."), clock a sibling span.
+//   • NEW (0.2.x ui-chat `RunningStatus`): a `div[data-chat-running]` box
+//     holding (a) a visually-hidden `role="status"` a11y span ("Deep diving",
+//     no dots), (b) the VISIBLE label inside a TextShimmer — "Deep diving"
+//     before the first tick, then "Deep diving for 12s ···", i.e. the
+//     duration is PART OF THE STRING and re-renders every second — and (c) a
+//     shimmer sweep copy of the same string in a `data-shimmer-text`
+//     ATTRIBUTE, not a text node.
 //
 // WHY THIS IS A DOM PATCH AND NOT A LOCALE REGISTRATION: the Client locale
 // service keeps one dictionary per (namespace, locale) pair and REFUSES a second
@@ -521,14 +535,16 @@ const BRAND_CSS = [
 // exposes no override or merge seam. Registering first is not an option either:
 // it would make ui-chat's own registration throw and take the chat view down
 // with it. The upstream extension point that would carry a status label has not
-// landed in 0.1.6-alpha.2. Rewriting the one text node the row renders is the
-// only route that works today.
+// landed in 0.1.6-alpha.2. Rewriting the strings the row renders is the only
+// route that works today.
 //
-// WHY IT IS SAFE ENOUGH TO SHIP: the matcher takes only elements carrying both
-// `role="status"` and `aria-live="polite"` AND currently holding the shipped
-// copy, every write is idempotent, and the observer does not run at all while no
-// label is set. A status row owned by another plugin, a row holding unexpected
-// text, and a brand that sets no label are all left exactly as they render.
+// WHY IT IS SAFE ENOUGH TO SHIP: the old path takes only elements carrying both
+// `role="status"` and `aria-live="polite"` AND currently holding the exact
+// shipped copy; the new path takes only carriers inside the harness's own
+// `[data-chat-running]` box AND currently holding the shipped PREFIX. Every
+// write is idempotent, and the observer does not run at all while no label is
+// set. A status row owned by another plugin, a row holding unexpected text, and
+// a brand that sets no label are all left exactly as they render.
 const SHIPPED_STATUS_TEXTS = new Set([
   "Deep diving...",
   "\u6df1\u5ea6\u6c42\u7d22\u4e2d...",
@@ -574,6 +590,90 @@ function syncStatusRows(root) {
   for (const row of root.querySelectorAll(STATUS_ROW_SELECTOR)) syncStatusRow(row)
 }
 
+// ── the new harness shape: div[data-chat-running] ──────────────────────────
+// ui-chat 0.2 moved the line into a `RunningStatus` component (see the shape
+// note above). The exact-set matcher can never fire there: the string is not
+// in its set, and it ticks every second. This path matches the shipped PREFIX
+// ("Deep diving" / "深度求索中") on every text node and every
+// `data-shimmer-text` value inside the harness's own box, and keeps whatever
+// follows the prefix (the " for 12s ···" duration tail) so the brand label
+// replaces the phrase without erasing the clock.
+const RUNNING_SELECTOR = "[data-chat-running]"
+const SHIPPED_STATUS_PREFIXES = ["Deep diving", "\u6df1\u5ea6\u6c42\u7d22\u4e2d"]
+
+// The duration tail that follows the shipped phrase, or null when the text is
+// not the shipped copy (someone else's line, or our own earlier label).
+function shippedStatusTail(text) {
+  if (typeof text !== "string") return null
+  for (const prefix of SHIPPED_STATUS_PREFIXES) {
+    if (text.startsWith(prefix)) return text.slice(prefix.length)
+  }
+  return null
+}
+
+// What we wrote into one carrier (a text node, or an element's
+// data-shimmer-text attribute), and the shipped copy it displaced. WeakMaps, so
+// a node React discards does not keep anything alive.
+const runningWritten = new WeakMap()  // carrier → { written, tail }
+const runningShipped = new WeakMap()  // carrier → displaced shipped value
+
+// Sync one carrier. Idempotent, and reversible: with the label cleared, a
+// carrier we wrote gets the shipped copy back rather than keeping our last
+// label frozen. The write is prefix-driven rather than remembered because the
+// usual writer is the run clock itself — React restores the shipped copy on
+// every tick and this runs again off the resulting mutation.
+function syncStatusCarrier(carrier, read, write) {
+  const label = statusLabelWanted()
+  const current = read()
+  const state = runningWritten.get(carrier)
+  if (label === "") {
+    if (state !== undefined && current === state.written) {
+      write(runningShipped.get(carrier) ?? current)
+    }
+    runningWritten.delete(carrier)
+    return
+  }
+  let tail = shippedStatusTail(current)
+  if (tail === null && state !== undefined && current === state.written) {
+    // Our own earlier label and the person just changed it: keep its duration tail.
+    tail = state.tail
+  }
+  if (tail === null) return  // not the shipped line — leave it alone
+  const next = label + tail
+  if (next === current) return
+  if (state === undefined || current !== state.written) runningShipped.set(carrier, current)
+  runningWritten.set(carrier, { written: next, tail })
+  write(next)
+}
+
+// Sync one running box: every text node (the visible label and the a11y span),
+// plus every data-shimmer-text value (the sweep copy is an attribute, not a
+// text node — leaving it would flash the shipped phrase during the sweep).
+function syncRunningBox(box) {
+  const walk = (node) => {
+    for (const child of node.childNodes) {
+      if (child.nodeType === 3) {
+        syncStatusCarrier(child, () => child.nodeValue, (v) => { child.nodeValue = v })
+      } else if (child.nodeType === 1) {
+        if (typeof child.getAttribute === "function" && child.getAttribute("data-shimmer-text") !== null) {
+          syncStatusCarrier(
+            child,
+            () => child.getAttribute("data-shimmer-text"),
+            (v) => child.setAttribute("data-shimmer-text", v),
+          )
+        }
+        walk(child)
+      }
+    }
+  }
+  walk(box)
+}
+
+function syncRunningBoxes(root) {
+  if (!root || typeof root.querySelectorAll !== "function") return
+  for (const box of root.querySelectorAll(RUNNING_SELECTOR)) syncRunningBox(box)
+}
+
 let statusObserver = null
 
 /**
@@ -590,6 +690,7 @@ function applyStatusLabel() {
     if (statusObserver !== null) statusObserver.disconnect()
     statusObserver = null
     syncStatusRows(document)
+    syncRunningBoxes(document)
     return
   }
   if (statusObserver === null) {
@@ -600,17 +701,33 @@ function applyStatusLabel() {
     statusObserver = new MutationObserver((records) => {
       for (const record of records) {
         if (record.type === "characterData") {
-          const row = record.target.parentNode
-          if (row && row.nodeType === 1 && row.matches(STATUS_ROW_SELECTOR)) syncStatusRow(row)
+          const parent = record.target.parentNode
+          if (parent && parent.nodeType === 1) {
+            if (parent.matches(STATUS_ROW_SELECTOR)) syncStatusRow(parent)
+            // New harness: the run clock rewrites the label every second, so a
+            // character change anywhere in the box re-syncs the whole box.
+            const box = typeof parent.closest === "function" ? parent.closest(RUNNING_SELECTOR) : null
+            if (box) syncRunningBox(box)
+          }
           continue
         }
         for (const node of record.addedNodes) {
           if (node.nodeType === 1) {
             if (node.matches(STATUS_ROW_SELECTOR)) syncStatusRow(node)
             syncStatusRows(node)
-          } else if (node.nodeType === 3 && node.parentNode && node.parentNode.nodeType === 1 &&
-            node.parentNode.matches(STATUS_ROW_SELECTOR)) {
-            syncStatusRow(node.parentNode)
+            if (node.matches(RUNNING_SELECTOR)) syncRunningBox(node)
+            if (typeof node.closest === "function") {
+              const box = node.closest(RUNNING_SELECTOR)
+              if (box) syncRunningBox(box)
+            }
+            if (typeof node.querySelectorAll === "function") {
+              for (const inner of node.querySelectorAll(RUNNING_SELECTOR)) syncRunningBox(inner)
+            }
+          } else if (node.nodeType === 3 && node.parentNode &&
+            typeof node.parentNode.closest === "function") {
+            // A re-render replaced a label text node instead of mutating it.
+            const box = node.parentNode.closest(RUNNING_SELECTOR)
+            if (box) syncRunningBox(box)
           }
         }
       }
@@ -623,6 +740,7 @@ function applyStatusLabel() {
     }
   }
   syncStatusRows(document)
+  syncRunningBoxes(document)
 }
 
 // ── locale ─────────────────────────────────────────────────────────────────
