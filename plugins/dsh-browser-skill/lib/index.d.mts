@@ -360,7 +360,7 @@ declare function registerBrowserTools(deps: ToolDeps): () => void;
 declare function registerObservationRoutes(ctx: Context, observation: ObservationService): () => void;
 //#endregion
 //#region src/index.d.ts
-declare const name = "@wxg-prc-cpg/browser-skill-dsh-plugin";
+declare const name = "@muen/dsh-browser-skill";
 declare const inject: string[];
 /** Runtime configuration schema (validated and defaulted by Cordis). */
 declare const Config: Schema<Schemastery.ObjectS<{

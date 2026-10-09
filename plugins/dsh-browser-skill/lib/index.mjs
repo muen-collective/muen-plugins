@@ -4074,7 +4074,7 @@ function armAgentScopedBskSkill(ctx) {
 }
 //#endregion
 //#region src/index.ts
-const name = "@wxg-prc-cpg/browser-skill-dsh-plugin";
+const name = "@muen/dsh-browser-skill";
 const inject = ["tools"];
 /** Runtime configuration schema (validated and defaulted by Cordis). */
 const Config = Schema.object({
