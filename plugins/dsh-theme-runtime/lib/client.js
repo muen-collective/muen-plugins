@@ -16,7 +16,7 @@
 // same origin.
 
 window.__ModuleLoader__.load({
-	id: "dsh-theme-runtime",
+	id: "@muen/dsh-theme-runtime",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
