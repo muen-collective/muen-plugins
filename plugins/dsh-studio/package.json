@@ -1,0 +1,59 @@
+{
+  "name": "@muen/dsh-studio",
+  "version": "0.1.0",
+  "description": "Muen's video production surface: character \u2192 outfit \u2192 scene \u2192 script \u2192 shoot \u2192 timeline, gated by a person at every stage, exported as MP4 without any external editor. Private: Muen-internal tooling while in dev.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ],
+      "external": [
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
+    }
+  },
+  "scripts": {
+    "verify:manifest": "node verify/manifest.mjs",
+    "verify:store": "node verify/store.mjs",
+    "verify:seals": "node verify/seals.mjs",
+    "verify:bibles": "node verify/bibles.mjs",
+    "verify:records": "node verify/records.mjs",
+    "verify:script": "node verify/script.mjs",
+    "verify:character": "node verify/character.mjs",
+    "verify:llm": "node verify/llm.mjs",
+    "verify:shell": "node verify/shell.mjs",
+    "verify": "node verify/manifest.mjs && node verify/store.mjs && node verify/seals.mjs && node verify/bibles.mjs && node verify/records.mjs && node verify/script.mjs && node verify/shoot.mjs && node verify/edl.mjs && node verify/export.mjs && node verify/batch.mjs && node verify/library.mjs && node verify/sync.mjs && node verify/character.mjs && node verify/llm.mjs && node verify/shell.mjs",
+    "verify:shoot": "node verify/shoot.mjs",
+    "verify:edl": "node verify/edl.mjs",
+    "verify:export": "node verify/export.mjs",
+    "verify:batch": "node verify/batch.mjs",
+    "verify:library": "node verify/library.mjs",
+    "verify:sync": "node verify/sync.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0"
+  },
+  "license": "MIT",
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muen-collective/muen-plugins",
+    "directory": "plugins/dsh-studio"
+  }
+}

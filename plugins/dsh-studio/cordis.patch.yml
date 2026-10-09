@@ -1,0 +1,13 @@
+# @muen/dsh-studio — bundle patch layer.
+#
+# One row: mount this package into the profile tree. The host half serves the
+# project/session store (/plugins/studio/…); the client half registers the
+# `studio` tab — the project screen with the six-stage pipeline nav.
+#
+# This file is exactly ONE YAML document that is a top-level array. Never append
+# text after it and never add a second `---` document: either makes the file
+# unparseable and the next profile boot falls into the safe-mode loop.
+# Gate it with: node scripts/check-profile-patch.mjs
+- insert:
+    - id: studio
+      name: '@muen/dsh-studio'
