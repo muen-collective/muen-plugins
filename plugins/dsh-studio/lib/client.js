@@ -1670,13 +1670,18 @@ window.__ModuleLoader__.load({
     function studioDefinition(t) {
       return {
         kind: KIND,
-        title: t('type.label'),
+        // The registry CALLS these (`chosen.title(address)`, `entry.title()`), so
+        // they are thunks — a bare `t(...)` string crashed the whole Start guide
+        // with "entry.title is not a function" (measured 2026-10-10; this one
+        // entry blanked every door on the right panel's start page).
+        title: () => t('type.label'),
         icon: IconSparkle ? () => h(IconSparkle, { width: 16, height: 16 }) : undefined,
         guide: [
           {
-            key: KIND,
-            title: t('guide.title'),
-            description: t('guide.description'),
+            id: 'open',
+            order: 50,
+            title: () => t('guide.title'),
+            description: () => t('guide.description'),
             icon: IconSparkle ? () => h(IconSparkle, { width: 16, height: 16 }) : undefined,
           },
         ],
