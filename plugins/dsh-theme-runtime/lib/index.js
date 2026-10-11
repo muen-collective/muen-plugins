@@ -43,8 +43,8 @@ const API_PREFIX = "/dream-skin/api";
 
 /** Plugin identity for cordis.yml rows. */
 export const name = "dsh-dream-skin";
-/** Services required before mounting: the web server routes and the trust fence host list. */
-export const inject = ["webServer", "webRuntime"];
+/** Services required before mounting: the web server routes. The trust host list is config now. */
+export const inject = ["webServer"];
 
 // ── state file ─────────────────────────────────────────────────────────────
 
@@ -114,7 +114,7 @@ function canonicalAuthority(entry, entryUrl) {
  * Anything WHATWG parsing would silently rewrite (whitespace, dangling
  * colon, zero-padded port, path fragment, bogus host spellings) is refused,
  * so a misconfigured entry cannot quietly broaden the authority grant. The
- * host list here comes from webRuntime (already validated by dsh-web-app);
+ * host list here comes from the plugin's own config;
  * this is a defensive second check that fails loud on a broken value.
  */
 function assertTrustedAuthority(entry) {
@@ -263,14 +263,17 @@ async function handleApi(req, res) {
 
 /**
  * Host loader entry: mount the fenced persistence API.
- * @param ctx - host cordis context (webServer, webRuntime).
+ * @param ctx - host cordis context (webServer).
+ * @param config - plugin config. `trustedHosts` names the non-loopback authorities this
+ *   deployment serves; loopback is always allowed, so the desktop app needs no config.
  */
-export function apply(ctx) {
+export function apply(ctx, config) {
+	const trustedHosts = config?.trustedHosts ?? [];
 	ctx.effect(() => ctx.webServer.register({
 		kind: "prefix",
 		path: API_PREFIX,
 		handler: async (req, res) => {
-			if (!isTrustedApiRequest(req, ctx.webRuntime.trustedHosts)) {
+			if (!isTrustedApiRequest(req, trustedHosts)) {
 				writeJson(res, 403, { ok: false, error: { code: "forbidden", message: "forbidden" } });
 				return;
 			}

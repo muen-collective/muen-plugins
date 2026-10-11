@@ -33,12 +33,17 @@ export interface DreamSkinHostContext {
       handler(req: unknown, res: unknown): Promise<void> | void;
     }): () => void;
   };
-  /** Bind-derived trust list sampled at boot (LAN literals + --trusted-host). */
-  webRuntime: {
-    trustedHosts: readonly string[];
-  };
   /** Register a disposer on the calling fiber. */
   effect(fn: () => (() => void) | void, label?: string): void;
+}
+
+/**
+ * Plugin config. `trustedHosts` names the non-loopback authorities this deployment
+ * serves (bare `host` or `host:port`); loopback is always allowed, so the desktop app
+ * needs no entry. Validated in full by `assertTrustedAuthority`.
+ */
+export interface DreamSkinHostConfig {
+  trustedHosts?: readonly string[];
 }
 
 /**
@@ -47,7 +52,7 @@ export interface DreamSkinHostContext {
  * up by dsh-client-modules through the package's `dsh.client` declaration,
  * exactly like the shipped ui-* packages.
  */
-export function apply(ctx: DreamSkinHostContext): void;
+export function apply(ctx: DreamSkinHostContext, config?: DreamSkinHostConfig): void;
 
 /** Plugin identity for cordis.yml rows. */
 export const name: string;

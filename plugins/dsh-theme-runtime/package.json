@@ -60,12 +60,12 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-store": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-settings-general": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-theme": "^0.1.0-rc.6",
+    "@deepseek-ai/cordis": "^4.0.1 || ^4.0.5-alpha.1",
+    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6 || ^0.1.7-rc.1 || ^0.2.0-rc.2 || ^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-store": "^0.1.0-rc.6 || ^0.1.7-rc.1 || ^0.2.0-rc.2 || ^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6 || ^0.1.7-rc.1 || ^0.2.0-rc.2 || ^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-settings-general": "^0.1.0-rc.6 || ^0.1.7-rc.1 || ^0.2.0-rc.2 || ^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-theme": "^0.1.0-rc.6 || ^0.1.7-rc.1 || ^0.2.0-rc.2 || ^0.2.1-alpha.2",
     "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
