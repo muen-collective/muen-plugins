@@ -44,6 +44,15 @@ harness's own preference scope.
 Language from the same catalog, so a second row from us would be two rows listing the same languages.
 What this plugin contributes to that page is the languages themselves.
 
+**The catalog is mirrored for surfaces outside the page.** A picker inside the page reads the catalog
+through the locale service, and only a plugin can hold that service. The shell's own account menu
+cannot: it is DOM injected from the main process, with no bundle of its own. It reads
+`<html data-muen-languages="[{\"id\":\"ko\",\"label\":\"한국어\"},…]">` instead — written here in the
+runtime's own order whenever the catalog moves, and removed when this plugin is disposed (a profile
+without it must not keep advertising languages it no longer has). That menu used to carry a hardcoded
+`en`/`zh` pair, the two the harness ships, which is exactly the set a Korean or Spanish reader is not
+looking at.
+
 **The overlay** (`lib/overlay.js`, `lib/scan.js`, and the walk in the bundle) is the other half of the language story: a plugin we do not
 own cannot be translated through `locale.register`, and editing its installed bundle is forbidden (an update
 would clobber it). So its translations live in the PROFILE — `<profile>/localizations/<plugin>/<lang>.json`,

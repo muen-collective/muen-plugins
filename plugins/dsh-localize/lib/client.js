@@ -86,6 +86,22 @@ window.__ModuleLoader__.load({
     /** The ids the runtime carries itself; a row naming one of these is kept, never re-registered. */
     const BUILT_IN = Object.freeze(['en', 'zh'])
 
+    /**
+     * Where the page mirrors the selectable languages, for surfaces OUTSIDE this plugin.
+     *
+     * Every picker inside the page reads the catalog through the locale service, and a plugin is the
+     * only thing that can hold that service. The shell's account row cannot: it is DOM the shell
+     * injects with no bundle of its own, and it used to carry a hardcoded `en`/`zh` pair. Those are
+     * exactly the two the harness ships, so the one person this hurts is a Korean, Japanese, French,
+     * German or Spanish reader — the languages this plugin exists to add.
+     *
+     * So the catalog is mirrored onto the document element as
+     * `<html data-muen-languages="[{\"id\":\"ko\",\"label\":\"한국어\"},…]">`, in the runtime's own
+     * order, rewritten whenever the catalog moves and REMOVED on disposal: a profile without this
+     * plugin must not keep advertising its languages.
+     */
+    const CATALOG_ATTR = 'muenLanguages'
+
     /** Lower-cased id of every language the service currently lists. */
     function catalogued(service) {
       try {
@@ -157,6 +173,54 @@ window.__ModuleLoader__.load({
     /** True when a language id is one this table owns (so a caller can tell ours from the runtime's). */
     function owned(id) {
       return LANGUAGES.some((row) => row.id.toLowerCase() === String(id).toLowerCase())
+    }
+
+    // ── the catalog mirror (the shell's language menu reads this) ──────────────
+
+    /**
+     * The rows a picker draws, in the runtime's own order: `{ id, label }` and nothing else.
+     *
+     * The runtime's snapshot also carries revisions and fallbacks; a menu needs two fields per row,
+     * and copying more of the runtime's shape into an attribute would make this mirror a schema we
+     * then have to keep in step. A row missing either field is dropped rather than drawn blank.
+     */
+    function catalogRows(service) {
+      try {
+        const snapshot = service && typeof service.getLocale === 'function' ? service.getLocale() : null
+        const locales = snapshot && Array.isArray(snapshot.locales) ? snapshot.locales : []
+        return locales
+          .filter((row) => row && typeof row.id === 'string' && row.id !== '' && typeof row.label === 'string' && row.label !== '')
+          .map((row) => ({ id: row.id, label: row.label }))
+      } catch {
+        return []
+      }
+    }
+
+    /**
+     * Write the mirror. Answers the rows written, or `[]` when there is nowhere to write or nothing
+     * to write — never throws, because this runs during activation and inside a change subscription.
+     */
+    function publishCatalog(service) {
+      const rows = catalogRows(service)
+      if (rows.length === 0) return []
+      try {
+        const root = typeof document !== 'undefined' ? document.documentElement : null
+        if (!root || !root.dataset) return []
+        root.dataset[CATALOG_ATTR] = JSON.stringify(rows)
+        return rows
+      } catch {
+        return []
+      }
+    }
+
+    /** Take the mirror down. */
+    function clearCatalog() {
+      try {
+        const root = typeof document !== 'undefined' ? document.documentElement : null
+        if (root && root.dataset) delete root.dataset[CATALOG_ATTR]
+      } catch {
+        // Nothing to undo.
+      }
     }
 
     // ── the overlay on the rendered tree (epic 65 L4) ──────────────────────────
@@ -477,7 +541,7 @@ window.__ModuleLoader__.load({
      */
     function apply(ctx) {
       const locale = typeof ctx.get === 'function' ? ctx.get('locale') : undefined
-      const report = { dictionaries: null, languages: null, globe: null }
+      const report = { dictionaries: null, languages: null, globe: null, published: null }
 
       if (locale && typeof locale.register === 'function') {
         try {
@@ -493,6 +557,11 @@ window.__ModuleLoader__.load({
         report.languages = installLanguages(locale)
       }
 
+      // The mirror: whatever the catalog now holds, where the shell's language menu can read it.
+      // Published once here and refreshed on every locale change below, because a language can arrive
+      // after us (another plugin's `addLanguage`) and a re-registration can re-label one.
+      report.published = publishCatalog(locale).map((row) => row.id)
+
       // THE OVERLAY, and its subscription: a language change re-reads the map for the new language.
       try {
         const overlay = startOverlay(locale)
@@ -507,6 +576,26 @@ window.__ModuleLoader__.load({
         }
       } catch (error) {
         report.overlay = { started: false, error: String((error && error.message) || error) }
+      }
+
+      // The mirror's lifetime is the activation's: refreshed when the catalog moves, and taken down
+      // on disposal so a profile that drops this plugin stops advertising languages it no longer has.
+      if (locale && typeof locale.subscribe === 'function') {
+        const startMirror = () => {
+          const off = locale.subscribe(() => {
+            publishCatalog(locale)
+          })
+          return () => {
+            try {
+              off()
+            } catch {
+              // The subscription may already be gone; the mirror still comes down.
+            }
+            clearCatalog()
+          }
+        }
+        if (typeof ctx.effect === 'function') ctx.effect(startMirror, 'localize: catalog mirror')
+        else startMirror()
       }
 
       const slots = typeof ctx.get === 'function' ? ctx.get('slots') : undefined
@@ -537,8 +626,12 @@ window.__ModuleLoader__.load({
       ACTION_ORDER,
       LANGUAGES,
       BUILT_IN,
+      CATALOG_ATTR,
       installLanguages,
       catalogued,
+      catalogRows,
+      publishCatalog,
+      clearCatalog,
       owned,
       makeGlobe,
     }

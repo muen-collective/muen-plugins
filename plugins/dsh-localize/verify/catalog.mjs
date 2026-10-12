@@ -18,7 +18,12 @@
  *   5. the choice is a real preference: `setLocale('ko')` moves the active locale and writes the
  *      id through the durable scope, which is how it survives a restart;
  *   6. and the languages are USABLE, not just listed: a dictionary can be registered for one of
- *      them afterwards, which is the pairing that makes a translation visible.
+ *      them afterwards, which is the pairing that makes a translation visible;
+ *   7. and the catalog is MIRRORED where a surface outside the page can read it — the shell's own
+ *      account menu is DOM injected from the main process, with no bundle and no locale service of
+ *      its own, and it used to carry a hardcoded `en`/`zh` pair (the founder's report: *"the language
+ *      switcher from avatar only show zh, en, needs full set from language switcher"*). The mirror is
+ *      `<html data-muen-languages>`, and it comes down when the plugin does.
  *
  * THE ORACLE IS THE SHIPPED RUNTIME. `@deepseek-ai/dsh-client-locale/lib/client.js` is a
  * `window.__ModuleLoader__` bundle — the same shape this plugin's own client is — so it loads in
@@ -38,7 +43,7 @@ const { check, note, finish } = reporter('verify:catalog', 'epic 65 L1 (the lang
 const mini = miniReact()
 const ui = primitivesStub()
 const client = loadClient(CLIENT, { react: mini.React, primitives: ui.primitives })
-const { BUILT_IN, ID_PATTERN, LANGUAGES, catalogued, installLanguages, owned } = client
+const { BUILT_IN, CATALOG_ATTR, ID_PATTERN, LANGUAGES, catalogRows, catalogued, clearCatalog, installLanguages, owned, publishCatalog } = client
 
 const bundlePath = localeBundlePath()
 if (bundlePath === null) {
@@ -227,6 +232,68 @@ check('the shipped bundle carries the catalog this slice is about', typeof insta
     'and the catalog this module reads back is the runtime\'s, not a copy of it',
     catalogued(runtime).has('en') && catalogued(runtime).has('zh') && !catalogued(runtime).has('ko'),
     JSON.stringify([...catalogued(runtime)]),
+  )
+}
+
+// ── 8. the mirror the shell reads (the injected account menu's language list) ─
+
+{
+  const runtime = makeRuntime(fakeScope())
+  installLanguages(runtime)
+  const element = { dataset: {} }
+  const page = loadClient(CLIENT, { react: mini.React, primitives: ui.primitives, globals: { document: { documentElement: element } } })
+  const rows = page.publishCatalog(runtime)
+  const expected = runtime.getLocale().locales.map((row) => ({ id: row.id, label: row.label }))
+
+  check(
+    'the catalog is mirrored onto the document element, one row per selectable language',
+    rows.length === expected.length && rows.every((row) => typeof row.id === 'string' && row.id !== '' && typeof row.label === 'string'),
+    JSON.stringify(rows.map((row) => row.id)),
+  )
+  check(
+    'the mirror is the runtime\'s list verbatim, in the runtime\'s own order',
+    JSON.stringify(rows) === JSON.stringify(expected),
+    JSON.stringify(rows) + ' vs ' + JSON.stringify(expected),
+  )
+  check(
+    'every language we own is in it, with its own label — this is the full set a menu outside the page draws',
+    LANGUAGES.every((row) => rows.some((seen) => seen.id === row.id && seen.label === row.label)),
+    JSON.stringify(rows),
+  )
+  check(
+    'and it is really ON the element, as JSON a shell can parse without this bundle',
+    typeof element.dataset[CATALOG_ATTR] === 'string' && JSON.parse(element.dataset[CATALOG_ATTR]).length === expected.length,
+    String(element.dataset[CATALOG_ATTR]).slice(0, 80),
+  )
+  check(
+    'a runtime that will not answer writes nothing and throws nothing',
+    (() => {
+      try {
+        return page.publishCatalog({ getLocale() { throw new Error('gone') } }).length === 0
+      } catch {
+        return false
+      }
+    })(),
+    'a parked or broken service must cost the menu its list, not the plugin its activation',
+  )
+  check(
+    'a page with no document is not an error either (the same bundle, loaded without one)',
+    (() => {
+      try {
+        return loadClient(CLIENT, { react: mini.React, primitives: ui.primitives }).publishCatalog(runtime).length === 0
+      } catch {
+        return false
+      }
+    })(),
+    'the seam is read by a shell, but the bundle must survive a context that has no DOM at all',
+  )
+  check(
+    'the mirror comes down when the plugin does',
+    (() => {
+      page.clearCatalog()
+      return element.dataset[CATALOG_ATTR] === undefined
+    })(),
+    JSON.stringify(element.dataset),
   )
 }
 
