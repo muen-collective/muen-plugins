@@ -212,6 +212,7 @@ export function fakeScope(initial) {
 export function mountCtx({ locale, slots = true, config } = {}) {
   const registered = []
   const injected = []
+  const effects = []
   const service = {
     injected,
     registered,
@@ -230,9 +231,19 @@ export function mountCtx({ locale, slots = true, config } = {}) {
       if (name === 'slots') return slots ? service : undefined
       return undefined
     },
+    // `ctx.effect(fn, label)` is how the harness owns a subscription's LIFETIME: it runs the callback
+    // during activation and calls what the callback returns when the plugin goes away. Recording it
+    // here is what lets a suite check that a subscription is actually taken down — the previous
+    // fixture had no `effect` at all, so the plugin's guarded fallback ran the callback inline and
+    // every disposal path was invisible.
+    effect: (fn, label) => {
+      const dispose = typeof fn === 'function' ? fn() : undefined
+      effects.push({ label, dispose: typeof dispose === 'function' ? dispose : () => {} })
+      return () => {}
+    },
   }
   // A row's config reaches the client as `entry.options.config`; a context without one must behave
   // exactly as before, which is what makes the option safe to add.
   if (config !== undefined) ctx.config = config
-  return { ctx, service, injected, registered }
+  return { ctx, service, injected, registered, effects }
 }

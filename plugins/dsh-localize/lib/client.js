@@ -10,18 +10,24 @@
 //                 throws on a taken id or a fallback that is not registered yet. A dictionary for a
 //                 language nobody added is dead weight; that is the trap the reverted first attempt
 //                 fell into, and this module is defensive because of it.
-//   the globe     THE SECOND CONTROL, at `sidebar.footer.action` (order 5, beside Settings). It lists
-//                 the CATALOG rather than a hardcoded list, and choosing a row is `locale.setLocale`,
-//                 which persists through the harness's own preference scope — so the choice survives
-//                 an app restart.
+//   the mirror    THE CATALOG, mirrored onto `<html data-muen-languages>` for the one picker that is
+//                 outside this page: the shell's account menu, which is DOM injected from the main
+//                 process and holds no locale service. Written on activation, refreshed on every
+//                 locale change, removed on disposal.
+//   the note      THE REVIEW COUNT (epic 65 §3), annotated onto the harness's own Language row. A
+//                 count is a to-do, not a preference, so it lives with the picker rather than in a
+//                 control of its own.
+//
+// THIS PLUGIN DRAWS NO PICKER (founder, 2026-10-12: *"kill the globe icon in ui since we will use
+// menu"*). It used to draw a globe at `sidebar.footer.action`; that is gone. The switchers are the
+// account menu (above) and the harness's own Settings row, which we only add languages to.
 //
 // THE SETTINGS ROW IS NOT OURS. The harness's locale plugin already draws Settings → General →
 // Language (it registers `settings.general.item` with id `language`, order 0, and drives the row's
-// options from the same catalog), so a second language row from us would be two rows listing the
-// same six languages. What this plugin contributes to that page is the LANGUAGES themselves; the
-// globe is the control the app does not have. Measured 2026-09-26 in the installed harness and in
-// the profile's carrier (`dsh-multi-lang-ui` registers 29 namespaces × 8 languages and never calls
-// `addLanguage`, and registers no slot at all).
+// options from the same catalog), so a row from us would be two rows listing the same six languages.
+// What this plugin contributes to that page is the LANGUAGES themselves — and the review count.
+// Measured 2026-09-26 in the installed harness and in the profile's carrier (`dsh-multi-lang-ui`
+// registers 29 namespaces × 8 languages and never calls `addLanguage`, and registers no slot at all).
 //
 // ONE FILE, BECAUSE A BUNDLE CANNOT REQUIRE ITS OWN SIBLINGS. `window.__ModuleLoader__` resolves by
 // registered module id (the `dsh.client.inject` graph), not by relative path — every plugin's client
@@ -34,47 +40,17 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const React = require('react')
     const h = React.createElement
-    const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
-    const { Menu } = primitives
-    /** The globe glyph by its current name, falling back to the pre-0.1.7 one. */
-    const GlobeGlyph = primitives.IconGlobeOutlineRegular || primitives.IconGlobeOutline
 
     /** This plugin's namespace: its own strings, in the languages it catalogs. */
     const NS = 'dsh-localize'
-    /** Where the globe lives when the profile wants one: the sidebar foot, beside Settings. */
-    const SEAM = 'sidebar.footer.action'
-    const ACTION_ID = 'localize'
-    const ACTION_ORDER = 5
 
     /**
      * The settings row the harness's own locale plugin draws (Settings → General → Language). It is the
-     * picker that always exists, and where this plugin's "some translations need review" note goes when
-     * the globe is switched off — so the to-do is never lost with the control.
+     * picker this plugin ADDS LANGUAGES TO, and where its "some translations need review" note goes —
+     * this plugin draws no picker of its own (see activation).
      */
     const LANGUAGE_ROW_SLOT = 'settings.general.item'
     const LANGUAGE_ROW_ID = 'language'
-
-    /**
-     * WHETHER TO DRAW THE GLOBE (`ctx.config.globe`).
-     *
-     * Default `true`: a stock install gets a language control it did not have, which is the whole
-     * reason this plugin owns a globe (the harness's Settings row is the only built-in picker).
-     *
-     * A profile sets it `false` when its language control lives somewhere else — Muen's does, in the
-     * shell's own account menu, which reads the catalog mirror below. One switcher in the product, and
-     * the plugin still owns the catalog and the translations.
-     *
-     * It is read defensively: `entry.options.config` is the harness's contract for a plugin's row
-     * config, but nothing here should take the boot down over a field it cannot read.
-     */
-    function globeEnabled(ctx) {
-      try {
-        const config = ctx && ctx.config
-        return !config || config.globe !== false
-      } catch {
-        return true
-      }
-    }
 
     /**
      * OUR OWN COPY, in every language we catalog. `locale.register(NS, dicts)` takes an object of
@@ -83,10 +59,10 @@ window.__ModuleLoader__.load({
      * exists to catch (epic 65 L3). `zh` and `ko`/`ja` are drafted here; the review gate is L5.
      */
     const DICT = {
-      en: { 'globe.aria': 'Change language', 'globe.title': 'Language', 'menu.title': 'Language', 'review.pending': 'Some translations need review' },
-      zh: { 'globe.aria': '切换语言', 'globe.title': '语言', 'menu.title': '语言', 'review.pending': '有翻译需要审阅' },
-      ko: { 'globe.aria': '언어 변경', 'globe.title': '언어', 'menu.title': '언어', 'review.pending': '검토가 필요한 번역이 있습니다' },
-      ja: { 'globe.aria': '言語を変更', 'globe.title': '言語', 'menu.title': '言語', 'review.pending': 'レビューが必要な翻訳があります' },
+      en: { 'review.pending': 'Some translations need review' },
+      zh: { 'review.pending': '有翻译需要审阅' },
+      ko: { 'review.pending': '검토가 필요한 번역이 있습니다' },
+      ja: { 'review.pending': 'レビューが必要な翻訳があります' },
     }
 
     // ── the catalog ────────────────────────────────────────────────────────────
@@ -449,7 +425,7 @@ window.__ModuleLoader__.load({
         draw,
         overlay,
         review: () => review,
-        /** Watch the review count: the globe's mark is drawn from it. */
+        /** Watch the review count: the Language row's note is drawn from it. */
         onReview: (watcher) => {
           watchers.add(watcher)
           return () => watchers.delete(watcher)
@@ -457,113 +433,13 @@ window.__ModuleLoader__.load({
       }
     }
 
-    // ── the globe ──────────────────────────────────────────────────────────────
-
-    /**
-     * THE LANGUAGE SURFACE (epic 65 §3, layer 1). A globe at the sidebar foot that opens the whole
-     * catalog and switches to the chosen language.
-     *
-     * THE LIST IS THE CATALOG, never a constant: every row is a language the harness will actually
-     * accept, drawn with the label that language calls itself, and the active one is marked by the
-     * menu's own selected state rather than by copy we would have to translate. The glyph and the
-     * menu are the app's own primitives — a trigger the app can focus, a list it can walk with Tab
-     * and Escape — so this control behaves like every other one in the shell.
-     */
-    function makeGlobe(locale, overlay = null) {
-      return function GlobeAction(props) {
-        const wide = props && props.wide === true
-        const t = locale && typeof locale.bind === 'function' ? locale.bind(NS) : (key) => key
-        const state = React.useSyncExternalStore(
-          (notify) => (locale && typeof locale.subscribe === 'function' ? locale.subscribe(notify) : () => {}),
-          () => (locale && typeof locale.getSnapshot === 'function' ? locale.getSnapshot() : { active: '', locales: [], revision: -1 }),
-          () => ({ active: '', locales: [], revision: -1 }),
-        )
-        const [open, setOpen] = React.useState(false)
-        /**
-         * THE REVIEW MARK (epic 65 §3): a subtle dot while a plugin's strings are waiting for a person
-         * — flagged, or not judged yet. It is a TO-DO, not an error, so it wears the app's own warn
-         * state, and it says what it is on hover rather than being a mystery dot.
-         */
-        const [pending, setPending] = React.useState(overlay && typeof overlay.review === 'function' ? overlay.review().pending || 0 : 0)
-        React.useEffect(() => {
-          if (!overlay || typeof overlay.onReview !== 'function') return undefined
-          return overlay.onReview((next) => setPending(next && next.pending ? next.pending : 0))
-        }, [])
-        const active = (state && state.active) || ''
-        const locales = (state && Array.isArray(state.locales) ? state.locales : []).filter((row) => row && typeof row.id === 'string')
-        const items = [{ type: 'label', id: 'heading', text: t('menu.title') }].concat(
-          locales.map((row) => ({ id: row.id, label: row.label || row.id })),
-        )
-
-        return h(Menu, {
-          open,
-          side: 'top',
-          align: 'start',
-          items,
-          selectedId: active,
-          onSelect: (id) => {
-            setOpen(false)
-            if (locale && typeof locale.setLocale === 'function') locale.setLocale(id)
-          },
-          onClose: () => setOpen(false),
-          anchor: h(
-            'button',
-            {
-              type: 'button',
-              'data-localize-globe': active || 'none',
-              'aria-label': t('globe.aria'),
-              title: t('globe.title'),
-              'aria-haspopup': 'menu',
-              'aria-expanded': open ? 'true' : 'false',
-              onClick: () => setOpen((value) => !value),
-              style: {
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                position: 'relative',
-                cursor: 'pointer',
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--dsw-alias-label-primary)',
-                padding: wide ? '0 6px' : 0,
-                font: 'inherit',
-                fontSize: 12,
-                lineHeight: 1,
-              },
-            },
-            GlobeGlyph ? h(GlobeGlyph, { size: 16 }) : null,
-            pending > 0
-              ? h('span', {
-                  'data-localize-review': 'pending',
-                  'data-localize-review-count': String(pending),
-                  title: t('review.pending'),
-                  'aria-label': t('review.pending'),
-                  role: 'status',
-                  style: {
-                    position: 'absolute',
-                    top: -1,
-                    left: 9,
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: 'var(--dsw-alias-state-warn-primary)',
-                  },
-                })
-              : null,
-            h(
-              'span',
-              { style: { fontWeight: 600, letterSpacing: '0.04em' } },
-              (active || 'en').toUpperCase(),
-            ),
-          ),
-        })
-      }
-    }
+    // ── the review note ────────────────────────────────────────────────────────
 
     // ── activation ─────────────────────────────────────────────────────────────
 
     /**
-     * Register our own strings, offer our languages, and put the globe at the sidebar foot.
+     * Register our own strings, offer our languages, publish the catalog mirror, and put the review
+     * count on the harness's own Language row.
      *
      * Every step is guarded and reported rather than thrown: this runs during activation, and an
      * exception here is an app that does not start. The returned report is the seam the suites read
@@ -571,7 +447,7 @@ window.__ModuleLoader__.load({
      */
     function apply(ctx) {
       const locale = typeof ctx.get === 'function' ? ctx.get('locale') : undefined
-      const report = { dictionaries: null, languages: null, globe: null, published: null }
+      const report = { dictionaries: null, languages: null, published: null, reviewNote: null }
 
       if (locale && typeof locale.register === 'function') {
         try {
@@ -628,43 +504,74 @@ window.__ModuleLoader__.load({
         else startMirror()
       }
 
-      const slots = typeof ctx.get === 'function' ? ctx.get('slots') : undefined
-      const wantsGlobe = globeEnabled(ctx)
-      report.globe = wantsGlobe ? null : { disabled: true }
-
-      if (wantsGlobe && slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
-        const Globe = makeGlobe(locale, report.__overlay || null)
-        slots.inject(SEAM, () => slots.register({ name: SEAM, id: ACTION_ID, order: ACTION_ORDER }, Globe))
-        report.globe = { seam: SEAM, id: ACTION_ID, order: ACTION_ORDER }
-      }
-
-      // NO GLOBE: the picker is the profile's own (Muen's account menu reads the catalog mirror). The
-      // review count below is still a to-do a person has to be able to see, and the harness's own
-      // Language row is the one picker guaranteed to be on screen — so it is annotated instead of
-      // hidden inside a control that is switched off.
-      if (!wantsGlobe) {
+      // THE PICKERS ARE NOT OURS (founder, 2026-10-12: *"kill the globe icon in ui since we will use
+      // menu"*).
+      //
+      // This plugin used to draw a globe at `sidebar.footer.action`. It does not any more: the language
+      // switch for this product is the account menu (the shell's own DOM, which reads the catalog mirror
+      // above), and the harness's Settings → General → Language row lists the same catalog for anyone not
+      // signed in. Two controls for one setting was the redundancy, and a third would be worse.
+      //
+      // What is left is the part a picker cannot do: the review count (epic 65 §3), which is a to-do and
+      // not a preference. It annotates the harness's own Language row — the one picker guaranteed to be
+      // on screen in every profile — because that is where a person looks when they are thinking about
+      // languages.
+      {
         const reviewKey = 'review.pending'
-        const count = report.__overlay && typeof report.__overlay.review === 'function' ? report.__overlay.review().pending || 0 : 0
+        const count = () => {
+          const overlay = report.__overlay
+          return overlay && typeof overlay.review === 'function' ? overlay.review().pending || 0 : 0
+        }
         const MARK = 'muenReviewPending'
+        // ONE note, updated in place. An earlier cut appended a fresh note on every change without
+        // removing the previous one, which would stack a count per review as the response arrived.
+        let note = null
+        const dropNote = () => {
+          if (!note) return
+          try {
+            if (note.parentElement) {
+              delete note.parentElement.dataset.muenReviewNote
+              note.remove()
+            }
+          } catch {
+            // The row may already be gone with the dialog.
+          }
+          note = null
+        }
         const paint = () => {
           try {
+            // RE-READ, never captured: the first paint happens during activation, before the overlay
+            // request has answered, so a count read once here would be the count before the fetch.
+            const pending = count()
             const root = typeof document !== 'undefined' ? document.documentElement : null
             if (root && root.dataset) {
-              if (count > 0) root.dataset[MARK] = String(count)
+              if (pending > 0) root.dataset[MARK] = String(pending)
               else delete root.dataset[MARK]
             }
-            if (count <= 0) return
+            if (pending <= 0) {
+              dropNote()
+              return
+            }
             const row = document.querySelector('[data-slot="' + LANGUAGE_ROW_SLOT + '"] [data-settings-id="' + LANGUAGE_ROW_ID + '"]')
-            if (!row || row.dataset.muenReviewNote === String(count)) return
-            row.dataset.muenReviewNote = String(count)
-            const note = document.createElement('span')
+            // Settings is a dialog: the row can go away while the count stays.
+            if (!row) {
+              dropNote()
+              return
+            }
+            if (note && note.parentElement === row) {
+              if (note.textContent !== String(pending)) note.textContent = String(pending)
+              return
+            }
+            dropNote()
+            note = document.createElement('span')
             note.dataset.muenReviewNoteText = 'yes'
             note.setAttribute('role', 'status')
             note.style.cssText = 'margin-inline-start:8px;font-size:12px;color:var(--dsw-alias-state-warn-primary);white-space:nowrap'
-            note.textContent = String(count)
+            note.textContent = String(pending)
             const label = locale && typeof locale.bind === 'function' ? locale.bind(NS) : (key) => key
             note.title = label(reviewKey)
             note.setAttribute('aria-label', label(reviewKey))
+            row.dataset.muenReviewNote = String(pending)
             row.appendChild(note)
           } catch {
             // A missing row or a page mid-render is not a reason to fail an activation.
@@ -674,13 +581,20 @@ window.__ModuleLoader__.load({
           try {
             const root = typeof document !== 'undefined' ? document.documentElement : null
             if (root && root.dataset) delete root.dataset[MARK]
-            const note = document.querySelector('[data-slot="' + LANGUAGE_ROW_SLOT + '"] [data-muen-review-note-text="yes"]')
-            if (note && note.parentElement) {
-              delete note.parentElement.dataset.muenReviewNote
-              note.remove()
-            }
           } catch {
             // Nothing to undo.
+          }
+          // The tracked note first, then the selector as a belt-and-braces sweep for one that was
+          // appended by an earlier activation of this same page.
+          dropNote()
+          try {
+            const stray = document.querySelector('[data-slot="' + LANGUAGE_ROW_SLOT + '"] [data-muen-review-note-text="yes"]')
+            if (stray) {
+              if (stray.parentElement) delete stray.parentElement.dataset.muenReviewNote
+              stray.remove()
+            }
+          } catch {
+            // The dialog may already be gone.
           }
         }
         const startRowNote = () => {
@@ -716,24 +630,20 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'locale'],
+      inject: ['locale'],
       apply,
       // The seams the suites drive (deliberate, like the assets plugin's zoom logic): the catalog is
-      // tested against the harness's own runtime, and the globe is mounted with a stub ctx.
+      // tested against the harness's own runtime, and the review note against a stub document.
       NS,
       DICT,
       ID_PATTERN,
-      SEAM,
       LANGUAGE_ROW_SLOT,
       LANGUAGE_ROW_ID,
-      globeEnabled,
       OVERLAY_API,
       resolveOverlay,
       textNodesUnder,
       makeOverlay,
       startOverlay,
-      ACTION_ID,
-      ACTION_ORDER,
       LANGUAGES,
       BUILT_IN,
       CATALOG_ATTR,
@@ -743,7 +653,6 @@ window.__ModuleLoader__.load({
       publishCatalog,
       clearCatalog,
       owned,
-      makeGlobe,
     }
   },
 })

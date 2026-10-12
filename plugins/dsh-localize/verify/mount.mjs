@@ -1,50 +1,45 @@
 /**
- * verify:mount — epic 65 L2's claims about the bundle and the globe, asserted rather than intended.
+ * verify:mount — epic 65 L2's claims about the bundle and the surfaces, asserted rather than intended.
  *
- * The claim: **`@muen/dsh-localize` installs the languages and puts a globe beside Settings, and the
- * globe lists the CATALOG rather than a list of its own.** The rules this file checks:
+ * The claim: **`@muen/dsh-localize` makes the languages we own selectable, publishes the catalog where
+ * a picker outside the page can read it, and draws no picker of its own.** The rules this file checks:
  *
- *   1. the bundle loads and registers one action at `sidebar.footer.action`, id `localize`, order 5;
+ *   1. the bundle loads and exports an activation with the locale dependency, and it registers NO
+ *      sidebar control — the language switch is the shell's account menu, and the harness's own
+ *      Settings row is the fallback; a second control in the rail is the regression this guards;
  *   2. activation registers our own strings and offers the languages we own, and NOTHING here throws:
  *      a missing service, a partial one, or a second activation is reported, never fatal — this code
  *      runs during boot, where an exception is an app that does not start;
- *   3. the globe DRAWS the app's own `Menu` (this suite reads the element it returned, so what is
- *      asserted is exactly what the component asked the primitive to draw);
- *   4. the rows are the CATALOG — every language the runtime lists, with the runtime's labels — and a
- *      language added to the catalog AFTER activation appears with no code change here;
- *   5. the active language is marked by the menu's own selected state, and the trigger's copy comes
- *      from our dictionaries in the ACTIVE language (not in English, not from a raw key);
- *   6. choosing a row IS `locale.setLocale(id)`, which is what makes the choice durable;
- *   7. the four dictionaries carry the same keys, because a missing key renders as the key name.
+ *   3. the catalog is MIRRORED onto `<html data-muen-languages>` (the reader is `catalog.mjs`'s job,
+ *      which loads this bundle with a document; here it is pinned as a contract);
+ *   4. the four dictionaries carry the same keys, because a missing key renders as the key name;
+ *   5. the review count (epic 65 §3) annotates the HARNESS's own Language row, in the active
+ *      language, is kept to ONE note as the count changes, and is taken back down when the activation
+ *      is disposed;
+ *   6. the count rides the SAME response as the overlay map, so it costs no second request.
  *
- * The locale service under the globe is the HARNESS'S OWN runtime, loaded from the installed bundle
- * (see `harness.mjs`), so the catalog the globe lists is a real one.
+ * The locale service under everything is the HARNESS'S OWN runtime, loaded from the installed bundle
+ * (see `harness.mjs`), so the catalog this suite measures is a real one.
  *
  *   node verify/mount.mjs
  */
 import { CLIENT, fakeScope, loadClient, loadLocaleRuntime, localeBundlePath, miniReact, mountCtx, primitivesStub, reporter } from './harness.mjs'
 
-const { check, note, finish } = reporter('verify:mount', 'epic 65 L2 (the bundle and the globe)')
+const { check, note, finish } = reporter('verify:mount', 'epic 65 L2 (the bundle and the surfaces)')
 
 const oraclePath = localeBundlePath()
 const mini = miniReact()
 const ui = primitivesStub()
 const client = loadClient(CLIENT, { react: mini.React, primitives: ui.primitives })
 
-// ── 1. the bundle ────────────────────────────────────────────────────────────
+// ── 1. the bundle, and the control it must NOT draw ─────────────────────────
 
-check('the bundle loads and exports an activation with the slots dependency', typeof client.apply === 'function' && Array.isArray(client.inject) && client.inject.includes('slots'), JSON.stringify({ apply: typeof client.apply, inject: client.inject }))
-check('and it names itself in one place: a namespace, a seam, an action id and an order', client.NS === 'dsh-localize' && client.SEAM === 'sidebar.footer.action' && client.ACTION_ID === 'localize' && client.ACTION_ORDER === 5, JSON.stringify({ NS: client.NS, SEAM: client.SEAM, id: client.ACTION_ID, order: client.ACTION_ORDER }))
-
-// ── 0. the globe is a PROFILE CHOICE (`config.globe`) ────────────────────────
-//
-// Default true: a stock install gets a language control it did not have. A profile that keeps its
-// language switch somewhere else — Muen's account menu — sets `globe: false`, and then this plugin
-// contributes the catalog and the translations but draws no control of its own. The option is read
-// defensively and must never take a boot down, so the no-config and null-config cases are pinned too.
-check('with no config at all the globe is ON — the default a stock install gets', client.globeEnabled(undefined) === true && client.globeEnabled({}) === true && client.globeEnabled({ config: {} }) === true, JSON.stringify({ none: client.globeEnabled(undefined), empty: client.globeEnabled({ config: {} }) }))
-check('`globe: false` switches it OFF, and any other value leaves it on', client.globeEnabled({ config: { globe: false } }) === false && client.globeEnabled({ config: { globe: true } }) === true && client.globeEnabled({ config: { globe: 'no' } }) === true, JSON.stringify({ off: client.globeEnabled({ config: { globe: false } }) }))
-check('and a config that cannot be read answers ON rather than throwing', (() => { try { return client.globeEnabled({ get config() { throw new Error('nope') } }) === true } catch { return false } })(), 'a boot must survive a config it cannot read')
+check('the bundle loads and exports an activation that depends on the locale service', typeof client.apply === 'function' && Array.isArray(client.inject) && client.inject.join(',') === 'locale', JSON.stringify({ apply: typeof client.apply, inject: client.inject }))
+check(
+  'and the globe is GONE from what the bundle ships — no seam, no action id, no component to mount',
+  client.SEAM === undefined && client.ACTION_ID === undefined && client.ACTION_ORDER === undefined && client.makeGlobe === undefined && client.globeEnabled === undefined,
+  JSON.stringify({ SEAM: client.SEAM, ACTION_ID: client.ACTION_ID, order: client.ACTION_ORDER, makeGlobe: typeof client.makeGlobe, globeEnabled: typeof client.globeEnabled }),
+)
 
 if (oraclePath === null) {
   note('the harness locale bundle was not found, so the mount checks that need a real service are skipped (set DSH_CLIENT_LOCALE)')
@@ -77,14 +72,12 @@ const report = client.apply(mounted.ctx)
 
 check('activation registers our strings for every language we catalog', Array.isArray(report.dictionaries) && report.dictionaries.join(',') === 'en,zh,ko,ja', JSON.stringify(report.dictionaries))
 check('and offers the languages we own to the shared catalog', !!report.languages && report.languages.added.join(',') === 'ko,ja,fr,de,es' && report.languages.refused.length === 0, JSON.stringify(report.languages))
+// THE REGRESSION GUARD. The founder's call was *"kill the globe icon in ui since we will use menu"*,
+// and the failure mode is a second language control quietly coming back into the sidebar.
 check(
-  'the globe is registered at the sidebar foot, beside Settings, as order 5',
-  mounted.injected.includes('sidebar.footer.action') &&
-    mounted.registered.length === 1 &&
-    mounted.registered[0].spec.name === 'sidebar.footer.action' &&
-    mounted.registered[0].spec.id === 'localize' &&
-    mounted.registered[0].spec.order === 5,
-  JSON.stringify(mounted.registered.map((row) => row.spec)),
+  'and registers NO sidebar control at all: the switch is the account menu, not a rail action',
+  mounted.registered.length === 0 && !mounted.injected.includes('sidebar.footer.action'),
+  JSON.stringify({ registered: mounted.registered.map((row) => row.spec), injected: mounted.injected }),
 )
 
 {
@@ -95,7 +88,7 @@ check(
     typeof second.dictionaries === 'string' && /already has locale/u.test(second.dictionaries) && second.languages.added.length === 0 && second.languages.kept.length === 5,
     JSON.stringify(second),
   )
-  check('and it still puts the globe up, because a boot twice is a boot that has to work', again.registered.length === 1, JSON.stringify(again.registered.map((row) => row.spec)))
+  check('and it registers nothing either — a boot twice is still a boot with no globe', again.registered.length === 0, JSON.stringify(again.registered.map((row) => row.spec)))
 }
 
 {
@@ -117,138 +110,18 @@ check(
   check('and so is a context with no locale service at all', bareThrew === null, bareThrew || 'no throw')
 }
 
-// ── 2b. the profile turns the globe OFF ──────────────────────────────────────
+// ── 3. the mirror, as a contract ─────────────────────────────────────────────
 //
-// The half of the profile choice a boot could get wrong: with `globe: false` nothing may be injected
-// into the sidebar, activation must still install the catalog and the mirror, and the review count —
-// which used to live on the globe — has to land somewhere a person can see it. The harness's own
-// Language row is that place.
-{
-  const offScope = fakeScope()
-  const offWatched = watchedRuntime(offScope)
-  const off = mountCtx({ locale: offWatched.locale, config: { globe: false } })
-  const offReport = client.apply(off.ctx)
-  check(
-    'globe: false draws no sidebar action at all, and says so in the report',
-    off.registered.length === 0 && !off.injected.includes('sidebar.footer.action') && offReport.globe && offReport.globe.disabled === true,
-    JSON.stringify({ registered: off.registered.length, injected: off.injected, globe: offReport.globe }),
-  )
-  check(
-    'and the catalog is unaffected — the plugin still owns the languages',
-    // The mirror itself is asserted in `catalog.mjs`, which loads this bundle WITH a document; here
-    // there is no DOM at all, so publishing answers `[]` — which is the behaviour, not a defect.
-    offReport.languages.added.join(',') === 'ko,ja,fr,de,es' &&
-      offWatched.runtime.getSnapshot().locales.map((row) => row.id).join(',') === 'zh,en,ko,ja,fr,de,es' &&
-      Array.isArray(offReport.published) && offReport.published.length === 0,
-    JSON.stringify({ added: offReport.languages.added, catalog: offWatched.runtime.getSnapshot().locales.map((row) => row.id), published: offReport.published }),
-  )
-  check(
-    'the review count gets the Language row instead, so the to-do survives the gone globe',
-    offReport.reviewNote && offReport.reviewNote.slot === 'settings.general.item' && offReport.reviewNote.id === 'language',
-    JSON.stringify(offReport.reviewNote),
-  )
-}
-
-// ── 3. the globe ─────────────────────────────────────────────────────────────
-
-const entry = mounted.registered[0]
-/** One render of the registered component, the way the slot registry calls it. It answers the
- *  element the component asked the app's `Menu` to draw, so every assertion below reads the real
- *  request rather than a re-implementation of it. */
-function render(props = {}) {
-  mini.reset()
-  return entry.component(props)
-}
-const rowIds = (tree) => (tree.props.items || []).filter((row) => row.type === undefined).map((row) => row.id)
-const catalogIds = () => watched.runtime.getSnapshot().locales.map((row) => row.id)
-
-let tree = render({ wide: false })
-check('the globe draws the harness\'s own Menu, opened above the trigger', tree && tree.type === ui.primitives.Menu && tree.props.side === 'top' && tree.props.align === 'start', JSON.stringify({ type: tree && typeof tree.type, side: tree && tree.props.side }))
-const anchor = tree.props.anchor
+// The mirror is driven properly in `catalog.mjs` (which loads this bundle with a document). Here the
+// point is only that activation reports it and that a page with NO document is not an error — this
+// bundle is also loaded where there is no DOM, and a missing `document` must cost the mirror, not the boot.
 check(
-  'and its trigger is a button drawing the app\'s own globe glyph plus the short code',
-  anchor &&
-    anchor.type === 'button' &&
-    // NULL CHILDREN ARE SKIPPED BY REACT, and this tree keeps them: a conditional child that renders
-    // nothing is a `null` here, so the count is of what actually draws.
-    (anchor.children || []).filter(Boolean).length === 2 &&
-    (anchor.children.filter(Boolean)[0] || {}).type === ui.primitives.IconGlobeOutlineRegular &&
-    (anchor.children.filter(Boolean)[1] || {}).children[0] === 'EN',
-  JSON.stringify({ drawn: (anchor.children || []).filter(Boolean).map((child) => child.type) }),
-)
-check(
-  'the trigger is a menu control named by our own dictionary',
-  anchor.props['aria-haspopup'] === 'menu' && anchor.props['aria-expanded'] === 'false' && anchor.props['aria-label'] === 'Change language' && anchor.props.title === 'Language',
-  JSON.stringify({ haspopup: anchor.props['aria-haspopup'], label: anchor.props['aria-label'], title: anchor.props.title }),
+  'activation reports the mirror, and a page with no document is not an error',
+  Array.isArray(report.published) && report.published.length === 0 && report.reviewNote !== null,
+  JSON.stringify({ published: report.published, reviewNote: report.reviewNote }),
 )
 
-// ── 4. the rows are the catalog ──────────────────────────────────────────────
-
-check(
-  'the rows ARE the catalog: every language the runtime lists, in its order',
-  rowIds(tree).join(',') === catalogIds().join(','),
-  JSON.stringify({ rows: rowIds(tree), catalog: catalogIds() }),
-)
-// Every read below is NULL-SAFE ON PURPOSE: a suite that throws on a wrong bundle stops at the
-// first defect and hides the rest, so a missing row has to be a FAIL like any other.
-const itemsOf = (node) => (node && node.props && Array.isArray(node.props.items) ? node.props.items : [])
-const rowFor = (node, id) => itemsOf(node).find((row) => row && row.id === id) || null
-check(
-  'with the runtime\'s own labels, so a person reads their language in that language',
-  itemsOf(tree).filter((row) => row && row.type === undefined).length === catalogIds().length &&
-    itemsOf(tree).filter((row) => row && row.type === undefined).every((row) => {
-      const found = watched.runtime.getSnapshot().locales.find((language) => language.id === row.id)
-      return !!found && row.label === found.label
-    }) &&
-    !!rowFor(tree, 'ko') &&
-    rowFor(tree, 'ko').label === '한국어',
-  JSON.stringify(itemsOf(tree)),
-)
-check(
-  'and the heading is ours, in the active language',
-  itemsOf(tree)[0] && itemsOf(tree)[0].type === 'label' && itemsOf(tree)[0].text === 'Language',
-  JSON.stringify(itemsOf(tree)[0] || null),
-)
-check(
-  'the active language is marked by the menu\'s own selected state, not by copy we would have to translate',
-  tree.props.selectedId === 'en' && !itemsOf(tree).some((row) => row && typeof row.label === 'string' && /current/u.test(row.label)),
-  JSON.stringify({ selectedId: tree.props.selectedId }),
-)
-check('and the trigger is the only place that carries the code, so a row is a language and nothing else', anchor.props['data-localize-globe'] === 'en' && (tree.props.items || []).every((row) => typeof row.label !== 'string' || !/^[A-Z]{2}$/u.test(row.label)), JSON.stringify(anchor.props['data-localize-globe']))
-
-// A LANGUAGE ADDED AFTER ACTIVATION APPEARS: the list is read per render, never captured.
-{
-  watched.runtime.addLanguage({ id: 'pt', label: 'Português', fallback: 'en' })
-  tree = render({})
-  check(
-    'a language added to the catalog AFTER activation appears in the menu with no code change here',
-    rowIds(tree).includes('pt') && rowIds(tree).join(',') === catalogIds().join(','),
-    JSON.stringify({ rows: rowIds(tree) }),
-  )
-}
-
-// ── 5. choosing a language ───────────────────────────────────────────────────
-
-{
-  const before = tree.props.open
-  tree.props.onSelect('ko')
-  tree = render({})
-  check('choosing a row switches the locale through the service', watched.chosen.join(',') === 'ko' && watched.runtime.getSnapshot().active === 'ko', JSON.stringify({ chosen: watched.chosen, active: watched.runtime.getSnapshot().active }))
-  check(
-    'and the choice is written through the durable scope, which is how it survives a restart',
-    scope.state.value && scope.state.value.preference === 'ko',
-    JSON.stringify(scope.state.value),
-  )
-  check(
-    'the globe then shows the new language, and the trigger copy is OURS in that language',
-    tree.props.anchor.props['data-localize-globe'] === 'ko' && tree.props.anchor.props['aria-label'] === '언어 변경' && tree.props.anchor.props.title === '언어',
-    JSON.stringify({ globe: tree.props.anchor.props['data-localize-globe'], label: tree.props.anchor.props['aria-label'], title: tree.props.anchor.props.title }),
-  )
-  check('and the rows still are the catalog after the switch', rowIds(tree).join(',') === catalogIds().join(','), JSON.stringify(rowIds(tree)))
-  check('the menu starts closed and a choice closes it (the owner decides, and this one decides yes)', before === false && tree.props.open === false, JSON.stringify({ before, after: tree.props.open }))
-}
-
-// ── 6. our own dictionaries ──────────────────────────────────────────────────
+// ── 4. our own dictionaries ──────────────────────────────────────────────────
 
 {
   const keys = Object.keys(client.DICT.en)
@@ -266,98 +139,139 @@ check('and the trigger is the only place that carries the code, so a row is a la
     JSON.stringify(client.DICT),
   )
   check('the catalog is data: five languages we own, with en and zh left to the runtime', client.LANGUAGES.map((row) => row.id).join(',') === 'ko,ja,fr,de,es' && client.BUILT_IN.join(',') === 'en,zh' && !client.owned('en') && client.owned('ja'), JSON.stringify(client.LANGUAGES.map((row) => row.id)))
-  // THE TRIGGER TOGGLES: pressing it opens the menu, which is what a footer action is for.
-  tree.props.anchor.props.onClick()
-  tree = render({})
-  check('the trigger opens the menu, and the app can close it again', tree.props.open === true && typeof tree.props.onClose === 'function', JSON.stringify({ open: tree.props.open }))
+  // NO DEAD STRINGS: every key has a reader, so a key kept for a removed control is a defect here.
+  const read = ['review.pending']
+  check(
+    'and the dictionary holds only keys something reads — no copy kept for a control that is gone',
+    keys.join(',') === read.join(','),
+    JSON.stringify({ keys, read }),
+  )
 }
 
-// ── 7. the review mark (epic 65 §3) ──────────────────────────────────────────
-
+// ── 5. the review count, annotated onto the HARNESS's Language row ───────────
+//
+// The globe used to carry this. With no globe there is still a to-do to show, and the harness's own
+// Settings → General → Language row is the picker a person actually uses — so the note goes there.
+// This runs the activation's own effect against a stub document rather than re-implementing the DOM
+// walk, so what is measured is the shipped code path.
 {
-  const globeWith = (pendingCount) => {
-    let watcher = null
-    const overlay = {
-      review: () => ({ pending: pendingCount, flagged: pendingCount, unjudged: 0 }),
-      onReview: (fn) => {
-        watcher = fn
-        return () => {
-          watcher = null
+  /**
+   * A page with one element that answers the Language row's selector.
+   *
+   * The note elements behave like DOM nodes where it matters to the plugin: `appendChild` records
+   * `parentElement`, and `remove()` clears it and marks the node removed. A stub without those makes
+   * the plugin's "is my note still on this row?" check answer no forever, and the suite then measures
+   * duplicates instead of the feature.
+   */
+  function pageWithRow() {
+    const notes = []
+    const row = {
+      dataset: {},
+      appended: [],
+      appendChild(child) {
+        this.appended.push(child)
+        child.parentElement = this
+        notes.push(child)
+      },
+    }
+    const wanted = `[data-slot="settings.general.item"] [data-settings-id="language"]`
+    const element = {
+      dataset: {},
+      childNodes: [row],
+      querySelector: (selector) => (selector === wanted ? row : null),
+      appendChild() {},
+    }
+    const document = {
+      documentElement: element,
+      querySelectorAll: () => [],
+      querySelector: (selector) => (selector === wanted ? row : null),
+      createElement: () => {
+        const node = {
+          dataset: {},
+          parentElement: null,
+          removed: false,
+          // `cssText` is here because that is how the note is styled and a real element supports it: a
+          // stub without it turns "the note is styled" into "the note is unstyled", silently.
+          style: { cssText: '' },
+          setAttribute(name, value) { this[name] = value },
+          remove() {
+            this.removed = true
+            this.parentElement = null
+          },
         }
+        return node
       },
+      head: { append() {} },
+      body: { childNodes: [] },
     }
-    const Globe = client.makeGlobe(watched.locale, overlay)
-    // CLEARED, not just rewound: the mini React keeps hook slots in call order, and two component
-    // instances rendered through the same stub would otherwise share them (`pending` from the last
-    // globe would decide this one's mark — which is what the first version of these checks measured).
-    mini.clear()
-    const el = Globe({})
-    // EFFECTS ARE RECORDED, NOT RUN, by the mini React: the subscription to the review count is an
-    // effect, and a suite that never runs it measures a globe that never listens.
-    mini.runEffects()
-    return {
-      el,
-      notify: (next) => watcher && watcher(next),
-      // The same instance rendered again, which is what a React re-render does.
-      renderAgain: () => {
-        mini.reset()
-        return Globe({})
-      },
-    }
+    return { document, row, notes: row.appended }
   }
 
-  const quiet = globeWith(0)
-  const drawn = (tree) => (tree.props.anchor.children || []).filter(Boolean)
+  // The page and its fetch. THE COUNT COMES FROM THE OVERLAY RESPONSE, which is the shipped path: an
+  // earlier version of this block handed `mountCtx` an overlay service that activation never reads (the
+  // plugin builds its own through `startOverlay`), so the note was never drawn and the checks passed
+  // against nothing. Driving the fetch means what is measured is the real wiring.
+  const { document, row } = pageWithRow()
+  const counts = [3]
+  const withPage = loadClient(CLIENT, {
+    react: miniReact().React,
+    primitives: primitivesStub().primitives,
+    globals: {
+      document,
+      MutationObserver: undefined,
+      fetch: async () => ({ ok: true, json: async () => ({ map: {}, review: { pending: counts[0], flagged: counts[0], unjudged: 0 } }) }),
+    },
+  })
+  const scopeFor = fakeScope()
+  const runtimeFor = watchedRuntime(scopeFor)
+  const mountedFor = mountCtx({ locale: runtimeFor.locale })
+  const offReport = withPage.apply(mountedFor.ctx)
+  await offReport.__overlay.refresh()
+
   check(
-    'with nothing waiting, the globe draws no mark — a mark that is always on says nothing',
-    drawn(quiet.el).length === 2 && !drawn(quiet.el).some((child) => child.props && child.props['data-localize-review']),
-    JSON.stringify(drawn(quiet.el).map((child) => child.type)),
+    'the review count is annotated onto the harness Language row, and named by our own string',
+    row.appended.length === 1 &&
+      row.appended[0].textContent === '3' &&
+      row.appended[0].title === withPage.DICT.en['review.pending'] &&
+      row.appended[0]['aria-label'] === row.appended[0].title,
+    JSON.stringify({ notes: row.appended.length, text: row.appended[0] && row.appended[0].textContent, title: row.appended[0] && row.appended[0].title }),
+  )
+  check(
+    'it wears the app\'s own WARN state, because a review is a to-do and not an error',
+    // NULL-SAFE: a wrong bundle has to FAIL here, not throw and hide every check after it.
+    (row.appended[0] || {}).role === 'status' && /--dsw-alias-state-warn-primary/u.test((row.appended[0] || { style: {} }).style.cssText || ''),
+    JSON.stringify(row.appended[0] ? row.appended[0].style : null),
+  )
+  check('and the count is mirrored onto the document element for anything that cannot see the row', document.documentElement.dataset.muenReviewPending === '3', JSON.stringify(document.documentElement.dataset))
+  check('the report names where it went, so the suite is not guessing', offReport.reviewNote && offReport.reviewNote.slot === 'settings.general.item' && offReport.reviewNote.id === 'language', JSON.stringify(offReport.reviewNote))
+
+  // THE COUNT FOLLOWS: a review recorded while the app is open moves the note without a reload.
+  counts[0] = 5
+  await offReport.__overlay.refresh()
+  check(
+    'a count that arrives LATER updates the ONE note — it listens rather than polling, and does not stack',
+    row.appended.length === 1 && row.appended[0].textContent === '5',
+    JSON.stringify(row.appended.map((noteEl) => noteEl.textContent)),
   )
 
-  const waiting = globeWith(3)
-  const mark = drawn(waiting.el).find((child) => child.props && child.props['data-localize-review'] === 'pending')
-  check(
-    'and with translations waiting it draws one subtle mark, carrying the count',
-    drawn(waiting.el).length === 3 && !!mark && mark.props['data-localize-review-count'] === '3',
-    JSON.stringify(drawn(waiting.el).map((child) => (child.props || {})['data-localize-review'] || child.type)),
-  )
-  check(
-    'the mark wears the app\'s own WARN state, because a review is a to-do and not an error',
-    !!mark && /--dsw-alias-state-warn-primary/u.test(mark.props.style.background) && mark.props.style.borderRadius === '50%',
-    JSON.stringify(mark && mark.props.style),
-  )
-  // IN THE ACTIVE LANGUAGE: an earlier check in this file switched the app to Korean, and the mark is
-  // ours — so it reads Korean, which is the point rather than an accident.
-  const activeLang = watched.runtime.getSnapshot().active
-  check(
-    'and it says what it is, in the ACTIVE language, rather than being a mystery dot',
-    !!mark &&
-      mark.props.role === 'status' &&
-      mark.props.title === client.DICT[activeLang]['review.pending'] &&
-      mark.props['aria-label'] === mark.props.title &&
-      mark.props.title !== 'review.pending',
-    JSON.stringify({ active: activeLang, title: mark && mark.props.title, wanted: client.DICT[activeLang]['review.pending'] }),
-  )
-  check(
-    'the trigger stays a menu control with the mark on it — the mark is not a second button',
-    waiting.el.props.anchor.type === 'button' && waiting.el.props.anchor.props['aria-haspopup'] === 'menu',
-    JSON.stringify(waiting.el.props.anchor.props['aria-haspopup']),
-  )
-
-  // THE MARK FOLLOWS THE COUNT: a review recorded while the app is open moves it without a reload.
-  const moving = globeWith(0)
-  check('a quiet globe has no mark to start with', !drawn(moving.el).some((child) => child.props && child.props['data-localize-review']), 'mark already drawn')
-  moving.notify({ pending: 2 })
-  const after = moving.renderAgain()
-  check(
-    'and a count that ARRIVES LATER draws it — the globe listens rather than polling',
-    drawn(after).some((child) => child.props && child.props['data-localize-review-count'] === '2'),
-    JSON.stringify(drawn(after).map((child) => (child.props || {})['data-localize-review-count'] || child.type)),
-  )
+  // DISPOSAL TAKES IT BACK DOWN: the row belongs to the harness, and this plugin may be removed.
+  const disposer = mountedFor.effects.find((entry) => /review note/u.test(entry.label))
+  check('the note is owned by an effect, so removing the plugin removes the note', !!disposer, JSON.stringify(mountedFor.effects.map((entry) => entry.label)))
+  if (disposer) {
+    for (const el of row.appended) el.remove = () => { el.removed = true }
+    disposer.dispose()
+    check(
+      'and disposing the activation removes it from the row and drops the mirror',
+      document.documentElement.dataset.muenReviewPending === undefined && row.appended.every((el) => el.removed === true),
+      JSON.stringify({ mark: document.documentElement.dataset.muenReviewPending, removed: row.appended.map((el) => el.removed === true) }),
+    )
+  }
 }
 
+// ── 6. the count rides the overlay response ──────────────────────────────────
+
 {
-  // THE COUNT RIDES THE OVERLAY RESPONSE, so the mark costs no second request.
+  // THE COUNT RIDES THE OVERLAY RESPONSE, so the note costs no second request.
   const node = { nodeType: 3, nodeValue: 'Save' }
   const body = { nodeType: 1, childNodes: [node] }
   const wired = loadClient(CLIENT, {
@@ -378,7 +292,7 @@ check('and the trigger is the only place that carries the code, so a row is a la
     overlay.review().pending === 4 && overlay.review().flagged === 1 && node.nodeValue === '저장',
     JSON.stringify({ review: overlay.review(), node: node.nodeValue }),
   )
-  check('and it tells whoever is watching, which is what moves the globe', seen.length >= 1 && seen[seen.length - 1].pending === 4, JSON.stringify(seen))
+  check('and it tells whoever is watching, which is what moves the note', seen.length >= 1 && seen[seen.length - 1].pending === 4, JSON.stringify(seen))
   const unwatch = overlay.onReview(() => {})
   check('a watcher can leave without disturbing the others', typeof unwatch === 'function' && unwatch() === true, 'no disposer')
 }

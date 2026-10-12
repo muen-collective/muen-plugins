@@ -1,7 +1,12 @@
 # @muen/dsh-localize
 
 **One plugin for language** (epic 65): the languages we own are added to DeepSeek Harness's shared
-catalog, and a globe beside Settings switches between them. Neutral — no brand or client is baked in.
+catalog, and that catalog is published for the pickers that live outside this page. Neutral — no brand
+or client is baked in.
+
+**No picker of its own.** The language switch is the surface that already exists: the account menu (which
+reads the mirror below) or the harness's Settings → General → Language row, which this plugin only adds
+languages to. See "the surfaces" below.
 
 Supersedes `@muen/dsh-language-switcher` (deleted) and the withdrawn ko/ja pack. See
 `docs/plans/65-muen-localize-epic.md` in the workspace for the whole epic.
@@ -33,22 +38,14 @@ of the picker.
 an unreviewed language would take the choice away from the person whose language it is. `en` and `zh`
 belong to the runtime and are never re-registered.
 
-**The globe is a profile choice (`config.globe`, default `true`).** On, the plugin draws its
-`sidebar.footer.action` control (id `localize`, order 5 — the sidebar foot, beside Settings). It lists
-the **catalog**, not a constant: every row is a language the harness will accept, drawn with the label
-that language calls itself, and a language added to the catalog *after* activation appears with no
-change here. The trigger is the app's own `IconGlobeOutlineRegular` and the app's own `Menu`; choosing a
-row is `locale.setLocale`, which persists the choice through the harness's own preference scope.
-
-**Off, the plugin still owns the catalog and draws nothing.** That is the right shape when a profile
-keeps its language switch somewhere else — Muen's does, in the shell's own account menu, which reads the
-catalog mirror below. One switcher in the product, and a stock install (no other picker) still gets the
-default `true`. With the globe off the change is not only the missing button: see the review note below.
+**The surfaces are not ours (2026-10-12).** This plugin used to draw a globe at `sidebar.footer.action`.
+It does not: the founder's call was *"kill the globe icon in ui since we will use menu"* — one switch per
+setting. What it contributes instead is the catalog itself, which two existing pickers read — the shell's
+account menu (signed in) and the harness's Settings → General → Language row (always).
 
 **The Settings row is not ours.** The harness's locale plugin already draws Settings → General →
 Language from the same catalog, so a second row from us would be two rows listing the same languages.
-What this plugin contributes to that page is the languages themselves — and, when the globe is off, the
-review note.
+What this plugin contributes to that page is the languages themselves — and the review note.
 
 **The catalog is mirrored for surfaces outside the page.** A picker inside the page reads the catalog
 through the locale service, and only a plugin can hold that service. The shell's own account menu
@@ -71,14 +68,13 @@ an installed bundle / DELETE), and the bundle walks the rendered tree to apply t
 text it first saw**, so a language switch is never cumulative. A `MutationObserver` re-applies the map already
 in hand, so late-rendered text is translated without another request.
 
-**The review mark has two homes** (epic 65 §3), because the count has to be visible wherever the picker
-is. With the globe ON it is a small dot in the app's own *warn* state on the globe button — flagged by a
-reviewer, or not judged yet — carrying the count in the host's answer, and saying what it is on hover in
-the active language. With the globe OFF it annotates the harness's own Settings → General → Language row
-instead, since that row is the picker a person actually uses; the row belongs to the harness's locale
-plugin, so it is found when it renders and re-found if Settings is reopened. Either way the count comes
-from the SAME response as the overlay map (no extra request), follows along while the app is open rather
-than polling, and is a to-do rather than an error.
+**The review count has one home** (epic 65 §3): the harness's own Settings → General → Language row,
+annotated with the count while any translation is waiting for a person — flagged by a reviewer, or not
+judged yet. It used to ride the globe button; with no globe, the row is the honest place for it, because
+that is the picker a person actually uses. The row belongs to the harness's locale plugin, so the note is
+found when it renders and re-found if Settings is reopened; it is ONE note that updates in place rather
+than stacking. The count comes from the SAME response as the overlay map (no extra request), follows
+along while the app is open rather than polling, and is a to-do rather than an error.
 
 **The reviewer** (`skills/localize-review/SKILL.md`) is the gate, and it ships inside this package so the
 served text is the repo's text. It judges four axes (accuracy, register, context, completeness), gives one of
@@ -92,9 +88,9 @@ makes the cross-plugin consistency check a read instead of a re-scan.
 ## Verify
 
 ```
-node verify/catalog.mjs   # the languages we own, against the HARNESS'S OWN LocaleRuntime (22 checks)
-node verify/mount.mjs     # the bundle, the profile choice (globe on/off), the globe, the review mark (43 checks)
-node verify/overlay.mjs   # the store, the scan, the DOM walk and the route (65 checks)
+node verify/catalog.mjs   # the languages we own, against the HARNESS'S OWN LocaleRuntime (29 checks)
+node verify/mount.mjs     # the bundle, the surfaces it must NOT draw, the review note (24 checks)
+node verify/overlay.mjs   # the store, the scan, the DOM walk and the route (73 checks)
 node verify/memory.mjs    # the review memory: hashing, re-review scope, attempts, the gate's data (36)
 node verify/review.mjs    # the reviewer skill and its registration (21)
 ```
