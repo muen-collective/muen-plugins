@@ -14,6 +14,25 @@ const pluginNames = readdirSync(pluginsDir)
   .filter((name) => !name.startsWith('.'))
   .filter((name) => statSync(join(pluginsDir, name)).isDirectory())
 
+// A WIP plugin is built in the open but is NOT ready to be handed to anyone, so it must not reach
+// public distribution. Founder, 2026-10-12: *"some plugins are work in progress so we need to
+// disable them from public distribution"*. The founder's own profile installs them by `link:` and
+// keeps working — nothing is deleted, only the PUBLISH is withheld.
+//
+// The lever is this list, checked in TWO places, because either one alone leaks:
+//   1. the default local `npm run pack:all` skips them, so a stray dist/ never contains one;
+//   2. a `RELEASE_TAG` naming one is refused, so even the release workflow cannot publish one.
+//
+// Adding a name here is the whole act of withholding a plugin. Deleting a name is the whole act of
+// releasing it — and doing that should coincide with clearing its WIP corner mark in the pane
+// (`data-studio-wip` / `data-cms-wip`), which is what the founder reads on screen.
+// Each repo withholds its OWN WIP plugins: this list is `muen-plugins`'s, and `@muen/dsh-cms`
+// (Website preview) is withheld in `mitsumeru-plugins`, where its source lives — a plugin can only be
+// withheld by the repo that could publish it.
+const WIP_PLUGINS = [
+  'dsh-studio', // Studio Director, epic 94 (draft) — the video production surface
+]
+
 function pluginVersion(pluginDir) {
   try {
     const pkg = JSON.parse(readFileSync(join(pluginDir, 'package.json'), 'utf8'))
@@ -51,7 +70,7 @@ function parseReleaseTag(tag) {
   return parsed === null ? null : { slug: parsed[1] ?? null, version: parsed[2] }
 }
 
-let targets = pluginNames
+let targets = pluginNames.filter((name) => !WIP_PLUGINS.includes(name))
 if (releaseTag) {
   // A release must attach exactly what this run produces — clear any stale
   // tarball left in dist so the workflow's `dist/*.tgz` is unambiguous.
@@ -73,6 +92,14 @@ if (releaseTag) {
       console.error(`RELEASE_TAG ${releaseTag}: plugins/${slug} is version ${found || '(none)'}, not ${version}`)
       process.exit(1)
     }
+    if (WIP_PLUGINS.includes(slug)) {
+      console.error(
+        `RELEASE_TAG ${releaseTag}: plugins/${slug} is WORK IN PROGRESS and withheld from public ` +
+        `distribution (see WIP_PLUGINS in scripts/pack-all.mjs). Clear its WIP corner mark and drop ` +
+        `it from that list in the same change that releases it.`,
+      )
+      process.exit(1)
+    }
     targets = [slug]
   } else {
     const matches = pluginNames.filter((name) => pluginVersion(join(pluginsDir, name)) === version)
@@ -84,6 +111,13 @@ if (releaseTag) {
       console.error(
         `RELEASE_TAG ${releaseTag}: version ${version} is ambiguous (${matches.join(', ')}) — ` +
         `name the plugin instead, e.g. ${matches[0]}-${releaseTag}`,
+      )
+      process.exit(1)
+    }
+    if (WIP_PLUGINS.includes(matches[0])) {
+      console.error(
+        `RELEASE_TAG ${releaseTag}: plugins/${matches[0]} is WORK IN PROGRESS and withheld from ` +
+        `public distribution (see WIP_PLUGINS in scripts/pack-all.mjs).`,
       )
       process.exit(1)
     }

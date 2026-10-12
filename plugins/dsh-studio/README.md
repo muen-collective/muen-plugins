@@ -1,5 +1,10 @@
 # @muen/dsh-studio
 
+> **WORK IN PROGRESS — not for public distribution.** The pane wears a `data-studio-wip` warning mark
+> in its top-right corner (founder, 2026-10-12) and `scripts/pack-all.mjs`'s `WIP_PLUGINS` refuses to
+> pack or release it. Clear the mark and drop the name from that list in the same change that
+> releases it.
+
 The video production surface: **design → script → shoot → timeline → MP4**, with
 a human gate at every stage and the generation engines swappable behind stable
 contracts. Built against `docs/plans/94-studio-director-plugin-epic.md` (draft);

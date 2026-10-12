@@ -81,8 +81,21 @@ const type = seen.types[0]
 check('the studio tab kind registers', !!type && type.kind === 'studio', type && type.kind)
 check('the tab carries a live icon', type && typeof type.icon === 'function' && type.icon() !== null)
 
+//  the WIP corner mark (founder, 2026-10-12: "if its work in progress add a warning icon in corner")
+
 const body = seen.slots.find((slot) => slot.options.name === 'sidebar.right.pane.tab')
 check('the pane body registers', !!body, body && body.options.name)
+
+check('the pane draws the WIP corner mark', (() => {
+  const mark = collect(instance.run(body.component, { t: (key) => EN[key] || key }), (n) => n.props && n.props['data-studio-wip'] === 'true')
+  return mark.length === 1
+})(), 'one mark per pane')
+
+check('the WIP mark cannot swallow a click meant for the pane', (() => {
+  // `pointerEvents: 'none'` is the difference between a corner badge and a dead 16px hot spot.
+  const mark = collect(instance.run(body.component, { t: (key) => EN[key] || key }), (n) => n.props && n.props['data-studio-wip'] === 'true')[0]
+  return !!mark && mark.props.style && mark.props.style.pointerEvents === 'none'
+})(), 'the badge is decoration, not a target')
 
 // ── the pipeline nav draws the method ────────────────────────────────────────
 

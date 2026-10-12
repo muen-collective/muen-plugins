@@ -1390,10 +1390,72 @@ window.__ModuleLoader__.load({
     const inputStyle = { background: 'transparent', border: '.5px solid var(--dsw-alias-border-l3)', borderRadius: 8, padding: '4px 8px', color: 'inherit' }
 
     /**
+     * THE WIP CORNER MARK (founder, 2026-10-12: *"if its work in progress add a warning icon in
+     * corner so I can visually see the status"*).
+     *
+     * A pane whose surface is still being built wears a warning glyph in its top-right corner, so a
+     * glance at the screen says which plugins are WIP without reading a manifest. It is positioned
+     * absolutely against the wrapper below rather than drawn per screen: `useStudioPane` returns from
+     * four branches (loading, failed, a stage screen, the project screen), and marking each would put
+     * the glyph in four places where a fifth branch would silently miss it.
+     *
+     * `pointerEvents: 'none'` is load bearing: the corner must never swallow a click meant for the tab.
+     * The glyph is the harness's own `IconWarningOutline` (DSH first, per the icon policy), and the
+     * ink is `--dsw-alias-state-warn-primary` — a token, never a hex.
+     *
+     * The same badge lives in `@muen/dsh-cms`; the two are duplicated rather than shared because a
+     * plugin bundle is self-contained by design (see `verify/mount.mjs`'s dependency pin).
+     */
+    function WipBadge() {
+      const IconWarning = icon('IconWarningOutlineRegular', 'IconWarningOutline16')
+      return h(
+        'span',
+        {
+          'data-studio-wip': 'true',
+          role: 'img',
+          'aria-label': 'Work in progress — not ready to share',
+          title: 'Work in progress — not for public distribution',
+          style: {
+            position: 'absolute',
+            top: 6,
+            right: 6,
+            zIndex: 1,
+            display: 'grid',
+            placeItems: 'center',
+            width: 16,
+            height: 16,
+            color: 'var(--dsw-alias-state-warn-primary)',
+            pointerEvents: 'none'
+          }
+        },
+        h(IconWarning, { size: 14, 'aria-hidden': true }),
+      )
+    }
+
+    /**
+     * The pane plus its WIP corner mark — the one seam a caller draws through.
+     * The body is a HOOK and this is a thin component over it, rather than the wrapper RETURNING an
+     * element for the pane. That distinction is load bearing: the verify harness drives whatever
+     * `slots.register` was given, and a wrapper that only ever returns `h(useStudioPane)` would never
+     * invoke it during the run's settle loop — the pane's own `useEffect` (its boot fetch) would queue
+     * and never fire, leaving every screen stuck on `…`. Calling the hook inline runs the body in the
+     * same component pass, which is also the ordinary custom-hook shape in real React.
+     */
+    function StudioPane(props) {
+      const inner = useStudioPane(props)
+      return h(
+        'div',
+        { 'data-studio': 'wip-wrap', style: { position: 'relative', display: 'flex', flexDirection: 'column', width: '100%', height: '100%', minHeight: 0 } },
+        h(WipBadge),
+        inner,
+      )
+    }
+
+    /**
      * The project screen. One component, host-driven state: the tree it draws is
      * a pure function of what GET answered, so the verify harness can walk it.
      */
-    function StudioPane({ t }) {
+    function useStudioPane({ t }) {
       const [state, setState] = React.useState({ phase: 'loading', projects: [], project: null, session: null, error: null, view: 'project', recall: null })
       const [pick, setPick] = React.useState({ projectId: '', name: '' })
 
