@@ -33,16 +33,22 @@ of the picker.
 an unreviewed language would take the choice away from the person whose language it is. `en` and `zh`
 belong to the runtime and are never re-registered.
 
-**The globe.** At `sidebar.footer.action` (id `localize`, order 5 — the sidebar foot, beside
-Settings). It lists the **catalog**, not a constant: every row is a language the harness will accept,
-drawn with the label that language calls itself, and a language added to the catalog *after*
-activation appears with no change here. The trigger is the app's own `IconGlobeOutlineRegular` and the
-app's own `Menu`; choosing a row is `locale.setLocale`, which persists the choice through the
-harness's own preference scope.
+**The globe is a profile choice (`config.globe`, default `true`).** On, the plugin draws its
+`sidebar.footer.action` control (id `localize`, order 5 — the sidebar foot, beside Settings). It lists
+the **catalog**, not a constant: every row is a language the harness will accept, drawn with the label
+that language calls itself, and a language added to the catalog *after* activation appears with no
+change here. The trigger is the app's own `IconGlobeOutlineRegular` and the app's own `Menu`; choosing a
+row is `locale.setLocale`, which persists the choice through the harness's own preference scope.
+
+**Off, the plugin still owns the catalog and draws nothing.** That is the right shape when a profile
+keeps its language switch somewhere else — Muen's does, in the shell's own account menu, which reads the
+catalog mirror below. One switcher in the product, and a stock install (no other picker) still gets the
+default `true`. With the globe off the change is not only the missing button: see the review note below.
 
 **The Settings row is not ours.** The harness's locale plugin already draws Settings → General →
 Language from the same catalog, so a second row from us would be two rows listing the same languages.
-What this plugin contributes to that page is the languages themselves.
+What this plugin contributes to that page is the languages themselves — and, when the globe is off, the
+review note.
 
 **The catalog is mirrored for surfaces outside the page.** A picker inside the page reads the catalog
 through the locale service, and only a plugin can hold that service. The shell's own account menu
@@ -65,11 +71,14 @@ an installed bundle / DELETE), and the bundle walks the rendered tree to apply t
 text it first saw**, so a language switch is never cumulative. A `MutationObserver` re-applies the map already
 in hand, so late-rendered text is translated without another request.
 
-**The globe carries a review mark** (epic 65 §3): a small dot in the app's own *warn* state while any
-translation is waiting for a person — flagged by a reviewer, or not judged yet — carrying the count in the
-host's answer. It rides the SAME response as the overlay map, so the mark costs no extra request, and it
-follows the count while the app is open rather than polling. It is a to-do, not an error, and it says what it
-is on hover in the active language.
+**The review mark has two homes** (epic 65 §3), because the count has to be visible wherever the picker
+is. With the globe ON it is a small dot in the app's own *warn* state on the globe button — flagged by a
+reviewer, or not judged yet — carrying the count in the host's answer, and saying what it is on hover in
+the active language. With the globe OFF it annotates the harness's own Settings → General → Language row
+instead, since that row is the picker a person actually uses; the row belongs to the harness's locale
+plugin, so it is found when it renders and re-found if Settings is reopened. Either way the count comes
+from the SAME response as the overlay map (no extra request), follows along while the app is open rather
+than polling, and is a to-do rather than an error.
 
 **The reviewer** (`skills/localize-review/SKILL.md`) is the gate, and it ships inside this package so the
 served text is the repo's text. It judges four axes (accuracy, register, context, completeness), gives one of
@@ -84,7 +93,7 @@ makes the cross-plugin consistency check a read instead of a re-scan.
 
 ```
 node verify/catalog.mjs   # the languages we own, against the HARNESS'S OWN LocaleRuntime (22 checks)
-node verify/mount.mjs     # the bundle, the globe, its activation and the review mark (37 checks)
+node verify/mount.mjs     # the bundle, the profile choice (globe on/off), the globe, the review mark (43 checks)
 node verify/overlay.mjs   # the store, the scan, the DOM walk and the route (65 checks)
 node verify/memory.mjs    # the review memory: hashing, re-review scope, attempts, the gate's data (36)
 node verify/review.mjs    # the reviewer skill and its registration (21)

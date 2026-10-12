@@ -41,10 +41,40 @@ window.__ModuleLoader__.load({
 
     /** This plugin's namespace: its own strings, in the languages it catalogs. */
     const NS = 'dsh-localize'
-    /** Where the globe lives: the sidebar foot, beside Settings. */
+    /** Where the globe lives when the profile wants one: the sidebar foot, beside Settings. */
     const SEAM = 'sidebar.footer.action'
     const ACTION_ID = 'localize'
     const ACTION_ORDER = 5
+
+    /**
+     * The settings row the harness's own locale plugin draws (Settings → General → Language). It is the
+     * picker that always exists, and where this plugin's "some translations need review" note goes when
+     * the globe is switched off — so the to-do is never lost with the control.
+     */
+    const LANGUAGE_ROW_SLOT = 'settings.general.item'
+    const LANGUAGE_ROW_ID = 'language'
+
+    /**
+     * WHETHER TO DRAW THE GLOBE (`ctx.config.globe`).
+     *
+     * Default `true`: a stock install gets a language control it did not have, which is the whole
+     * reason this plugin owns a globe (the harness's Settings row is the only built-in picker).
+     *
+     * A profile sets it `false` when its language control lives somewhere else — Muen's does, in the
+     * shell's own account menu, which reads the catalog mirror below. One switcher in the product, and
+     * the plugin still owns the catalog and the translations.
+     *
+     * It is read defensively: `entry.options.config` is the harness's contract for a plugin's row
+     * config, but nothing here should take the boot down over a field it cannot read.
+     */
+    function globeEnabled(ctx) {
+      try {
+        const config = ctx && ctx.config
+        return !config || config.globe !== false
+      } catch {
+        return true
+      }
+    }
 
     /**
      * OUR OWN COPY, in every language we catalog. `locale.register(NS, dicts)` takes an object of
@@ -599,10 +629,87 @@ window.__ModuleLoader__.load({
       }
 
       const slots = typeof ctx.get === 'function' ? ctx.get('slots') : undefined
-      if (slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
+      const wantsGlobe = globeEnabled(ctx)
+      report.globe = wantsGlobe ? null : { disabled: true }
+
+      if (wantsGlobe && slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
         const Globe = makeGlobe(locale, report.__overlay || null)
         slots.inject(SEAM, () => slots.register({ name: SEAM, id: ACTION_ID, order: ACTION_ORDER }, Globe))
         report.globe = { seam: SEAM, id: ACTION_ID, order: ACTION_ORDER }
+      }
+
+      // NO GLOBE: the picker is the profile's own (Muen's account menu reads the catalog mirror). The
+      // review count below is still a to-do a person has to be able to see, and the harness's own
+      // Language row is the one picker guaranteed to be on screen — so it is annotated instead of
+      // hidden inside a control that is switched off.
+      if (!wantsGlobe) {
+        const reviewKey = 'review.pending'
+        const count = report.__overlay && typeof report.__overlay.review === 'function' ? report.__overlay.review().pending || 0 : 0
+        const MARK = 'muenReviewPending'
+        const paint = () => {
+          try {
+            const root = typeof document !== 'undefined' ? document.documentElement : null
+            if (root && root.dataset) {
+              if (count > 0) root.dataset[MARK] = String(count)
+              else delete root.dataset[MARK]
+            }
+            if (count <= 0) return
+            const row = document.querySelector('[data-slot="' + LANGUAGE_ROW_SLOT + '"] [data-settings-id="' + LANGUAGE_ROW_ID + '"]')
+            if (!row || row.dataset.muenReviewNote === String(count)) return
+            row.dataset.muenReviewNote = String(count)
+            const note = document.createElement('span')
+            note.dataset.muenReviewNoteText = 'yes'
+            note.setAttribute('role', 'status')
+            note.style.cssText = 'margin-inline-start:8px;font-size:12px;color:var(--dsw-alias-state-warn-primary);white-space:nowrap'
+            note.textContent = String(count)
+            const label = locale && typeof locale.bind === 'function' ? locale.bind(NS) : (key) => key
+            note.title = label(reviewKey)
+            note.setAttribute('aria-label', label(reviewKey))
+            row.appendChild(note)
+          } catch {
+            // A missing row or a page mid-render is not a reason to fail an activation.
+          }
+        }
+        const clear = () => {
+          try {
+            const root = typeof document !== 'undefined' ? document.documentElement : null
+            if (root && root.dataset) delete root.dataset[MARK]
+            const note = document.querySelector('[data-slot="' + LANGUAGE_ROW_SLOT + '"] [data-muen-review-note-text="yes"]')
+            if (note && note.parentElement) {
+              delete note.parentElement.dataset.muenReviewNote
+              note.remove()
+            }
+          } catch {
+            // Nothing to undo.
+          }
+        }
+        const startRowNote = () => {
+          paint()
+          const stop = report.__overlay && typeof report.__overlay.onReview === 'function' ? report.__overlay.onReview(() => paint()) : () => {}
+          // The row belongs to the harness's locale plugin, so it may not exist yet when we activate and
+          // it may be re-created when Settings opens. Redraw when it appears; the count never polls.
+          let observer = null
+          try {
+            if (typeof MutationObserver === 'function' && typeof document !== 'undefined') {
+              observer = new MutationObserver(() => paint())
+              observer.observe(document.documentElement, { childList: true, subtree: true })
+            }
+          } catch {
+            observer = null
+          }
+          return () => {
+            try {
+              if (typeof stop === 'function') stop()
+            } catch {
+              // The subscription may already be gone.
+            }
+            if (observer) observer.disconnect()
+            clear()
+          }
+        }
+        if (typeof ctx.effect === 'function') ctx.effect(startRowNote, 'localize: review note on the Language row')
+        else startRowNote()
+        report.reviewNote = { slot: LANGUAGE_ROW_SLOT, id: LANGUAGE_ROW_ID }
       }
 
       return report
@@ -617,6 +724,9 @@ window.__ModuleLoader__.load({
       DICT,
       ID_PATTERN,
       SEAM,
+      LANGUAGE_ROW_SLOT,
+      LANGUAGE_ROW_ID,
+      globeEnabled,
       OVERLAY_API,
       resolveOverlay,
       textNodesUnder,

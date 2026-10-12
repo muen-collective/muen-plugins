@@ -36,6 +36,16 @@ const client = loadClient(CLIENT, { react: mini.React, primitives: ui.primitives
 check('the bundle loads and exports an activation with the slots dependency', typeof client.apply === 'function' && Array.isArray(client.inject) && client.inject.includes('slots'), JSON.stringify({ apply: typeof client.apply, inject: client.inject }))
 check('and it names itself in one place: a namespace, a seam, an action id and an order', client.NS === 'dsh-localize' && client.SEAM === 'sidebar.footer.action' && client.ACTION_ID === 'localize' && client.ACTION_ORDER === 5, JSON.stringify({ NS: client.NS, SEAM: client.SEAM, id: client.ACTION_ID, order: client.ACTION_ORDER }))
 
+// ── 0. the globe is a PROFILE CHOICE (`config.globe`) ────────────────────────
+//
+// Default true: a stock install gets a language control it did not have. A profile that keeps its
+// language switch somewhere else — Muen's account menu — sets `globe: false`, and then this plugin
+// contributes the catalog and the translations but draws no control of its own. The option is read
+// defensively and must never take a boot down, so the no-config and null-config cases are pinned too.
+check('with no config at all the globe is ON — the default a stock install gets', client.globeEnabled(undefined) === true && client.globeEnabled({}) === true && client.globeEnabled({ config: {} }) === true, JSON.stringify({ none: client.globeEnabled(undefined), empty: client.globeEnabled({ config: {} }) }))
+check('`globe: false` switches it OFF, and any other value leaves it on', client.globeEnabled({ config: { globe: false } }) === false && client.globeEnabled({ config: { globe: true } }) === true && client.globeEnabled({ config: { globe: 'no' } }) === true, JSON.stringify({ off: client.globeEnabled({ config: { globe: false } }) }))
+check('and a config that cannot be read answers ON rather than throwing', (() => { try { return client.globeEnabled({ get config() { throw new Error('nope') } }) === true } catch { return false } })(), 'a boot must survive a config it cannot read')
+
 if (oraclePath === null) {
   note('the harness locale bundle was not found, so the mount checks that need a real service are skipped (set DSH_CLIENT_LOCALE)')
   finish()
@@ -105,6 +115,38 @@ check(
     bareThrew = String((error && error.message) || error)
   }
   check('and so is a context with no locale service at all', bareThrew === null, bareThrew || 'no throw')
+}
+
+// ── 2b. the profile turns the globe OFF ──────────────────────────────────────
+//
+// The half of the profile choice a boot could get wrong: with `globe: false` nothing may be injected
+// into the sidebar, activation must still install the catalog and the mirror, and the review count —
+// which used to live on the globe — has to land somewhere a person can see it. The harness's own
+// Language row is that place.
+{
+  const offScope = fakeScope()
+  const offWatched = watchedRuntime(offScope)
+  const off = mountCtx({ locale: offWatched.locale, config: { globe: false } })
+  const offReport = client.apply(off.ctx)
+  check(
+    'globe: false draws no sidebar action at all, and says so in the report',
+    off.registered.length === 0 && !off.injected.includes('sidebar.footer.action') && offReport.globe && offReport.globe.disabled === true,
+    JSON.stringify({ registered: off.registered.length, injected: off.injected, globe: offReport.globe }),
+  )
+  check(
+    'and the catalog is unaffected — the plugin still owns the languages',
+    // The mirror itself is asserted in `catalog.mjs`, which loads this bundle WITH a document; here
+    // there is no DOM at all, so publishing answers `[]` — which is the behaviour, not a defect.
+    offReport.languages.added.join(',') === 'ko,ja,fr,de,es' &&
+      offWatched.runtime.getSnapshot().locales.map((row) => row.id).join(',') === 'zh,en,ko,ja,fr,de,es' &&
+      Array.isArray(offReport.published) && offReport.published.length === 0,
+    JSON.stringify({ added: offReport.languages.added, catalog: offWatched.runtime.getSnapshot().locales.map((row) => row.id), published: offReport.published }),
+  )
+  check(
+    'the review count gets the Language row instead, so the to-do survives the gone globe',
+    offReport.reviewNote && offReport.reviewNote.slot === 'settings.general.item' && offReport.reviewNote.id === 'language',
+    JSON.stringify(offReport.reviewNote),
+  )
 }
 
 // ── 3. the globe ─────────────────────────────────────────────────────────────

@@ -209,7 +209,7 @@ export function fakeScope(initial) {
 }
 
 /** A context that answers the two services the bundle asks for, and records the registrations. */
-export function mountCtx({ locale, slots = true } = {}) {
+export function mountCtx({ locale, slots = true, config } = {}) {
   const registered = []
   const injected = []
   const service = {
@@ -231,5 +231,8 @@ export function mountCtx({ locale, slots = true } = {}) {
       return undefined
     },
   }
+  // A row's config reaches the client as `entry.options.config`; a context without one must behave
+  // exactly as before, which is what makes the option safe to add.
+  if (config !== undefined) ctx.config = config
   return { ctx, service, injected, registered }
 }
