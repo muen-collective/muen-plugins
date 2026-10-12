@@ -61,8 +61,8 @@ They do not. There is no custom remote, no HTTP route, no shared storage.
 
 `ctx.remote.*` namespaces are a **fixed application selection** (`dsh-api-remotes` mounts a closed
 list), so a plugin cannot add one. That is why there is no `Stop` yet: `run.dispose()` is a host
-handle. Stop needs the fenced HTTP route that `@muen/dsh-theme-runtime` already demonstrates
-(`ctx.webServer.register`, trust-checked), and it ships in v1.1.
+handle. Stop needs a fenced HTTP route — the pattern `@muen/dsh-generate` already runs
+(`webServer.register`, exact and prefix kinds), and it ships in v1.1.
 
 ## Budgets
 
