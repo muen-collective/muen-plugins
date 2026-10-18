@@ -115,6 +115,10 @@ window.__ModuleLoader__.load({
       'pane.view.list': 'List',
       'pane.view.gallery': 'Gallery',
       'pane.gallery.pick': 'Pick a thumbnail below to look at it closely',
+      // THE FILMSTRIP CAROUSEL (2026-10-18): the arrows over the main thumb move the selection, and
+      // the strip follows. Named for a screen reader; the glyph says it visually.
+      'pane.carousel.prev': 'Previous image',
+      'pane.carousel.next': 'Next image',
       'pane.search.placeholder': 'Search by name or prompt',
       // THE REFRESH CONTROL'S WORDS (founder, 2026-10-17): the sentence says what it re-reads, and the
       // label names the thing that changed on disk rather than the word "refresh" alone.
@@ -212,6 +216,8 @@ window.__ModuleLoader__.load({
       'pane.view.list': '列表',
       'pane.view.gallery': '画廊',
       'pane.gallery.pick': '在下方选择缩略图以便细看',
+      'pane.carousel.prev': '上一张',
+      'pane.carousel.next': '下一张',
       'pane.search.placeholder': '按名称或提示词搜索',
       'pane.refresh': '刷新',
       'pane.refresh.hint': '重新读取这些文件夹——在应用之外新增或移动的文件会出现在这里。',
@@ -324,7 +330,7 @@ window.__ModuleLoader__.load({
       // THE GRID, from the OS that shipped this surface: fluid columns, a 240px floor, no
       // breakpoints — the pane's own width is the only input (`repeat(auto-fit, minmax(240px, 1fr))`).
       // THE FLOOR YIELDS TO THE COLUMN WHEN THE SPLIT MAKES IT NARROW (2026-10-18): the right-hand
-      // preview can now take most of the pane, and a 240px hard floor would overflow a 160px thumbnail
+      // preview can now take most of the pane, and a 240px hard floor would overflow a 120px thumbnail
       // column instead of letting its one tile shrink with it. `min(240px, 100%)` is the floor that
       // still makes a wide pane several 240px columns.
       grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 12, alignContent: 'start' },
@@ -392,7 +398,7 @@ window.__ModuleLoader__.load({
       // gap, the handle is 12px carved out of the side's share (`calc(R% - 12px)`), and the two columns
       // plus the handle add up to exactly 100%.
       //
-      // THE FLOORS ARE STILL THE CONTRACT: 160 + 240 + the 12px handle is the width below which there
+      // THE FLOORS ARE STILL THE CONTRACT: 120 + 240 + the 12px handle is the width below which there
       // are not two columns, only a stack — the breakpoint is the pane's own width, because the pane is
       // what resizes. The pane measures the row (`ResizeObserver`) and stacks below that number; when it
       // does, the divider goes with it, since there is nothing to divide.
@@ -403,7 +409,7 @@ window.__ModuleLoader__.load({
       // The row clips (or scrolls, when stacked) and gives each column a DEFINITE height, which is what
       // makes `overflowY: auto` on a column actually scroll instead of growing.
       columns: { display: 'flex', flexWrap: 'wrap', gap: 0, alignItems: 'stretch', minWidth: 0, flex: '1 1 0', minHeight: 0, overflow: 'hidden' },
-      // The floors are MONOTONIC with the split: the thumbnail column may shrink to 160px, and the
+      // The floors are MONOTONIC with the split: the thumbnail column may shrink to 120px, and the
       // preview never goes below 240px, so dragging the handle all the way left makes the picture most
       // of the frame instead of squeezing both columns into noise.
       // EACH COLUMN IS ITS OWN SCROLL BOX (2026-10-18). `minHeight: 0` plus a definite height from the
@@ -424,15 +430,22 @@ window.__ModuleLoader__.load({
       skeletonTile: { border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, overflow: 'hidden', background: 'var(--dsw-alias-bg-layer-2)' },
       skeletonBlock: { background: 'var(--dsw-alias-bg-skeleton)' },
 
-      // ── the gallery (founder, 2026-09-26, from Finder) ──────────────────
+      // ── the gallery (founder, 2026-09-26, from Finder; enlarged 2026-10-18) ──
       //
-      // THE FRAME IS THE PANE'S WIDTH and the strip is one row of 56×74 cells under it: the stage
-      // A4 already draws, with the catalog's own thumbnails beneath.
-      gallery: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, flex: '1 1 auto' },
-      galleryStage: { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 200, borderRadius: 10, background: 'var(--dsw-alias-bg-layer-2)', overflow: 'hidden' },
-      galleryPreview: { maxWidth: '100%', maxHeight: 420, objectFit: 'contain', display: 'block' },
+      // THE MAIN THUMB IS THE TOP AND THE FILMSTRIP IS THE BOTTOM (founder, 2026-10-18: *"fix the main
+      // thumb top+filmstrip bottom. it should also have metadata bottom right to make the main thumb
+      // bigger"*). The stage takes every pixel the column can give it; the 56×74 frames are one fixed
+      // row under it; the facts are a floating card over the stage's lower-right corner — the same
+      // `metaFloat` the grid/list preview uses — instead of a side column stealing the picture's width.
+      gallery: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, minHeight: 0, flex: '1 1 auto' },
+      galleryStage: { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', flex: '1 1 auto', minHeight: 0, borderRadius: 10, background: 'var(--dsw-alias-bg-layer-2)', overflow: 'hidden' },
+      galleryPreview: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' },
       galleryHint: { padding: 24, textAlign: 'center' },
-      galleryStrip: { display: 'flex', gap: 6, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4 },
+      galleryStrip: { display: 'flex', gap: 6, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4, flex: '0 0 auto' },
+      // THE CAROUSEL ARROWS (2026-10-18). They hover over the main thumb's mid-left and mid-right and
+      // move the SELECTION (the strip follows), not just the strip's scroll offset — the founder asked
+      // for a carousel because the strip's overlay scrollbar is a hard mouse target.
+      carouselButton: { position: 'absolute', top: '50%', transform: 'translateY(-50%)', zIndex: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, borderRadius: '50%', border: '0.5px solid var(--dsw-alias-border-l3)', background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-primary)', cursor: 'pointer', boxShadow: 'var(--dsw-elevation-prominent, 0 4px 12px rgba(0, 0, 0, 0.24))' },
       frame: { flex: '0 0 auto', width: 56, height: 74, padding: 0, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-2)', cursor: 'pointer', overflow: 'hidden' },
       frameOn: { borderColor: 'var(--dsw-alias-brand-primary)' },
       frameImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
@@ -558,9 +571,10 @@ window.__ModuleLoader__.load({
     // bounds and asserts the host stores them.
     //
     // THE RANGE IS WIDE ON PURPOSE (2026-10-18): this is the detail-inspection surface, so the
-    // thumbnail column can go down to 15% and the preview can take 85% — the old 30% floor left the
-    // picture smaller than the wall of tiles it was meant to be inspected against.
-    const SPLIT_MIN = 0.15
+    // thumbnail column can go down to 10% and the preview can take 90% — the old 30% floor left the
+    // picture smaller than the wall of tiles it was meant to be inspected against. The pane's pixel
+    // floor (120px) is usually the binding one on a real pane.
+    const SPLIT_MIN = 0.1
     const SPLIT_MAX = 0.85
     const SPLIT_DEFAULT = 0.6
     // A HOST THAT ANSWERS NO BOUNDS IS THE OLD HOST (2026-10-18). The widening above shipped with a
@@ -568,13 +582,13 @@ window.__ModuleLoader__.load({
     // share below 0.3 — and the pane must not offer a drag the host will clamp away on release, which
     // is the founder's *"it snaps back to bigger size"*. The view route now answers `splitBounds`;
     // absent that field, the pane uses exactly the old build's range, so a drag to its floor stays
-    // put. After a restart the new host answers 0.15–0.85 and the full range opens by itself.
+    // put. After a restart the new host answers 0.1–0.85 and the full range opens by itself.
     const HOST_SPLIT_FALLBACK = { min: 0.3, max: 0.8 }
     // The 12px the handle itself occupies, carved out of the side's share rather than added to the row.
     const SPLIT_HANDLE = 12
     // The two columns' floors. Below MAIN + SIDE + HANDLE there is not enough width for two columns, so
     // the pane stacks them (and hides the handle) — the pane's own width is the breakpoint.
-    const MAIN_FLOOR = 160
+    const MAIN_FLOOR = 120
     const SIDE_FLOOR = 240
     const STACK_BELOW = MAIN_FLOOR + SIDE_FLOOR + SPLIT_HANDLE
     // A pane whose width is not measured yet (a suite, or the first paint) is assumed wide enough that
@@ -625,7 +639,9 @@ window.__ModuleLoader__.load({
       // the middle of the pane, so the number is tested for finiteness rather than truthiness.
       const wanted = typeof share === 'number' ? share : Number(share)
       const live = Math.min(bounds.max, Math.max(bounds.min, Number.isFinite(wanted) ? wanted : SPLIT_DEFAULT))
-      const main = Math.floor(live * row)
+      // AT THE EXACT FLOOR, `(120 / row) * row` can be 119.999… and `floor` would hand back 119 — one
+      // pixel below the floor the drag was clamped to. The max keeps the pixel contract on the floor.
+      const main = Math.max(MAIN_FLOOR, Math.floor(live * row))
       return { share: main / row, main, side: row - SPLIT_HANDLE - main }
     }
 
@@ -1318,37 +1334,110 @@ window.__ModuleLoader__.load({
      */
     /**
      * THE THIRD VIEW (founder, 2026-09-26, reading Finder: *"grid, list, filmstrip"*, and then, on second thought, *"finder also calls it gallery, that's my ignorance"* — Finder's own View menu is Icons · List · Columns · **Gallery**, and Lucide's glyph for it is `gallery-thumbnails`): one picture
-     * big, the frames in a strip under it, the facts beside it. It is the view A4's inspect stage was
-     * built for — the stage is the SAME component the metadata block draws, at the pane's width, so
-     * the zoom, the pan and the 1:1 control arrive with it and nothing is written twice.
+     * filling the top, the frames in a fixed strip under it, and the facts floating over the stage's
+     * lower-right corner (2026-10-18). It is the view A4's inspect stage was built for — the stage is
+     * the SAME component the metadata block draws, filling the box, so the zoom, the pan and the 1:1
+     * control arrive with it and nothing is written twice. The `meta` node is passed in by the pane
+     * and rendered INSIDE the stage box, so the card can never cover the strip below.
      *
      * THE STRIP IS THE CATALOG, not a second fetch: each frame asks the file route for a 128px
      * preview, the way every other tile does. Nothing selected yet says so and waits — auto-selecting
      * the first frame would write to the view file from inside a render.
      */
-    function GalleryView({ assets, selected, onSelect, detail, t }) {
+    function GalleryView({ assets, selected, onSelect, detail, t, meta = null }) {
       const ready = detail && detail.path === selected
-      // THE FILMSTRIP, RESTORED (2026-10-18). The founder's words: *"the filmstrip gallery view
-      // attempts this but that view was not supposed to change"* — so this view keeps the shape it
-      // shipped with in 2026-09-26: ONE PICTURE BIG, the frames in a strip UNDER it. The inspection
-      // preview the split was built for belongs to the grid and the list, in their right-hand column;
-      // here the stage already is the pane's main column, and a second competing column would steal
-      // the width this view exists to give the picture.
+      // THE CAROUSEL (2026-10-18). The founder: *"its very hard to get the mouse hit on scroll bar.
+      // also add caurosel, left/right buttons on hover"*. The arrows move the SELECTION one frame, so
+      // the strip does not have to be grabbed at all; it scrolls the newly selected frame into view.
+      // They appear only while the pointer is over the stage, so the picture stays clean at rest.
+      const [hovered, setHovered] = React.useState(false)
+      const stripRef = React.useRef(null)
+      const step = (delta) => {
+        if (assets.length === 0) return
+        const at = assets.findIndex((asset) => asset.path === selected)
+        const from = at >= 0 ? at : (delta > 0 ? -1 : 0)
+        const next = (from + delta + assets.length) % assets.length
+        onSelect(assets[next].path)
+      }
+      // KEEP THE STRIP ON THE SELECTED FRAME, whether the selection came from a click on the strip or
+      // from a carousel arrow. A DOM ref, so the offline shim (no nodes) simply skips it.
+      React.useEffect(() => {
+        const strip = stripRef.current
+        if (!strip || typeof strip.querySelector !== 'function') return
+        const marked = strip.querySelector('[data-assets-frame-on="yes"]')
+        if (marked && typeof marked.scrollIntoView === 'function') marked.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      }, [selected])
+      // THE MAIN THUMB IS THE TOP, THE FILMSTRIP IS THE BOTTOM, AND THE FACTS FLOAT ON THE PICTURE
+      // (founder, 2026-10-18: *"fix the main thumb top+filmstrip bottom. it should also have metadata
+      // bottom right to make the main thumb bigger"*).
+      //
+      // The stage now takes every pixel the column can give it (the framed 60vh box and the facts
+      // side-column are both gone), the frames are one fixed 56×74 row under it, and the metadata is
+      // the same bottom-right floating accordion card the grid/list preview uses. The card is inside
+      // the STAGE box, so it floats over the picture and never covers the strip.
       return h(
         'div',
         { style: S.gallery, 'data-assets-gallery': 'yes' },
         h(
           'div',
-          { style: S.galleryStage, 'data-assets-gallery-stage': 'yes' },
+          {
+            style: S.galleryStage,
+            'data-assets-gallery-stage': 'yes',
+            onMouseEnter: () => setHovered(true),
+            onMouseLeave: () => setHovered(false),
+          },
           selected === null || selected === undefined
             ? h('span', { style: { ...S.muted, ...S.galleryHint }, 'data-assets-gallery-empty': 'yes' }, t('pane.gallery.pick'))
             : ready
-              ? h(InspectStage, { detail, t })
+              ? h(InspectStage, { detail, t, fill: true })
               : h('img', { style: S.galleryPreview, src: '/plugins/assets/file?path=' + encodeURIComponent(selected) + '&w=1024', alt: '', 'data-assets-gallery-preview': 'yes' }),
+          // The card is a sibling of the picture inside the positioned stage, so `metaFloat` anchors
+          // to the stage's lower-right corner rather than to the whole gallery (which would put it
+          // over the filmstrip).
+          meta,
+          // THE ARROWS ARE SIBLINGS OF THE STAGE, not children of it: the stage owns pointerdown for
+          // panning, and a button inside it would start a pan on press. They are hover-only.
+          hovered && selected !== null && selected !== undefined && assets.length > 1
+            ? [
+                h(
+                  'button',
+                  {
+                    key: 'prev',
+                    type: 'button',
+                    'data-assets-carousel': 'prev',
+                    'aria-label': t('pane.carousel.prev'),
+                    title: t('pane.carousel.prev'),
+                    onClick: () => step(-1),
+                    style: { ...S.carouselButton, left: 10 },
+                  },
+                  h(CarouselPrev, { size: 18 }),
+                ),
+                h(
+                  'button',
+                  {
+                    key: 'next',
+                    type: 'button',
+                    'data-assets-carousel': 'next',
+                    'aria-label': t('pane.carousel.next'),
+                    title: t('pane.carousel.next'),
+                    onClick: () => step(1),
+                    style: { ...S.carouselButton, right: 10 },
+                  },
+                  h(CarouselNext, { size: 18 }),
+                ),
+              ]
+            : null,
         ),
         h(
           'div',
-          { style: S.galleryStrip, 'data-assets-gallery-strip': 'yes', role: 'listbox', 'aria-label': t('pane.view.gallery') },
+          {
+            ref: stripRef,
+            className: 'dsh-assets-scroll',
+            style: S.galleryStrip,
+            'data-assets-gallery-strip': 'yes',
+            role: 'listbox',
+            'aria-label': t('pane.view.gallery'),
+          },
           ...assets.map((asset) =>
             h(
               'button',
@@ -1390,6 +1479,7 @@ window.__ModuleLoader__.load({
           'div',
           {
             style: { ...S.meta, ...(floating ? S.metaFloat : null) },
+            className: floating ? 'dsh-assets-scroll' : undefined,
             'data-assets-meta': 'loading',
             'data-assets-meta-float': floating ? 'yes' : 'no',
           },
@@ -1442,15 +1532,16 @@ window.__ModuleLoader__.load({
         'div',
         {
           // IN THE PREVIEW THE BLOCK IS A CARD OVER THE PICTURE (2026-10-18), not a column under it:
-          // `metaFloat` is bottom-anchored inside the side column, which is made `position: relative`
-          // by the pane. In gallery there is no second stage, so the block stays in flow.
+          // `metaFloat` is bottom-anchored inside whatever box the caller makes `position: relative` —
+          // the grid/list side column, or the gallery's stage box. A stacked pair stays in flow.
           style: { ...S.meta, ...(floating ? S.metaFloat : null) },
+          className: floating ? 'dsh-assets-scroll' : undefined,
           'data-assets-meta': 'yes',
           'data-assets-meta-float': floating ? 'yes' : 'no',
         },
-        // The stage first: the facts describe the picture, so the picture leads.
-        // In the gallery the stage is already the pane's main column, so the block draws its
-        // facts only — one picture, not two (`withStage`).
+        // The stage first: the facts describe the picture, so the picture leads. Gallery and the
+        // grid/list float pass `withStage: false` because they draw the stage themselves; only a
+        // stacked pair lets the block draw it (`panel: true`).
         withStage && picture ? h(InspectStage, { detail, t, panel: true }) : null,
 
         // ── the disclosure: one row, and everything the library knows underneath ──
@@ -1940,12 +2031,30 @@ window.__ModuleLoader__.load({
         : t('pane.summary.filtered').replace('{shown}', String(shownAssets.length)).replace('{total}', String(total))
 
       // THE FLOATING FACTS CARD (2026-10-18). In grid and list, side by side, the preview column is the
-      // picture and the facts float over its lower-right corner. In a stacked pair the side column is
-      // content-height (the row scrolls), so there is nothing to float over: the facts stay in flow
-      // with the stage inside the block. Gallery has no second stage, so its facts stay in flow too.
+      // picture and the facts float over its lower-right corner. Gallery does the same inside its stage
+      // box (the card is rendered by `GalleryView`, so it cannot cover the strip). In a stacked pair
+      // the side column is content-height (the row scrolls), so there is nothing to float over: the
+      // facts stay in flow with the stage inside the block.
       const floatFacts = layout !== 'gallery' && !stacked
       const detailData = detail.data
       const showStage = floatFacts && detailData && detailData.where === 'present' && PICTURE_EXT.test(String(detailData.ext || ''))
+      // ONE SET OF FACTS PROPS FOR BOTH PLACES (2026-10-18): the grid/list side column and the gallery's
+      // floating card are the same block, so they get the same detail, loading and actions — only the
+      // placement (`withStage`, `floating`) differs.
+      const metaProps = {
+        detail: detailData,
+        loading: detail.phase === 'loading',
+        t,
+        openGenerate,
+        generateReady,
+        canTrash,
+        asking,
+        busy,
+        trashError,
+        onAsk: () => { setTrashError(null); setAsking(true) },
+        onCancel: () => setAsking(false),
+        onConfirm: () => remove(detailData && detailData.path ? detailData.path : selectedPath),
+      }
 
       return h(
         'div',
@@ -2071,9 +2180,9 @@ window.__ModuleLoader__.load({
         // bar and both columns — moved as one sheet, and the preview's lower facts could not be
         // reached at all while the grid was tall.
         //
-        // GALLERY IS STILL TWO COLUMNS (restored 2026-10-18): the filmstrip is the main column and the
-        // facts are the side, so the same independent scrolling applies. It is the SPLIT that gallery
-        // does not take, not the columns.
+        // GALLERY IS ONE COLUMN NOW (2026-10-18): the main thumb takes the whole width and height, the
+        // strip is a fixed row under it, and the facts float over the stage's lower-right corner. It is
+        // the SPLIT that gallery does not take, and it no longer needs a facts column.
         h(
           'div',
           {
@@ -2094,6 +2203,7 @@ window.__ModuleLoader__.load({
               alignContent: stacked ? 'flex-start' : 'stretch',
               ...(stacked ? { overflowY: 'auto', overflowX: 'hidden' } : { overflow: 'hidden' }),
             },
+            className: 'dsh-assets-scroll',
             'data-assets-columns': 'yes',
             'data-assets-stacked': stacked ? 'yes' : 'no',
             'data-assets-columns-scroll': stacked ? 'row' : 'columns',
@@ -2102,7 +2212,8 @@ window.__ModuleLoader__.load({
             'div',
             {
               style: layout === 'gallery'
-                ? { ...S.columnMain, flex: '3 1 0', minWidth: 260 }
+                // THE GALLERY TAKES THE WHOLE ROW (2026-10-18): no facts column steals its width.
+                ? { ...S.columnMain, flex: '1 1 100%', minWidth: 0 }
                 : stacked
                   // STACKED: the row is the scroll box, so the columns are content-height and show
                   // their overflow instead of each owning a scrollbar inside a scrolling row.
@@ -2112,13 +2223,23 @@ window.__ModuleLoader__.load({
                       ? { ...S.columnMain, flex: '0 0 ' + widths.main + 'px', minWidth: MAIN_FLOOR }
                       : { ...S.columnMain, flex: '0 0 ' + String(mainShare) + '%', minWidth: MAIN_FLOOR }
                     : S.columnMain,
+              className: 'dsh-assets-scroll',
               'data-assets-main': 'yes',
               'data-assets-main-split': twoColumns ? (stacked ? 'stacked' : String(Math.round(shownSplit * 100))) : 'full',
             },
             shownAssets.length === 0
               ? h('span', { style: S.muted, 'data-assets-none': 'yes' }, total === 0 ? t('pane.none') : t('pane.none.match'))
               : layout === 'gallery'
-                ? h(GalleryView, { assets: shownAssets, selected: selectedPath, onSelect: select, detail: detail.data, t })
+                ? h(GalleryView, {
+                    assets: shownAssets,
+                    selected: selectedPath,
+                    onSelect: select,
+                    detail: detailData,
+                    t,
+                    // THE GALLERY'S FACTS ARE THE FLOATING CARD TOO (2026-10-18): over the stage's
+                    // lower-right corner, so the picture keeps the full width and the strip stays under.
+                    meta: selectedPath ? h(MetadataBlock, { ...metaProps, withStage: false, floating: true }) : null,
+                  })
                 : layout === 'grid'
                 ? h(
                     'div',
@@ -2137,55 +2258,38 @@ window.__ModuleLoader__.load({
           twoColumns && !stacked
             ? h(ColumnSplit, { split: shownSplit, min: bounds.min, max: bounds.max, onMove: moveSplit, onCommit: commitSplit, t })
             : null,
-          // THE PREVIEW COLUMN. Gallery keeps the facts without a second stage (the main column is
-          // already the stage), and keeps the shipped 3:2 columns rather than the draggable split —
-          // *"that view was not supposed to change"*. Grid and list get the resizable column, whose
-          // stage is the inspection preview.
+          // THE PREVIEW COLUMN (grid and list). In a side-by-side pair the side column is the picture
+          // (unframed, filling the column) and the metadata block is an absolutely positioned card
+          // over its lower-right corner. That is `floatFacts`; the stage is rendered here, outside the
+          // block, and the block is told `withStage: false` so there is only one picture. In a stacked
+          // pair the side is content-height and the row scrolls, so the block keeps its stage inside
+          // (`panel: true`).
           //
-          // THE FACTS FLOAT ON THE PICTURE (2026-10-18). In a side-by-side grid/list pair the side
-          // column is the picture (unframed, filling the column) and the metadata block is an
-          // absolutely positioned card over its lower-right corner. That is `floatFacts`; the stage is
-          // rendered here, outside the block, and the block is told `withStage: false` so there is
-          // only one picture. In a stacked pair the side is content-height and the row scrolls, so the
-          // block keeps its stage inside (`panel: true`); gallery has no second stage at all.
-          selectedPath
+          // GALLERY HAS NO SIDE COLUMN (2026-10-18): its main thumb takes the whole width and height,
+          // the strip is a fixed row under it, and its facts are the floating card inside the gallery
+          // stage (`GalleryView`), so the picture is as large as the pane can make it.
+          selectedPath && layout !== 'gallery'
             ? h(
                 'div',
                 {
-                  style: layout === 'gallery'
-                    ? { ...S.columnSide, flex: '2 1 0', minWidth: 240 }
-                    : stacked
-                      ? { ...S.columnSide, flex: '1 1 100%', minWidth: 0, height: 'auto', overflowY: 'visible', overflowX: 'visible' }
-                      : {
-                          ...S.columnSide,
-                          ...(widths ? { flex: '0 0 ' + widths.side + 'px' } : { flex: '0 0 calc(' + String(sideShare) + '% - ' + SPLIT_HANDLE + 'px)' }),
-                          minWidth: SIDE_FLOOR,
-                          // The card is positioned against this column, and the picture (not a
-                          // scrollbar) is what the column contains.
-                          position: 'relative',
-                          overflow: 'hidden',
-                        },
+                  style: stacked
+                    ? { ...S.columnSide, flex: '1 1 100%', minWidth: 0, height: 'auto', overflowY: 'visible', overflowX: 'visible' }
+                    : {
+                        ...S.columnSide,
+                        ...(widths ? { flex: '0 0 ' + widths.side + 'px' } : { flex: '0 0 calc(' + String(sideShare) + '% - ' + SPLIT_HANDLE + 'px)' }),
+                        minWidth: SIDE_FLOOR,
+                        // The card is positioned against this column, and the picture (not a
+                        // scrollbar) is what the column contains.
+                        position: 'relative',
+                        overflow: 'hidden',
+                      },
+                  className: 'dsh-assets-scroll',
                   'data-assets-side': 'yes',
                   'data-assets-side-float': floatFacts ? 'yes' : 'no',
                   'data-assets-side-split': twoColumns ? (stacked ? 'stacked' : String(Math.round((1 - shownSplit) * 100))) : 'full',
                 },
                 floatFacts && showStage ? h(InspectStage, { detail: detailData, t, fill: true }) : null,
-                h(MetadataBlock, {
-                  detail: detailData,
-                  loading: detail.phase === 'loading',
-                  t,
-                  openGenerate,
-                  generateReady,
-                  withStage: layout !== 'gallery' && !floatFacts,
-                  floating: floatFacts,
-                  canTrash: canTrash,
-                  asking,
-                  busy,
-                  trashError: trashError,
-                  onAsk: () => { setTrashError(null); setAsking(true) },
-                  onCancel: () => setAsking(false),
-                  onConfirm: () => remove(detailData && detailData.path ? detailData.path : selectedPath),
-                }),
+                h(MetadataBlock, { ...metaProps, withStage: !floatFacts, floating: floatFacts }),
               )
             : null,
         ),
@@ -2254,7 +2358,7 @@ window.__ModuleLoader__.load({
       const [dragging, setDragging] = React.useState(false)
       const [hovered, setHovered] = React.useState(false)
       const drag = React.useRef(null)
-      // THE PANE'S OWN RANGE (2026-10-18): the static 15–85% narrowed by the two pixel floors at the
+      // THE PANE'S OWN RANGE (2026-10-18): the static 10–85% narrowed by the two pixel floors at the
       // width the row actually has. Clamping here — not only in the pane's handler — keeps the live
       // value, and so the stored value on release, inside what the columns can draw.
       const clamp = (value) => Math.min(max, Math.max(min, value))
@@ -2428,6 +2532,15 @@ window.__ModuleLoader__.load({
       h('path', { key: 'e', d: 'M19 21h1' }),
     ])
 
+    // THE CAROUSEL CHEVRONS, Lucide's own `chevron-left` / `chevron-right` geometry at the family's
+    // 24-unit grid and 1.5 stroke, so the arrows match the view switch rather than the text.
+    const CarouselPrev = viewGlyph('CarouselPrev', [
+      h('path', { key: 'a', d: 'M15 18l-6-6 6-6' }),
+    ])
+    const CarouselNext = viewGlyph('CarouselNext', [
+      h('path', { key: 'a', d: 'M9 18l6-6-6-6' }),
+    ])
+
     /** The chip beside the DSH glyph: the library's own mark, then the name — the guide tab's own shape. */
     function AssetsTitle(props) {
       const t = props && props.locale ? props.locale.bind(NS) : (key) => EN[key] || key
@@ -2518,6 +2631,16 @@ window.__ModuleLoader__.load({
           // it *"grey instead of white"*. So these two menus take the app's own raised surface —
           // solid `bg-layer-2`, a real `border-l3` hairline (the shadow's own stroke is silenced so
           // there is exactly one ring), no blur — which is the same answer the Generate popover uses.
+          // A SCROLLBAR A MOUSE CAN HIT (founder, 2026-10-18: *"its very hard to get the mouse hit on
+          // scroll bar"*). macOS's overlay scrollbar is a few transparent pixels until it is already
+          // scrolling. Styling `::-webkit-scrollbar` makes it a real 10px track with a 6px thumb, and
+          // every scroll container in this pane wears the class: the thumbnail column, the preview
+          // column, the floating facts card, the stacked row and the filmstrip.
+          '.dsh-assets-scroll { scrollbar-width: thin; }\n' +
+          '.dsh-assets-scroll::-webkit-scrollbar { width: 10px; height: 10px; }\n' +
+          '.dsh-assets-scroll::-webkit-scrollbar-thumb { background: var(--dsw-alias-border-l3); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }\n' +
+          '.dsh-assets-scroll::-webkit-scrollbar-thumb:hover { background: var(--dsw-alias-label-tertiary); background-clip: padding-box; }\n' +
+          '.dsh-assets-scroll::-webkit-scrollbar-track { background: transparent; }\n' +
           '.dsh-assets-menu { background: var(--dsw-alias-bg-layer-2); backdrop-filter: none; border: 0.5px solid var(--dsw-alias-border-l3); --dsw-elevation-stroke-color: transparent; }\n'
         document.head.appendChild(style)
         return () => {

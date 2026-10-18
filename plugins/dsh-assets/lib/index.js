@@ -99,9 +99,9 @@ const VIEWS = ['grid', 'list', 'gallery']
  * cannot get out of.
  */
 // 2026-10-18: the range widened so the inspection preview can take most of the frame. The pane's
-// dynamic floors (160px thumbnails + 240px preview + the 12px handle) narrow this further at the
+// dynamic floors (120px thumbnails + 240px preview + the 12px handle) narrow this further at the
 // width it actually has, and the pane's copy of these three numbers must agree with this one.
-const SPLIT_MIN = 0.15
+const SPLIT_MIN = 0.1
 const SPLIT_MAX = 0.85
 const SPLIT_DEFAULT = 0.6
 

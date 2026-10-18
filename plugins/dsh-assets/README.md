@@ -147,10 +147,13 @@ after calling it filmstrip): its View menu is Icons · List · Columns · **Gall
 the same shape is `gallery-thumbnails`.
 
 **THE THIRD VIEW IS THE ONE THE STAGE WAS BUILT FOR.** `gallery` draws the selected asset in A4's
-`InspectStage` at the pane's width, with the catalog's thumbnails in a one-row strip under it and the facts in
-the side column — which is told `withStage: false` there, because the big picture already is the stage and
-two would be silly. Nothing selected says so rather than auto-selecting the first thumbnail (that would write to
-the view file from inside a render). **The switch's three glyphs are Lucide's own — `layout-grid`, `list` and
+`InspectStage`, now FILLING THE TOP of the view (2026-10-18: *"fix the main thumb top+filmstrip bottom. it
+should also have metadata bottom right to make the main thumb bigger"*): the stage takes the column's width
+and the height the 56×74 strip leaves, the frames are one fixed row under it, and the facts are the same
+bottom-right floating accordion card as grid/list — rendered INSIDE the stage box, so it can never cover the
+strip. There is no facts side column any more; that column was what made the main thumb smaller. Nothing
+selected says so rather than auto-selecting the first thumbnail (that would write to the view file from
+inside a render). **The switch's three glyphs are Lucide's own — `layout-grid`, `list` and
 `gallery-thumbnails`** —
 hand-drawn in the bundle so the control carries ONE drawing style: the harness's grid and rows marks are a
 different family (filled 16-unit geometry) and it ships no gallery glyph at all. All three are 24-unit at
@@ -161,9 +164,9 @@ missing the large image on right, should be able to expand so the thumbnails sma
 up most of the frame. the filmstrip gallery view attempts this but that view was not supposed to change,
 list view should also have resizable panels"*). In grid and list, selecting an asset opens the **inspection
 column on the right** — A4's stage, then the folded facts — and the line between them is a draggable
-handle. Dragging it left gives the thumbnail column less room and the picture more: the share runs 15–85%,
-and the pixel floors are **160px of thumbnails** and **240px of preview**, so the pane always knows the
-smallest legal pair. Below `160 + 240 + 12 = 412px` there is no room for two columns, so the pane stacks
+handle. Dragging it left gives the thumbnail column less room and the picture more: the share runs 10–85%,
+and the pixel floors are **120px of thumbnails** and **240px of preview**, so the pane always knows the
+smallest legal pair. Below `120 + 240 + 12 = 372px` there is no room for two columns, so the pane stacks
 them and the handle goes with them.
 
 The arithmetic that makes it fit is one line: **the 12px handle is carved out of the preview's share, not
@@ -175,17 +178,17 @@ the two columns' bases already summed to 100% **and** the row kept its 12px gap 
 `minmax(min(240px, 100%), 1fr)` — so a narrow thumbnail column shrinks its one tile instead of overflowing.
 
 **THE PANE USES THE HOST'S RANGE, NOT ITS OWN** (founder, 2026-10-18: *"i can resize the left panel to
-narrowest width but it snaps back to bigger size"*). The widened 15–85% range shipped in both halves, but a
+narrowest width but it snaps back to bigger size"*). The widened 10–85% range shipped in both halves, but a
 running app from before that build still clamps every write to 0.3–0.8. The pane was offering the new floor,
 the host stored the old one, and the divider jumped back the moment it was released. The view route now
 answers `splitBounds` on every read and write; the pane intersects that with its own range and the two pixel
 floors. A host from before the field (the one still running) omits it, and the pane falls back to exactly
 that host's **0.3–0.8** — so a drag to the floor stays where it was dropped. Restart the app and the new host
-answers 0.15, and the full range opens without another edit.
+answers 0.1, and the full range opens without another edit.
 
-`gallery` keeps the shape it shipped with: the stage at the pane's width, the 56×74 frames in one strip
-under it, the facts in the side column at the fixed 3:2 pair, and **no handle**. The founder asked for that
-view to be left alone; the resizable inspection column is grid/list's job.
+`gallery` keeps its shape — main thumb on top, the 56×74 frames in one strip under it — and now gets the
+whole width for the picture: its facts float bottom-right over the stage, and there is still **no handle**.
+The resizable split remains grid/list's job.
 
 **THE TOP THREE ROWS STAY, AND EACH COLUMN SCROLLS ITSELF** (founder, 2026-10-18: *"the left panel can
 scroll but not the right, the top 3 rows are sticky"*). The pane used to be **one scroll box**, so the
@@ -198,7 +201,7 @@ not scroll the thumbnails. Two CSS facts make it real, and both were measured in
 than assumed: the row needs a **zero flex basis** (`1 1 0`) so it takes the space left by the top block, and
 each column needs **`height: 100%`** — `align-items: stretch` does **not** shrink a flex line whose content
 is taller than the row, so without the explicit height the columns were 2,000px tall inside a 646px row and
-`overflow-y: auto` had nothing to scroll. When the pane is narrower than 412px the pair stacks, the columns
+`overflow-y: auto` had nothing to scroll. When the pane is narrower than 372px the pair stacks, the columns
 go back to `height: auto` / `overflow: visible`, and the **row** becomes the scroll box instead, because two
 column scrollbars in a stacked pair would nest.
 
@@ -214,13 +217,26 @@ prominent elevation. It is bottom-anchored, so opening the facts grows the card 
 they outgrow it. Because the card owns the lower-right corner, the stage's **hint and zoom controls move to the
 top** (`top: 8`) in this mode — the card can never cover Fit or 1:1.
 
-Two cases deliberately do NOT float: **gallery** already has a second stage in its main column and a facts
-column of its own, and a **stacked** pair has no side-by-side preview to float over (its row scrolls). Both
-keep the block in flow; the card is the grid/list inspection layout's own.
+Gallery floats too (2026-10-18), with one difference: its card is rendered **inside the gallery stage**, above
+the strip, so the 56×74 filmstrip stays fully visible. One case deliberately does NOT float: a **stacked**
+pair has no side-by-side preview to float over (its row scrolls), so the block stays in flow under the stage.
 
 The tile changed with the same pass: the on-image badges are gone, the thumbnail is the card, the name is the
 **full file name**, and the **size chip is below the picture** in the text area. A tile no longer repeats the
 folder it came from; that is a fact of the metadata card.
+
+**THE FILMSTRIP IS A CAROUSEL, AND THE SCROLLBARS ARE 10px** (founder, 2026-10-18: *"its very hard to get
+the mouse hit on scroll bar. also add caurosel, left/right buttons on hover"*). Hovering the gallery's main
+thumb reveals **left/right chevrons** at its mid-left and mid-right. They move the **selection** one frame —
+wrapping at either end — so the filmstrip does not have to be grabbed at all; a small effect scrolls the
+newly selected frame into view with `scrollIntoView({ inline: 'nearest' })`. The arrows are hover-only (the
+picture is clean at rest) and carry `aria-label`s for a screen reader.
+
+The scrollbar itself is also easier to hit: every scroll container in the pane — the thumbnail column, the
+preview column, the floating facts card, the stacked row and the filmstrip — wears `dsh-assets-scroll`, and
+the bundle's sheet styles `::-webkit-scrollbar` as a **10px track with a 6px thumb** (the thumb brightens on
+hover). macOS's overlay bar is a few transparent pixels until it is already scrolling; this makes it a
+visible target. The filmstrip keeps its horizontal bar as a fallback for a long folder.
 
 ### The harness grew a `Button`, and that closed a real gap
 

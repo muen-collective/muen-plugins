@@ -116,7 +116,7 @@ const detailBody = {
 
 const looseDetail = { ...detailBody, path: LOOSE, name: 'hand-added.jpg', ext: 'jpg', bytes: 0, dimensions: null, provenance: null, prompt: null, values: [], carrier: { format: 'jpeg', supported: false, hasGraph: false, api: null, ui: null, label: false, complete: true, error: null } }
 
-let view = { schema: 'muen-assets-view/v1', view: 'grid', context: null, date: null, selected: null, splitBounds: { min: 0.15, max: 0.85 } }
+let view = { schema: 'muen-assets-view/v1', view: 'grid', context: null, date: null, selected: null, splitBounds: { min: 0.1, max: 0.85 } }
 const posted = []
 // EVERY READ AND WRITE THE PANE MAKES, in order: the refresh and the split assert against it (a
 // control's whole behaviour is the request it issues), so the stub that answers them records them.
@@ -659,8 +659,9 @@ async function render(passes = 4) {
   // *"the grid view is missing the large image on right"*.
   const main2 = collect(tree, (node) => node.props && node.props['data-assets-main'] === 'yes')[0]
   check('the two columns take the share the view file holds — 60 / 40 by default', !!main2 && main2.props.style.flex === '0 0 60%' && !!side && side.props.style.flex === '0 0 calc(40% - 12px)', JSON.stringify({ main: main2 && main2.props.style.flex, side: side && side.props.style.flex }))
-  check('each keeps its own floor, so the pane’s width is still the breakpoint', !!side && side.props.style.minWidth === 240 && main2.props.style.minWidth === 160, JSON.stringify({ main: main2 && main2.props.style.minWidth, side: side && side.props.style.minWidth }))
+  check('each keeps its own floor, so the pane’s width is still the breakpoint', !!side && side.props.style.minWidth === 240 && main2.props.style.minWidth === 120, JSON.stringify({ main: main2 && main2.props.style.minWidth, side: side && side.props.style.minWidth }))
   check('and the divider is a real element between them, not a gap in the row', !!collect(tree, (node) => node.props && node.props['data-assets-split'] === 'yes')[0] && columns.props.style.gap === 0, JSON.stringify({ gap: columns.props.style.gap }))
+  check('the columns wear the class that gives them a 10px scrollbar', !!main && main.props.className === 'dsh-assets-scroll' && !!side && side.props.className === 'dsh-assets-scroll', JSON.stringify({ main: main && main.props.className, side: side && side.props.className }))
   check('and the block it holds is a sibling of the grid, not a child of it', !!side && collect(side, (node) => node.props && node.props['data-assets-grid'] === 'yes').length === 0, 'the grid is inside the side column')
 
   // ── THE FACTS ARE A FLOATING CARD OVER THE PICTURE (2026-10-18) ──────────
@@ -840,6 +841,13 @@ async function render(passes = 4) {
     /\.dsh-assets-menu \{ background: var\(--dsw-alias-bg-layer-2\); backdrop-filter: none; border: 0\.5px solid var\(--dsw-alias-border-l3\);/.test(sheetText),
     (sheetText.match(/\.dsh-assets-menu \{[^\n]*/) || ['no rule'])[0],
   )
+  // A SCROLLBAR A MOUSE CAN HIT (2026-10-18): macOS's overlay bar is a few transparent pixels until
+  // it is already scrolling, so the pane's scroll containers get a real 10px track with a 6px thumb.
+  check(
+    'and the sheet gives every scroll container a 10px track a mouse can hit',
+    /\.dsh-assets-scroll::-webkit-scrollbar \{ width: 10px; height: 10px; \}/.test(sheetText) && /\.dsh-assets-scroll::-webkit-scrollbar-thumb \{ background: var\(--dsw-alias-border-l3\)/.test(sheetText),
+    (sheetText.match(/\.dsh-assets-scroll[^\n]*/) || ['no rule'])[0],
+  )
 
   const rows = collect(tree, (node) => node.props && node.props.role === 'menuitem')
   // `All` plus the one context in the fixture, and `All` plus the two days: the rows are the catalog's own counts.
@@ -894,17 +902,69 @@ async function render(passes = 4) {
   check('a picked thumbnail is drawn big, in the stage A4 built', stage.length === 1, stage.length + ' stages')
   const marked = collect(tree, (node) => node.props && node.props['data-assets-frame-on'] === 'yes')
   check('and its thumbnail is the marked one in the strip', marked.length === 1 && marked[0].props['data-assets-frame'] === RECORDED, marked.length ? String(marked[0].props['data-assets-frame']) : 'none')
+
+  // MAIN THUMB TOP, FILMSTRIP BOTTOM, FACTS FLOATING BOTTOM-RIGHT (2026-10-18). The founder asked for
+  // this after the first filmstrip restore: *"fix the main thumb top+filmstrip bottom. it should also
+  // have metadata bottom right to make the main thumb bigger"*. The stage takes the column's height,
+  // the strip is a fixed row under it, and the facts are the same floating card as grid/list — inside
+  // the STAGE box, so the card never covers the strip.
+  const gallery = collect(tree, (node) => node.props && node.props['data-assets-gallery'] === 'yes')[0]
+  const galleryStage = collect(tree, (node) => node.props && node.props['data-assets-gallery-stage'] === 'yes')[0]
+  const galleryStrip = collect(tree, (node) => node.props && node.props['data-assets-gallery-strip'] === 'yes')[0]
   const meta = collect(tree, (node) => node.props && node.props['data-assets-meta'] === 'yes')[0]
-  check('the block beside it draws the facts and NOT a second picture', !!meta && collect(meta, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 0, meta ? 'facts only' : 'no block')
-  // THE FLOATING CARD IS GRID/LIST'S (2026-10-18): gallery's stage is its main column and the facts
-  // already have their own column, so there is nothing for a card to float over. It stays in flow.
-  check('gallery keeps its facts in flow, not as a floating card', !!meta && meta.props['data-assets-meta-float'] === 'no' && meta.props.style.position === undefined, meta ? JSON.stringify({ float: meta.props['data-assets-meta-float'], position: meta.props.style.position }) : 'no block')
-  // THE GALLERY KEEPS THE FIXED 3:2 PAIR AND NO HANDLE. The split belongs to grid and list; putting it
-  // here would change the view the founder asked to leave alone.
+  // Read the ORDER from the gallery's own children, not by node identity: the tree walk re-creates
+  // component output, so two separately collected nodes can be equal in shape without being the same
+  // object.
+  const galleryChildren = (gallery && gallery.children) || []
+  check(
+    'the stage is the top and the strip is the bottom',
+    !!gallery && !!galleryStage && !!galleryStrip && !!galleryChildren[0] && galleryChildren[0].props['data-assets-gallery-stage'] === 'yes' && !!galleryChildren[1] && galleryChildren[1].props['data-assets-gallery-strip'] === 'yes',
+    JSON.stringify(galleryChildren.map((c) => (c && c.props) || null).map((props) => props && (props['data-assets-gallery-stage'] || props['data-assets-gallery-strip'] || 'other'))),
+  )
+  check('the main thumb takes the height the strip leaves', !!stage[0] && stage[0].props.style.height === '100%' && stage[0].props.style.border === 0, stage[0] ? JSON.stringify({ height: stage[0].props.style.height, border: stage[0].props.style.border }) : 'no stage')
+  check('the strip stays a fixed row under it', !!galleryStrip && galleryStrip.props.style.flex === '0 0 auto' && galleryStrip.props.className === 'dsh-assets-scroll', galleryStrip ? JSON.stringify({ flex: galleryStrip.props.style.flex, class: galleryStrip.props.className }) : 'no strip')
+  check('the facts are a floating card inside the stage, bottom-right', !!meta && meta.props['data-assets-meta-float'] === 'yes' && meta.props.style.position === 'absolute' && meta.props.style.bottom === 8 && meta.props.style.right === 8 && !!galleryStage && collect(galleryStage, (node) => node.props && node.props['data-assets-meta'] === 'yes').length === 1, meta ? JSON.stringify({ float: meta.props['data-assets-meta-float'], position: meta.props.style.position, bottom: meta.props.style.bottom, right: meta.props.style.right }) : 'no block')
+  check('and the card holds no second picture', !!meta && collect(meta, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 0, 'the card contains a stage')
+
+  // CAROUSEL (2026-10-18): *"its very hard to get the mouse hit on scroll bar. also add caurosel,
+  // left/right buttons on hover"*. The arrows are hover-only and move the SELECTION one frame; the
+  // strip follows via `scrollIntoView`. No strip scrollbar is required to navigate.
+  const arrowsAt = (node) => collect(node, (c) => c.props && c.props['data-assets-carousel'] !== undefined)
+  check('no carousel arrows at rest', arrowsAt(tree).length === 0, arrowsAt(tree).length + ' arrows')
+  galleryStage.props.onMouseEnter()
+  mini.reset()
+  tree = pane({ locale: { bind: () => t } })
+  const prevArrow = arrowsAt(tree).find((node) => node.props['data-assets-carousel'] === 'prev')
+  const nextArrow = arrowsAt(tree).find((node) => node.props['data-assets-carousel'] === 'next')
+  check('hovering the main thumb reveals both arrows', !!prevArrow && !!nextArrow && prevArrow.props['aria-label'] === EN['pane.carousel.prev'] && nextArrow.props['aria-label'] === EN['pane.carousel.next'], arrowsAt(tree).map((node) => String(node.props['data-assets-carousel'])).join(','))
+  posted.length = 0
+  if (nextArrow) {
+    nextArrow.props.onClick()
+    await settle()
+  }
+  check('the right arrow selects the next frame', posted.some((entry) => entry.url.includes('/view') && entry.body.selected === LOOSE), JSON.stringify(posted.slice(-2)))
+
+  // THE OTHER DIRECTION, FROM THE LAST FRAME, lands on the first.
+  view = { ...view, selected: LOOSE }
+  tree = await render()
+  const stageForPrev = collect(tree, (node) => node.props && node.props['data-assets-gallery-stage'] === 'yes')[0]
+  stageForPrev.props.onMouseEnter()
+  mini.reset()
+  tree = pane({ locale: { bind: () => t } })
+  const backArrow = arrowsAt(tree).find((node) => node.props['data-assets-carousel'] === 'prev')
+  posted.length = 0
+  if (backArrow) {
+    backArrow.props.onClick()
+    await settle()
+  }
+  check('the left arrow selects the previous frame', posted.some((entry) => entry.url.includes('/view') && entry.body.selected === RECORDED), JSON.stringify(posted.slice(-2)))
+
+  // NO SIDE COLUMN, NO HANDLE. The facts column is what made the main thumb smaller; it is gone, so
+  // the gallery main column takes the whole row and the split stays a grid/list control.
   const main = collect(tree, (node) => node.props && node.props['data-assets-main'] === 'yes')[0]
   const side = collect(tree, (node) => node.props && node.props['data-assets-side'] === 'yes')[0]
-  check('gallery keeps its shipped 3:2 columns', !!main && main.props.style.flex === '3 1 0' && !!side && side.props.style.flex === '2 1 0', JSON.stringify({ main: main && main.props.style.flex, side: side && side.props.style.flex }))
-  check('and no draggable handle, because this view was not supposed to change', collect(tree, (node) => node.props && node.props['data-assets-split'] === 'yes').length === 0, 'a handle was drawn in gallery')
+  check('gallery has no facts column and takes the whole width', !!main && main.props.style.flex === '1 1 100%' && !side, JSON.stringify({ main: main && main.props.style.flex, side: !!side }))
+  check('and no draggable handle — the split is grid/list only', collect(tree, (node) => node.props && node.props['data-assets-split'] === 'yes').length === 0, 'a handle was drawn in gallery')
   view = { ...view, view: 'grid', selected: null }
 }
 
@@ -1107,14 +1167,14 @@ note('the live layer is the founder’s eyes: the bar, the two columns, the hove
   const api = await loadClient({ React: mini.React })
   const { splitOf, splitFrom, splitBounds, splitWidths, SPLIT_MIN, SPLIT_MAX, SPLIT_DEFAULT, SPLIT_HANDLE, MAIN_FLOOR, SIDE_FLOOR, STACK_BELOW } = api.exports.split
   check('the default share is inside its own bounds', SPLIT_DEFAULT >= SPLIT_MIN && SPLIT_DEFAULT <= SPLIT_MAX, String(SPLIT_DEFAULT))
-  // THE FLOORS ARE PIXELS, SO THE RANGE DEPENDS ON THE PANE'S WIDTH (2026-10-18): 160px of thumbnails
+  // THE FLOORS ARE PIXELS, SO THE RANGE DEPENDS ON THE PANE'S WIDTH (2026-10-18): 120px of thumbnails
   // and 240px of preview are what a drag may not cross, and the handle's 12px comes out of the preview's
   // share. At 1000px that is 16%–74.8%; at 2000px the static 15%–85% is the only bound.
   const hostLimits = { min: SPLIT_MIN, max: SPLIT_MAX }
   const at1000 = splitBounds(1000, hostLimits)
-  check('a 1000px row already narrows the range to its two floors', at1000.min === 0.16 && at1000.max === 0.748, JSON.stringify(at1000))
+  check('a 1000px row already narrows the range to its two floors', at1000.min === 0.12 && at1000.max === 0.748, JSON.stringify(at1000))
   const at2000 = splitBounds(2000, hostLimits)
-  check('a 2000px row is bounded only by the static 15–85%', at2000.min === SPLIT_MIN && at2000.max === SPLIT_MAX, JSON.stringify(at2000))
+  check('a 2000px row is bounded only by the static 10–85%', at2000.min === SPLIT_MIN && at2000.max === SPLIT_MAX, JSON.stringify(at2000))
   check('the stack point is both floors plus the handle, and that is the pane’s breakpoint', STACK_BELOW === MAIN_FLOOR + SIDE_FLOOR + SPLIT_HANDLE, String(STACK_BELOW))
   // THE HOST THAT ANSWERS NO BOUNDS (2026-10-18) is the 0.3–0.8 build still running. The pane must use
   // ITS range, not the widened one: otherwise a drag to 0.2 renders, the host stores 0.3 on release,
@@ -1126,8 +1186,8 @@ note('the live layer is the founder’s eyes: the bar, the two columns, the hove
   // THE MEASURED ROW IS LAID OUT IN EXACT PIXELS (2026-10-18): `main + handle + side === width` for
   // every width and share, and neither floor is ever crossed. A subpixel over the row would wrap the
   // preview under the grid — the bug this range and arithmetic exist to prevent.
-  const rows = [412, 500, 700, 1000, 1440, 2000, 3200]
-  const shares = [0, 0.15, 0.3, 0.5, 0.6, 0.75, 0.85, 1]
+  const rows = [372, 412, 500, 700, 1000, 1440, 2000, 3200]
+  const shares = [0, 0.1, 0.15, 0.3, 0.5, 0.6, 0.75, 0.85, 1]
   const sumsExact = []
   const floorsKept = []
   for (const width of rows) {
@@ -1192,7 +1252,7 @@ note('the live layer is the founder’s eyes: the bar, the two columns, the hove
   check('the listeners are removed when the drag ends', listeners.size === 0, JSON.stringify([...listeners.keys()]))
 
   // THE PREVIEW CAN TAKE MOST OF THE FRAME (2026-10-18). Dragging the line far left leaves the
-  // thumbnail column its 160px floor and gives the rest to the picture — the point of the split for
+  // thumbnail column its 120px floor and gives the rest to the picture — the point of the split for
   // detail inspection. A second drag proves the range reaches there, not just the default's vicinity.
   tree = await render()
   const leftHandle = collect(tree, (node) => node.props && node.props['data-assets-split'] === 'yes')[0]
@@ -1219,7 +1279,7 @@ note('the live layer is the founder’s eyes: the bar, the two columns, the hove
 
 {
   // THE HOST STILL RUNNING FROM BEFORE THE WIDENING (2026-10-18). It answers no `splitBounds`, so the
-  // pane must use its 0.3 floor — not the widened 0.15 it ships with. This is the pane-level proof of
+  // pane must use its 0.3 floor — not the widened 0.1 it ships with. This is the pane-level proof of
   // the founder's *"it snaps back to bigger size"*: a release below 0.3 is stored at 0.3, and the
   // handle never renders below the floor in the first place, so there is nothing to jump back from.
   const savedBounds = view.splitBounds

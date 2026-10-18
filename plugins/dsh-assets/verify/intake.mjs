@@ -209,18 +209,18 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
   check('and a date that is not YYYY-MM-DD is refused, not stored', badDate.statusCode === 400 && badDate.json().error === 'bad-date', badDate.statusCode + ' ' + JSON.stringify(badDate.json()))
 
   // THE SPLIT (2026-10-17; range widened 2026-10-18 for detail inspection). The pane and the host both
-  // clamp a share to 0.15–0.85, and the two halves ship as separate files — so what the STORE answers is
+  // clamp a share to 0.1–0.85, and the two halves ship as separate files — so what the STORE answers is
   // asserted here, not assumed from the pane.
   const fresh = await call(viewHandler, 'GET', VIEW_PATH)
   check('a view file with no split answers the default 0.6', fresh.json().split === 0.6, JSON.stringify(fresh.json().split))
-  // THE PANE MUST KNOW THE HOST'S RANGE (2026-10-18). Without it, a pane built for 0.15–0.85 lets a
-  // drag reach 0.15, this host clamps the write to 0.3, and the divider snaps back on release.
+  // THE PANE MUST KNOW THE HOST'S RANGE (2026-10-18). Without it, a pane built for 0.1–0.85 lets a
+  // drag reach 0.1, this host clamps the write to 0.3, and the divider snaps back on release.
   const freshBounds = fresh.json().splitBounds
-  check('the read answers the split bounds, so the pane can stay inside what this host will store', !!freshBounds && freshBounds.min === 0.15 && freshBounds.max === 0.85, JSON.stringify(freshBounds))
+  check('the read answers the split bounds, so the pane can stay inside what this host will store', !!freshBounds && freshBounds.min === 0.1 && freshBounds.max === 0.85, JSON.stringify(freshBounds))
 
   const stored = await call(viewHandler, 'POST', VIEW_PATH, { split: 0.72 })
   check('the host stores the share a drag asked for', stored.statusCode === 200 && stored.json().split === 0.72, stored.statusCode + ' ' + JSON.stringify(stored.json().split))
-  check('and a write answers those bounds too, so a release uses the host it just talked to', !!stored.json().splitBounds && stored.json().splitBounds.min === 0.15 && stored.json().splitBounds.max === 0.85, JSON.stringify(stored.json().splitBounds))
+  check('and a write answers those bounds too, so a release uses the host it just talked to', !!stored.json().splitBounds && stored.json().splitBounds.min === 0.1 && stored.json().splitBounds.max === 0.85, JSON.stringify(stored.json().splitBounds))
   // The bounds are an ANSWER, not a fact: the view file holds what a person chose, nothing else.
   const rawView = JSON.parse(readFileSync(join(dataRoot, 'view.json'), 'utf8'))
   check('the bounds are not written into the view file', rawView.splitBounds === undefined, JSON.stringify(Object.keys(rawView)))
@@ -232,7 +232,7 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
   const tooWide = await call(viewHandler, 'POST', VIEW_PATH, { split: 0.95 })
   check('a share past the ceiling is clamped to 0.85 rather than refused', tooWide.statusCode === 200 && tooWide.json().split === 0.85, tooWide.statusCode + ' ' + JSON.stringify(tooWide.json().split))
   const tooNarrow = await call(viewHandler, 'POST', VIEW_PATH, { split: 0.01 })
-  check('and a share under the floor is clamped to 0.15', tooNarrow.statusCode === 200 && tooNarrow.json().split === 0.15, tooNarrow.statusCode + ' ' + JSON.stringify(tooNarrow.json().split))
+  check('and a share under the floor is clamped to 0.1', tooNarrow.statusCode === 200 && tooNarrow.json().split === 0.1, tooNarrow.statusCode + ' ' + JSON.stringify(tooNarrow.json().split))
   const nonsense = await call(viewHandler, 'POST', VIEW_PATH, { split: 'wide' })
   check('a split that is not a number falls back to the default, not NaN', nonsense.statusCode === 200 && nonsense.json().split === 0.6, nonsense.statusCode + ' ' + JSON.stringify(nonsense.json().split))
   const untouched = await call(viewHandler, 'POST', VIEW_PATH, { view: 'list' })
