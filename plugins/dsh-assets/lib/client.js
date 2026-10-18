@@ -36,6 +36,10 @@ window.__ModuleLoader__.load({
     // The bar's filters wear the app's own disclosure chevron (polish pass, 2026-09-26).
     const IconChevronDownOutline16 = icon('IconChevronDownOutlineRegular', 'IconChevronDown16')
     const IconSearchOutline16 = icon('IconSearchOutlineRegular', 'IconSearchOutline16')
+    // The refresh control (founder, 2026-10-17: *"it needs a refresh button to refresh the view so
+    // when agent does housecleaning the user can update the view"*). The app's own glyph, so it sits
+    // beside the bar's other marks at the same weight.
+    const IconRefreshOutline16 = icon('IconRefreshOutlineRegular', 'IconRefreshOutline16')
     // The Generate surface's own glyph, which is what tells a person where this control goes
     // (epic 64 S7).
     const IconSparkle16 = icon('IconSparkleRegular', 'IconSparkle16')
@@ -112,6 +116,14 @@ window.__ModuleLoader__.load({
       'pane.view.gallery': 'Gallery',
       'pane.gallery.pick': 'Pick a thumbnail below to look at it closely',
       'pane.search.placeholder': 'Search by name or prompt',
+      // THE REFRESH CONTROL'S WORDS (founder, 2026-10-17): the sentence says what it re-reads, and the
+      // label names the thing that changed on disk rather than the word "refresh" alone.
+      'pane.refresh': 'Refresh',
+      'pane.refresh.hint': 'Re-read these folders — files added or moved outside the app show up here.',
+      'pane.refreshed': '{n} assets — up to date',
+      // THE DIVIDER: a split a person can drag, and a way back to the default one.
+      'pane.split': 'Drag to resize the columns — double-click to reset',
+      'pane.split.reset': 'Default columns',
       'pane.selected': 'Selected',
       'meta.file': 'File',
       'meta.dimensions': 'Dimensions',
@@ -140,6 +152,10 @@ window.__ModuleLoader__.load({
       'meta.prompt': 'Prompt',
       'meta.values': 'Values',
       'meta.noRecord': 'No run made this file — it is listed with the file\'s own facts only.',
+      // THE DISCLOSURE'S TWO HOVER SENTENCES (2026-10-17): the row itself says the file's name, so the
+      // tip only has to say what the press does.
+      'meta.facts.show': 'Show this file\'s details',
+      'meta.facts.hide': 'Hide this file\'s details',
       // THE DESTRUCTIVE ACT, in Finder's own words: the control says Delete (what a person
       // calls it), the confirm says Move to Trash (what actually happens).
       'meta.delete': 'Delete',
@@ -197,6 +213,11 @@ window.__ModuleLoader__.load({
       'pane.view.gallery': '画廊',
       'pane.gallery.pick': '在下方选择缩略图以便细看',
       'pane.search.placeholder': '按名称或提示词搜索',
+      'pane.refresh': '刷新',
+      'pane.refresh.hint': '重新读取这些文件夹——在应用之外新增或移动的文件会出现在这里。',
+      'pane.refreshed': '{n} 项资产 —— 已是最新',
+      'pane.split': '拖动可调整两栏宽度——双击恢复默认',
+      'pane.split.reset': '恢复默认宽度',
       'pane.selected': '已选择',
       'meta.file': '文件',
       'meta.dimensions': '尺寸',
@@ -222,6 +243,8 @@ window.__ModuleLoader__.load({
       'meta.prompt': '提示词',
       'meta.values': '参数',
       'meta.noRecord': '这个文件不是运行产生的——只列出文件本身的信息。',
+      'meta.facts.show': '展开此文件的详细信息',
+      'meta.facts.hide': '收起此文件的详细信息',
       'meta.delete': '删除',
       'meta.deleteAsk': '移到废纸篓？',
       'meta.deleteYes': '移到废纸篓',
@@ -240,20 +263,48 @@ window.__ModuleLoader__.load({
 
     /** The pane's ink, in the harness's own aliases so it follows the theme. */
     const S = {
-      pane: { display: 'flex', flexDirection: 'column', gap: 12, padding: '18px 16px', height: '100%', overflow: 'auto' },
+      // THE PANE IS A COLUMN, SO EVERY CHILD IS A FLEX ITEM — and a flex item's default is `flex: 0 1 auto`,
+      // which means it MAY SHRINK. The tab strip carries `overflowY: hidden`, and an `overflow` other than
+      // `visible` removes the automatic minimum size a flex item otherwise gets, so under the grid's weight
+      // the strip shrank to a two-pixel sliver (founder, 2026-10-17: *"tabs are there but clipped"*). Every
+      // fixed row in this pane therefore says `flex: 0 0 auto` out loud: a toolbar is not a flexible thing.
+      // THE PANE ITSELF DOES NOT SCROLL (2026-10-18): it is a fixed frame around a fixed top block and
+      // a columns row that owns the scrolling. The loading, error and empty states restore `auto`
+      // inline, because there the pane is still one sheet of content.
+      // `boxSizing: border-box` matters now that the pane is a fixed frame: without it the 36px of
+      // vertical padding is added ON TOP of `height: 100%`, so the columns row would hang past the
+      // pane's bottom by the padding it never counted.
+      pane: { display: 'flex', flexDirection: 'column', gap: 12, padding: '18px 16px', height: '100%', minHeight: 0, boxSizing: 'border-box', overflow: 'hidden' },
+      // THE THREE ROWS THAT STAY PUT: the header, the folder tabs and the bar. `flex: 0 0 auto` is what
+      // keeps them at their content height so the columns get the rest of the pane.
+      top: { display: 'flex', flexDirection: 'column', gap: 12, flex: '0 0 auto', minWidth: 0, minHeight: 0 },
       centre: { margin: 'auto 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center', maxWidth: 380, alignSelf: 'center' },
       title: { color: 'var(--dsw-alias-label-primary)', fontSize: 14, fontWeight: 600 },
       body: { color: 'var(--dsw-alias-label-secondary)', fontSize: 13, lineHeight: '19px' },
       muted: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11.5, lineHeight: '17px' },
-      facts: { display: 'flex', flexDirection: 'column', gap: 2, width: '100%', paddingTop: 4 },
-      row: { display: 'flex', justifyContent: 'space-between', gap: 12, minWidth: 0 },
       glyph: { color: 'var(--dsw-alias-label-tertiary)', display: 'flex' },
-      head: { display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' },
-      folderRow: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 },
-      // A FOLDER A PERSON ADDED IS A PLACE, so its name is the way there: the glyph says what
-      // it is, the name is the button, and Finder opens it (`pane.reveal`).
-      folderButton: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: '1 1 auto', padding: '2px 4px', background: 'transparent', border: 0, borderRadius: 6, cursor: 'pointer', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5, textAlign: 'left' },
-      folderName: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+      head: { display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between', flex: '0 0 auto' },
+      // ── THE FOLDER TABS (2026-10-17) ─────────────────────────────────────────
+      //
+      // ONE ROW, SCROLLING SIDEWAYS, not a stacked list: the folders are places to switch between, so they
+      // read as the harness's own tab strip one row down — a muted label at rest, and the ACTIVE tab
+      // wearing the app's outline (`--dsw-alias-border-l3`, the same pair the DSH strip uses). Nothing
+      // here is a card: a tab is a label with a hit area, not a block.
+      //
+      // `flex: '0 0 auto'` with `flexWrap: 'nowrap'` is what keeps a strip a strip: names never truncate
+      // into each other, the row scrolls when there are many folders, and a long path cannot push the
+      // controls below it off the pane.
+      tabs: { display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden', paddingBottom: 2, minWidth: 0, flex: '0 0 auto', minHeight: 26 },
+      tab: { display: 'inline-flex', alignItems: 'center', gap: 2, flex: '0 0 auto', padding: '0 2px 0 0', border: '0.5px solid transparent', borderRadius: 7, minWidth: 0 },
+      tabOn: { borderColor: 'var(--dsw-alias-border-l3)' },
+      // The label itself is the switch: no fill, no border, the strip's own ink.
+      tabButton: { display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, padding: '3px 5px', border: 0, background: 'transparent', color: 'var(--dsw-alias-label-secondary)', font: 'inherit', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' },
+      tabGlyph: { color: 'var(--dsw-alias-label-tertiary)', display: 'flex', flex: '0 0 auto' },
+      tabLabel: { overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 },
+      // The count and the close sit in the SAME slot, so selecting a tab changes the control in place
+      // rather than growing the tab by a glyph.
+      tabCount: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 10.5, fontVariantNumeric: 'tabular-nums', paddingRight: 4 },
+      tabClose: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, padding: 0, border: 0, borderRadius: 5, background: 'transparent', color: 'var(--dsw-alias-label-tertiary)', cursor: 'pointer', flex: '0 0 auto' },
       // (Six style keys were deleted in the 2026-09-26 polish pass because nothing drew them:
       //  `path`, `indent` and `thumbEmpty` had been dead since the system-path and nested-date
       //  designs left, and `group`, `groupTitle` and `head2` died with the always-open filters.)
@@ -272,8 +323,12 @@ window.__ModuleLoader__.load({
       notice: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, padding: '0 2px' },
       // THE GRID, from the OS that shipped this surface: fluid columns, a 240px floor, no
       // breakpoints — the pane's own width is the only input (`repeat(auto-fit, minmax(240px, 1fr))`).
-      grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignContent: 'start' },
-      tile: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, padding: 0, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, background: 'var(--dsw-alias-bg-layer-2)', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' },
+      // THE FLOOR YIELDS TO THE COLUMN WHEN THE SPLIT MAKES IT NARROW (2026-10-18): the right-hand
+      // preview can now take most of the pane, and a 240px hard floor would overflow a 160px thumbnail
+      // column instead of letting its one tile shrink with it. `min(240px, 100%)` is the floor that
+      // still makes a wide pane several 240px columns.
+      grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 12, alignContent: 'start' },
+      tile: { display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0, padding: 0, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, background: 'var(--dsw-alias-bg-layer-2)', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' },
       // HOVER IS STATE, NOT A SHEET: every style in this pane is inline, so there is no `:hover`
       // to write — the tile carries the flag and swaps its own border (founder, 2026-09-23, on
       // the sibling's account arrow: *"add onhover on the website link arrow to theme primary
@@ -283,18 +338,21 @@ window.__ModuleLoader__.load({
       // ONE RATIO FOR EVERY TILE, so a grid stays a grid.
       thumb: { position: 'relative', width: '100%', aspectRatio: '3 / 4', background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2))', overflow: 'hidden' },
       thumbImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
-      badgeRow: { position: 'absolute', left: 6, bottom: 6, display: 'flex', alignItems: 'center', gap: 4, maxWidth: 'calc(100% - 12px)' },
-      // THE TWO BADGES ARE DIFFERENT KINDS OF FACT: the context is FILLED (where it belongs),
-      // the size is OUTLINED (how big it is). They must not read as the same statement.
-      badgeFill: { background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-primary)', fontSize: 10.5, lineHeight: '15px', padding: '0 5px', borderRadius: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.94 },
-      badgeLine: { border: '1px solid var(--dsw-alias-border-l3)', color: 'var(--dsw-alias-label-secondary)', fontSize: 10.5, lineHeight: '15px', padding: '0 4px', borderRadius: 4, whiteSpace: 'nowrap', letterSpacing: '0.02em' },
-      tileText: { padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 },
+      // NO OVERLAY ON THE PICTURE (2026-10-18). The tile used to carry two badges on top of the
+      // thumbnail: a filled context ("fashion people") and an outlined size. The founder asked for
+      // the picture to be the card and the facts to sit under it: *"the thumbnail fills the card and
+      // text is below, remove the badge fashion people ... 1.6 MB badge below the thumbnail card"*.
+      // The size survives as an outlined chip in the text area; the context lives in the facts card.
+      badgeLine: { border: '1px solid var(--dsw-alias-border-l3)', color: 'var(--dsw-alias-label-secondary)', fontSize: 10.5, lineHeight: '15px', padding: '0 4px', borderRadius: 4, whiteSpace: 'nowrap', letterSpacing: '0.02em', flex: '0 0 auto' },
+      // The text is BELOW the image, not on it: a little breathing room above the filename, and the
+      // card's own padding is the only inset around it.
+      tileText: { padding: '7px 8px 8px', display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 },
 
       // ── the polish pass (founder, 2026-09-26: *"now let's UX polish"*) ─────
       //
       // THE BAR IS ONE ROW: the search, the two layouts, the two filters and the count. The
       // grid then starts high, and a filter no longer owns the screen before the pictures do.
-      bar: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+      bar: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: '0 0 auto' },
       // THE COUNT IS A SUMMARY, not an uppercase group title: how much is here, and how much of
       // it the filters are showing.
       summary: { color: 'var(--dsw-alias-label-caption)', fontSize: 11, fontVariantNumeric: 'tabular-nums', marginLeft: 'auto', whiteSpace: 'nowrap' },
@@ -310,14 +368,57 @@ window.__ModuleLoader__.load({
       menuRowLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
       menuRowCount: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, fontVariantNumeric: 'tabular-nums' },
       clearButton: { border: 0, background: 'transparent', color: 'var(--dsw-alias-label-tertiary)', display: 'flex', cursor: 'pointer', padding: 0 },
-      // THE TWO COLUMNS. The breakpoint is the pane's own width, because the pane is what
-      // resizes: the grid keeps a 320px floor and the block a 280px one, and below that they
-      // stack — the same rule the workflow surface already uses.
-      columns: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start', minWidth: 0 },
-      // The floors are the SAME PAIR the workflow surface settled on (260 + 240 + the 12px gap):
-      // one number for the whole family, so a pane that shows two columns there shows them here.
-      columnMain: { flex: '3 1 0', minWidth: 260, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 },
-      columnSide: { flex: '2 1 0', minWidth: 240, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 },
+      // THE REFRESH CONTROL (founder, 2026-10-17). A glyph at the bar's end, sized to sit level with
+      // the filters' 32px and wearing the same hairline family, so the row still reads as one strip of
+      // controls. The mark turns while a read is running (`refreshBusy`) and the button refuses a
+      // second press, because a slow folder should be one read rather than a queue of them.
+      refreshButton: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto', width: 30, height: 30, padding: 0, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'transparent', color: 'var(--dsw-alias-label-secondary)', cursor: 'pointer' },
+      refreshBusy: { color: 'var(--dsw-alias-label-tertiary)', cursor: 'progress' },
+      // The fallback when the app's icon set is absent (the verify stub does not guarantee it).
+      refreshFallback: { fontSize: 13, lineHeight: '1' },
+      // THE TWO COLUMNS, AND THE LINE BETWEEN THEM (founder, 2026-10-17: *"the panel should be
+      // constructed w 2 resizable panels, a lot of times I need to see the larger image"*).
+      //
+      // THE SPLIT IS THE PERSON'S, so the columns stop being a fixed 3:2 pair: each takes its share of
+      // the free width from the view file (`split`), which is what makes the divider draggable and why
+      // a drag survives a reload. `flex: '0 0 N%'` rather than `flexGrow`, because a share of the free
+      // width is exactly what the drag computes — grow factors would re-divide whatever the floors
+      // leave over and the handle would drift away from the pointer.
+      //
+      // THE HANDLE IS PART OF THE SIDE'S SHARE, NOT AN EXTRA COLUMN (2026-10-18). It used to be a 12px
+      // flex item between columns whose bases already added to 100%, with the row's own `gap: 12` on
+      // both sides of it: 100% + 24px cannot fit, so the row wrapped and the preview fell UNDER the
+      // grid — the founder's *"the grid view is missing the large image on right"*. Now the row has no
+      // gap, the handle is 12px carved out of the side's share (`calc(R% - 12px)`), and the two columns
+      // plus the handle add up to exactly 100%.
+      //
+      // THE FLOORS ARE STILL THE CONTRACT: 160 + 240 + the 12px handle is the width below which there
+      // are not two columns, only a stack — the breakpoint is the pane's own width, because the pane is
+      // what resizes. The pane measures the row (`ResizeObserver`) and stacks below that number; when it
+      // does, the divider goes with it, since there is nothing to divide.
+      // THE ROW FILLS THE PANE'S REMAINING SPACE, and its main column fills the row's WIDTH. Without a
+      // `flex` a flex item is shrink-to-fit, so the `repeat(auto-fit, minmax(240px, 1fr))` grid inside it
+      // had a 240px container to divide and laid itself out in ONE column with the pane's width empty
+      // beside it (founder, 2026-10-17, in the same screenshot as the clipped tabs).
+      // The row clips (or scrolls, when stacked) and gives each column a DEFINITE height, which is what
+      // makes `overflowY: auto` on a column actually scroll instead of growing.
+      columns: { display: 'flex', flexWrap: 'wrap', gap: 0, alignItems: 'stretch', minWidth: 0, flex: '1 1 0', minHeight: 0, overflow: 'hidden' },
+      // The floors are MONOTONIC with the split: the thumbnail column may shrink to 160px, and the
+      // preview never goes below 240px, so dragging the handle all the way left makes the picture most
+      // of the frame instead of squeezing both columns into noise.
+      // EACH COLUMN IS ITS OWN SCROLL BOX (2026-10-18). `minHeight: 0` plus a definite height from the
+      // row is the flex rule that lets a child scroll instead of pushing its parent taller.
+      columnMain: { display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, height: '100%', flex: '1 1 100%', overflowY: 'auto', overflowX: 'hidden' },
+      columnSide: { display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, height: '100%', overflowY: 'auto', overflowX: 'hidden' },
+      // THE HANDLE. A 12px column that is mostly air: the line is what a person sees, the rest is what
+      // their pointer can actually hit, so the split is grabbable without the divider looking heavy.
+      // It is a flex item with a real 12px width, but the side's basis subtracts it, so the row still
+      // totals exactly 100%. `touchAction: none` because a drag on a trackpad must not also scroll the
+      // pane.
+      split: { flex: '0 0 12px', alignSelf: 'stretch', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'col-resize', touchAction: 'none', background: 'transparent' },
+      splitLine: { width: 1, alignSelf: 'stretch', borderRadius: 1, background: 'var(--dsw-alias-border-l2)', transition: 'background 120ms ease' },
+      // The handle under the pointer (or held): the brand accent, the app's own "this one".
+      splitLineOn: { background: 'var(--dsw-alias-brand-primary)' },
       // THE SKELETON wears the app's own token and the pane's own shape, so the library looks
       // like itself while it loads instead of throwing a spinner into the middle of nothing.
       skeletonTile: { border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, overflow: 'hidden', background: 'var(--dsw-alias-bg-layer-2)' },
@@ -340,6 +441,32 @@ window.__ModuleLoader__.load({
       // line where the layout had already drawn one, and a word naming a list of a file's facts is the
       // list's least informative line.
       meta: { display: 'flex', flexDirection: 'column', gap: 6 },
+      // THE FACTS ARE A FLOATING CARD IN THE PREVIEW (2026-10-18: *"make the metadata a floating
+      // accordion card"*). The picture is the panel; the facts sit on top of its lower-right corner in
+      // the app's own raised surface — the same card ink the menus use — instead of taking a column of
+      // their own and pushing the picture smaller. The card is bottom-anchored, so opening the
+      // accordion grows it UPWARD over the image; `maxHeight` keeps it inside the preview and its own
+      // `overflowY` scrolls the facts once they outgrow that. The stage's controls move to the
+      // TOP-right when the card is present, so the card never covers them.
+      metaFloat: {
+        position: 'absolute',
+        right: 8,
+        bottom: 8,
+        zIndex: 3,
+        width: 'min(360px, calc(100% - 16px))',
+        // THE TOP 56px ARE THE STAGE'S: the hint and the Fit / 1:1 controls live up there in fill
+        // mode, and a card that could grow to the full height would cover them exactly when a person
+        // opened the long facts. The card scrolls instead.
+        maxHeight: 'calc(100% - 64px)',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        boxSizing: 'border-box',
+        padding: '8px 10px',
+        borderRadius: 12,
+        border: '0.5px solid var(--dsw-alias-border-l3)',
+        background: 'var(--dsw-alias-bg-layer-2)',
+        boxShadow: 'var(--dsw-elevation-prominent, 0 8px 24px rgba(0, 0, 0, 0.28))',
+      },
       // THE INSPECT STAGE (epic 63 A4): the picture in a frame of its own, above the facts.
       // THE FRAME IS THE PICTURE'S SHAPE (founder, 2026-09-26: *"fix the main preview it should be same
       // aspect as the image or we can lock view as 3:4 as default"*). It was a fixed 280px-tall box, so a
@@ -360,6 +487,17 @@ window.__ModuleLoader__.load({
       metaRow: { display: 'flex', gap: 10, justifyContent: 'space-between', minWidth: 0 },
       metaKey: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11.5, whiteSpace: 'nowrap' },
       metaValue: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, textAlign: 'right', overflowWrap: 'anywhere', minWidth: 0 },
+      // ── the disclosure (2026-10-17) ────────────────────────────────────────
+      //
+      // THE BLOCK'S ALWAYS-ON ROW: a chevron, the file's name, and the two facts that orient a person.
+      // It is a `button`, so it carries no border or fill of its own — the row should read as the
+      // block's caption, not as a control sitting in a card. The name is the flexible part and clips;
+      // the summary is tabular so two pictures of the same size line up under each other.
+      factsToggle: { display: 'flex', alignItems: 'baseline', gap: 6, width: '100%', minWidth: 0, margin: 0, padding: '2px 0', border: 0, background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', textAlign: 'left', cursor: 'pointer' },
+      factsName: { flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 500 },
+      factsSummary: { flex: '0 0 auto', color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, fontVariantNumeric: 'tabular-nums' },
+      // The folded body, indented under the row that opened it so the hierarchy is visible at a glance.
+      factsBody: { display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 18, paddingTop: 2 },
       // THE HANDOFF'S ROW. The control is the block's one action, so it sits on its own line
       // under the run it belongs to rather than inside a fact row where it would read as one
       // more piece of metadata.
@@ -405,6 +543,102 @@ window.__ModuleLoader__.load({
         }
       }, [url, tick])
       return [state, () => setTick((value) => value + 1)]
+    }
+
+    // ── the two columns' arithmetic (the 2026-10-17 split) ─────────────────────
+    //
+    // THE SPLIT IS A SHARE, NOT A WIDTH, and it is kept as pure functions for the same reason the
+    // stage's zoom is: "a drag from this pointer lands on this share" and "neither column can be
+    // dragged out of existence" are claims a suite can assert without a browser.
+    //
+    // THE BOUNDS ARE THE SAME IN THE HOST AND HERE (`SPLIT_MIN`/`SPLIT_MAX`/`SPLIT_DEFAULT` in
+    // lib/index.js). They are duplicated because the two halves ship as separate files a profile
+    // composes independently — but they must agree, or a drag would be clamped in the pane and stored
+    // as something else, and the columns would move on the next read. `verify/intake.mjs` posts the
+    // bounds and asserts the host stores them.
+    //
+    // THE RANGE IS WIDE ON PURPOSE (2026-10-18): this is the detail-inspection surface, so the
+    // thumbnail column can go down to 15% and the preview can take 85% — the old 30% floor left the
+    // picture smaller than the wall of tiles it was meant to be inspected against.
+    const SPLIT_MIN = 0.15
+    const SPLIT_MAX = 0.85
+    const SPLIT_DEFAULT = 0.6
+    // A HOST THAT ANSWERS NO BOUNDS IS THE OLD HOST (2026-10-18). The widening above shipped with a
+    // host that also widened its clamp, but a running app from before that build still refuses a
+    // share below 0.3 — and the pane must not offer a drag the host will clamp away on release, which
+    // is the founder's *"it snaps back to bigger size"*. The view route now answers `splitBounds`;
+    // absent that field, the pane uses exactly the old build's range, so a drag to its floor stays
+    // put. After a restart the new host answers 0.15–0.85 and the full range opens by itself.
+    const HOST_SPLIT_FALLBACK = { min: 0.3, max: 0.8 }
+    // The 12px the handle itself occupies, carved out of the side's share rather than added to the row.
+    const SPLIT_HANDLE = 12
+    // The two columns' floors. Below MAIN + SIDE + HANDLE there is not enough width for two columns, so
+    // the pane stacks them (and hides the handle) — the pane's own width is the breakpoint.
+    const MAIN_FLOOR = 160
+    const SIDE_FLOOR = 240
+    const STACK_BELOW = MAIN_FLOOR + SIDE_FLOOR + SPLIT_HANDLE
+    // A pane whose width is not measured yet (a suite, or the first paint) is assumed wide enough that
+    // the static range is the only bound.
+    const ASSUMED_PANE_WIDTH = 1000
+
+    /** A share inside the interaction range — the one place the static bounds are applied in the pane. */
+    function splitOf(value) {
+      const number = typeof value === 'number' ? value : Number(value)
+      if (!Number.isFinite(number)) return SPLIT_DEFAULT
+      return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, number))
+    }
+
+    /**
+     * The share range a pane of this width can actually draw: the static range narrowed by the two
+     * floors, so a drag can never press a column below its minimum and wrap the row.
+     */
+    function splitBounds(width, limits = null) {
+      const usable = Number.isFinite(width) && width > 0 ? width : ASSUMED_PANE_WIDTH
+      // THE HOST'S RANGE, THEN THE CLIENT'S, THEN THE PANE'S OWN PIXEL FLOORS. The host's answer is
+      // what it will actually store; the client constants are the widest this build understands; the
+      // floors are what the columns can draw. Intersecting all three is what makes a release land
+      // where the pointer left it.
+      const hostMin = limits && Number.isFinite(limits.min) ? limits.min : HOST_SPLIT_FALLBACK.min
+      const hostMax = limits && Number.isFinite(limits.max) ? limits.max : HOST_SPLIT_FALLBACK.max
+      const min = Math.max(SPLIT_MIN, hostMin, MAIN_FLOOR / usable)
+      const max = Math.min(SPLIT_MAX, hostMax, (usable - SPLIT_HANDLE - SIDE_FLOOR) / usable)
+      // A pane too narrow for both floors stacks (the pane decides that), but the arithmetic still has
+      // to answer a legal pair; `max` never goes below `min`.
+      return { min, max: Math.max(min, max) }
+    }
+
+    /**
+     * The two columns' widths, in PIXELS, for a measured row. A percentage pair with `minWidth` floors
+     * can end up one subpixel over the row — round each share down and flexbox may push a floored
+     * column back up — and under `flex-wrap` a subpixel over is a wrapped preview, the bug this whole
+     * change exists to kill. Pixel bases are exact: `main + handle + side === width`, always.
+     *
+     * `main` is floored and the side is the remainder, so both floors are honoured at once: the share
+     * clamp guarantees `share * width >= MAIN_FLOOR` and `(1 − share) * width − handle >= SIDE_FLOOR`.
+     * A row with no measured width answers `null` and the pane falls back to percentages.
+     */
+    function splitWidths(width, share, limits = null) {
+      const row = Number(width)
+      if (!Number.isFinite(row) || row <= 0) return null
+      const bounds = splitBounds(row, limits)
+      // `0` IS A SHARE, not "missing": `|| SPLIT_DEFAULT` would turn a deliberate far-left drag into
+      // the middle of the pane, so the number is tested for finiteness rather than truthiness.
+      const wanted = typeof share === 'number' ? share : Number(share)
+      const live = Math.min(bounds.max, Math.max(bounds.min, Number.isFinite(wanted) ? wanted : SPLIT_DEFAULT))
+      const main = Math.floor(live * row)
+      return { share: main / row, main, side: row - SPLIT_HANDLE - main }
+    }
+
+    /**
+     * The share a pointer at `clientX` asks for, given the container the two columns divide.
+     *
+     * A container with no measured width answers `null` — the caller keeps what it has, because a
+     * zero-width frame is a pane that has not been laid out yet, and dividing by it would snap the
+     * line to a limit on the first pointer event.
+     */
+    function splitFrom(left, width, clientX) {
+      if (!Number.isFinite(width) || width <= 0) return null
+      return splitOf(((clientX || 0) - (left || 0)) / width)
     }
 
     /** Bytes as a person reads them. */
@@ -502,12 +736,9 @@ window.__ModuleLoader__.load({
       return { scale: 1, offset: { x: fw / 2 - at.x, y: fh / 2 - at.y } }
     }
 
-    /** The name without its extension: a picture is called by what it is, not by its format. */
-    function stemOf(name) {
-      const text = String(name || '')
-      const dot = text.lastIndexOf('.')
-      return dot > 0 ? text.slice(0, dot) : text
-    }
+    // `stemOf` lived here until 2026-10-18: a picture was called by its stem. The founder asked for
+    // the file name itself — *"the labels should be filename *.png or whatever"* — so every label
+    // (tile, list row, gallery tooltip, metadata header) reads `asset.name` whole.
 
     /** One filter row: a label, and the number of assets behind it. */
     /**
@@ -614,13 +845,21 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * ONE TILE. The 3/4 thumbnail, the name, and the two badges that are deliberately unlike
-     * each other: the context is FILLED (where the asset belongs) and the size is OUTLINED
-     * (how big it is). It is a button — `role`, `tabIndex`, Enter and Space — because a tile a
-     * keyboard cannot reach is a tile half the people cannot use.
+     * ONE TILE. A CARD WHOSE PICTURE IS THE TOP AND WHOSE FACTS ARE UNDER IT (2026-10-18). The
+     * founder's correction: *"the thumbnail fills the card and text is below, remove the badge fashion
+     * people, the labels should be filename *.png or whatever. 1.6 MB badge below the thumbnail card"*.
      *
-     * DRAGGABLE ONLY WHEN THERE ARE BYTES: an entry with a name and no file is listed (so a
-     * person can see the library knows about it) but nothing invents a file to carry.
+     * So there is NO overlay on the picture — no filled context chip, no size chip on top of the
+     * photograph. The card is the image, edge to edge; the text area below it carries the FULL FILE
+     * NAME (`lee_facecard.png`, extension and all) and a row with the size as an outlined chip, the
+     * date, and the Run/File marker. The context is still in the metadata card; a tile does not repeat
+     * the folder every picture came from.
+     *
+     * It is a button — `role`, `tabIndex`, Enter and Space — because a tile a keyboard cannot reach is
+     * a tile half the people cannot use.
+     *
+     * DRAGGABLE ONLY WHEN THERE ARE BYTES: an entry with a name and no file is listed (so a person can
+     * see the library knows about it) but nothing invents a file to carry.
      */
     function Tile({ asset, selected, onSelect, t, hovered = false, onHover = null }) {
       const carry = typeof asset.bytes === 'number' && asset.bytes > 0
@@ -629,7 +868,7 @@ window.__ModuleLoader__.load({
         {
           role: 'button',
           tabIndex: 0,
-          'aria-label': t('pane.selected') + ': ' + stemOf(asset.name),
+          'aria-label': t('pane.selected') + ': ' + asset.name,
           'data-assets-tile': 'yes',
           'data-assets-tile-selected': selected ? 'yes' : 'no',
           'data-assets-tile-hover': hovered ? 'yes' : 'no',
@@ -661,24 +900,22 @@ window.__ModuleLoader__.load({
         },
         h(
           'div',
-          { style: S.thumb },
+          { style: S.thumb, 'data-assets-tile-thumb': 'yes' },
           // A TILE ASKS FOR A PREVIEW, not the original: 320px is a tile's own size at this
-          // pane's width, and the host answers the original when it cannot resize.
+          // pane's width, and the host answers the original when it cannot resize. No badge sits on
+          // this picture any more — the card's text area carries every fact instead.
           h('img', { style: S.thumbImage, src: '/plugins/assets/file?path=' + encodeURIComponent(asset.path) + '&w=320', alt: '', loading: 'lazy', draggable: false }),
-          h(
-            'div',
-            { style: S.badgeRow },
-            asset.context ? h('span', { style: S.badgeFill, title: t('meta.context') }, asset.context) : null,
-            asset.bytes ? h('span', { style: S.badgeLine, title: t('meta.bytes') }, sizeOf(asset.bytes)) : null,
-          ),
         ),
         h(
           'div',
           { style: S.tileText },
-          h('span', { style: S.itemName, title: asset.path }, stemOf(asset.name)),
+          h('span', { style: S.itemName, title: asset.path, 'data-assets-tile-name': 'yes' }, asset.name),
           h(
             'span',
             { style: S.itemMeta },
+            // THE SIZE IS BELOW THE THUMBNAIL, as an outlined chip (2026-10-18). It left the picture
+            // with the context badge; the card's text row is where a person reads it.
+            asset.bytes ? h('span', { style: S.badgeLine, title: t('meta.bytes'), 'data-assets-tile-size': 'yes' }, sizeOf(asset.bytes)) : null,
             h('span', null, asset.date || ''),
             asset.hasRecord ? h('span', null, t('pane.recorded')) : h('span', null, t('pane.unrecorded')),
           ),
@@ -704,16 +941,129 @@ window.__ModuleLoader__.load({
         h(
           'span',
           { style: S.grow },
-          h('span', { style: S.itemName, title: asset.path }, stemOf(asset.name)),
+          // THE FULL FILE NAME, extension and all (2026-10-18): a person looking for the file needs
+          // `lee_facecard.png`, not `lee_facecard`. The context badge is gone from the card and from
+          // this row; the facts card is where the folder is read.
+          h('span', { style: S.itemName, title: asset.path }, asset.name),
           h(
             'span',
             { style: S.itemMeta },
             h('span', null, asset.date || ''),
             h('span', null, sizeOf(asset.bytes)),
-            asset.context ? h('span', null, asset.context) : null,
             asset.hasRecord ? h('span', null, t('pane.recorded')) : h('span', null, t('pane.unrecorded')),
           ),
         ),
+      )
+    }
+
+    /**
+     * THE FOLDER TABS (founder, 2026-10-17: *"folders should be like tabs not stacked"*).
+     *
+     * The folders used to be a stacked list with a `×` on each row: two folders already pushed the
+     * search and the pictures down the page, and each row was two controls (a Finder link and a Remove)
+     * for a thing a person mostly wants to SWITCH TO. A tab is that switch. Three facts decide the
+     * shape:
+     *
+     *   - **All is a tab, and it is always first.** It is the library as a whole, which is the state
+     *     every install starts in; without it a person on one folder's tab has no way back to "all".
+     *   - **The active tab is the scope.** Selecting a folder tab reads the catalog for that folder —
+     *     the tab is not decoration over an unscoped list.
+     *   - **A tab carries its count**, because the number behind each folder is what tells a person
+     *     which one to look at, and a tab that cannot say is a guess.
+     *
+     * The `×` on a folder tab REMOVES it from the library (it never touches the folder on disk — that is
+     * `pane.remove`'s own sentence), and it is drawn only on the ACTIVE tab: a `×` on every tab turns a
+     * row of switches into a row of delete buttons, which is how a person loses a folder by mis-clicking
+     * a tab they meant to open. The count sits where the `×` would be on the inactive ones, so nothing
+     * shifts when a tab is selected.
+     */
+    function FolderTabs({ folders, active, counts, onPick, onRemove, onReveal, busy, t }) {
+      const stripped = folders.map((folder, index) =>
+        h(
+          'div',
+          {
+            key: folder.path + ':' + index,
+            style: { ...S.tab, ...(active === folder.path ? S.tabOn : null) },
+            'data-assets-tab': folder.path,
+            'data-assets-tab-on': active === folder.path ? 'yes' : 'no',
+          },
+          h(
+            'button',
+            {
+              type: 'button',
+              'aria-current': active === folder.path ? 'page' : undefined,
+              title: folder.path,
+              'data-assets-tab-pick': folder.path,
+              onClick: () => onPick(folder.path),
+            // A TAB IS A SWITCH, so it has no fill of its own and no border: the strip's rule is the
+            // active tab's, drawn by `S.tabOn`.
+              style: S.tabButton,
+            },
+            IconFolderOpen ? h(IconFolderOpen, { size: 13, style: S.tabGlyph }) : null,
+            h('span', { style: S.tabLabel }, folder.label || folder.path),
+          ),
+          active === folder.path
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  title: t('pane.remove'),
+                  'aria-label': t('pane.remove') + ' ' + (folder.label || folder.path),
+                  disabled: busy,
+                  'data-assets-tab-remove': folder.path,
+                  // REMOVES IT FROM THE LIBRARY, NOT FROM THE DISK. `pane.remove`'s own sentence.
+                  onClick: (event) => {
+                    if (event && typeof event.stopPropagation === 'function') event.stopPropagation()
+                    onRemove(folder.path)
+                  },
+                  style: S.tabClose,
+                },
+                IconCloseOutline16 ? h(IconCloseOutline16, { size: 12 }) : null,
+              )
+            : h('span', { style: S.tabCount, 'data-assets-tab-count': folder.path }, String(counts(folder.path))),
+          // THE WAY TO THE FOLDER ITSELF stays one press away, on the tab that is already open: a Finder
+          // link belongs to the folder a person is looking at, and a strip is not a place for two verbs
+          // on every item.
+          active === folder.path && typeof onReveal === 'function'
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  title: t('pane.reveal') + ' — ' + folder.path,
+                  'aria-label': t('pane.reveal') + ' ' + (folder.label || folder.path),
+                  'data-assets-tab-reveal': folder.path,
+                  onClick: () => onReveal(folder.path),
+                  style: S.tabClose,
+                },
+                h(RevealGlyph, { size: 12 }),
+              )
+            : null,
+        ),
+      )
+      return h(
+        'div',
+        { style: S.tabs, role: 'tablist', 'aria-label': t('pane.where'), 'data-assets-tabs': 'yes' },
+        h(
+          'div',
+          {
+            style: { ...S.tab, ...(active === null ? S.tabOn : null) },
+            'data-assets-tab': 'all',
+            'data-assets-tab-on': active === null ? 'yes' : 'no',
+          },
+          h(
+            'button',
+            {
+              type: 'button',
+              'aria-current': active === null ? 'page' : undefined,
+              'data-assets-tab-pick': 'all',
+              onClick: () => onPick(null),
+              style: S.tabButton,
+            },
+            h('span', { style: S.tabLabel }, t('pane.filter.all')),
+          ),
+          active === null ? null : h('span', { style: S.tabCount }, String(counts(null))),
+        ),
+        ...stripped,
       )
     }
 
@@ -795,7 +1145,7 @@ window.__ModuleLoader__.load({
      * asks for the ORIGINAL — which is what a person inspecting focus wants, and is not what a
      * grid of tiles should ever cost.
      */
-    function InspectStage({ detail, t }) {
+    function InspectStage({ detail, t, fill = false, panel = false }) {
       const frameRef = React.useRef(null)
       const [frame, setFrame] = React.useState({ width: 0, height: 0 })
       const [full, setFull] = React.useState(false)
@@ -809,7 +1159,6 @@ window.__ModuleLoader__.load({
       const [bitmap, setBitmap] = React.useState(null)
       const declared = detail && detail.dimensions && detail.dimensions.width > 0 && detail.dimensions.height > 0 ? detail.dimensions : null
       const natural = declared || bitmap
-      const ratio = natural && natural.height > 0 ? natural.width / natural.height : 3 / 4
       const [view, setView] = React.useState(() => fitView(natural, { width: 0, height: 0 }))
 
       // The frame is MEASURED: the pane resizes (docked, split, fullscreen) and the fit follows
@@ -825,6 +1174,21 @@ window.__ModuleLoader__.load({
         observer.observe(frameRef.current)
         return () => observer.disconnect()
       }, [detail && detail.path])
+
+      // THE STAGE OWNS THE WHEEL (2026-10-18). Each column is now its own scroll container, so a wheel
+      // over the picture would zoom it AND scroll the column underneath. A native non-passive listener
+      // is what can stop the second half: React's delegated wheel listener is passive, so a
+      // `preventDefault` from the JSX handler would be ignored. The JSX handler still does the zoom;
+      // this one only claims the gesture.
+      React.useEffect(() => {
+        const node = frameRef.current
+        if (!node || typeof node.addEventListener !== 'function') return () => {}
+        const hold = (event) => {
+          if (event && event.cancelable !== false) event.preventDefault()
+        }
+        node.addEventListener('wheel', hold, { passive: false })
+        return () => node.removeEventListener('wheel', hold)
+      }, [])
 
       // A new picture, a new frame, or the full-resolution swap: back to the fit.
       React.useEffect(() => {
@@ -860,7 +1224,35 @@ window.__ModuleLoader__.load({
         'div',
         {
           ref: frameRef,
-          style: { ...S.stage, aspectRatio: natural ? natural.width + ' / ' + natural.height : '3 / 4', maxHeight: '60vh', maxWidth: 'calc(60vh * ' + ratio + ')', margin: '0 auto' },
+          // THE STAGE IS AS WIDE AS THE COLUMN IT SITS IN, AND AS TALL AS THAT ALLOWS (founder,
+          // 2026-10-17: *"the large image has pan and zoom"*, after the two panels became resizable).
+          //
+          // The ceiling used to be 60vh with a matching width cap, which meant a person who dragged the
+          // divider to give the picture more room got MORE WHITESPACE: the frame grew horizontally and
+          // stopped at 60vh of height, so the picture inside never grew. A picture is inspected by
+          // making it larger, so the constraint has to be the column's own width — `width: 100%` plus
+          // the picture's ratio is what makes height follow it — with the viewport height as the only
+          // outer limit. Dragging the divider wider now makes the picture bigger until the pane's height
+          // runs out, which is the behaviour the split was built for.
+          //
+          // NO `maxWidth` cap any more: the old `calc(60vh * ratio)` existed only to keep that 60vh box
+          // the picture's shape, and without the height cap it would contradict the width.
+          //
+          // TWO CALLERS, TWO SHAPES. The GALLERY is the old filmstrip, unchanged (2026-09-26): its stage
+          // is the pane's width with the 60vh ceiling and the ratio's matching width cap. The SIDE
+          // COLUMN (grid and list) is the inspection preview (2026-10-17): `fill` gives the stage the
+          // column's own width AND height, so it is the whole panel and the metadata card floats on top
+          // of it (2026-10-18). The gallery is deliberately NOT the inspection panel — the founder
+          // asked for it to stay as it was (2026-10-18: *"that view was not supposed to change"*).
+          //
+          // THE FILLED STAGE IS UNFRAMED: no border, no radius, no card background — the picture is the
+          // panel, and a frame around a panel is a second edge. The framed form stays for gallery,
+          // where the stage sits above a strip and needs an edge to read as one picture.
+          style: fill
+            ? { ...S.stage, width: '100%', height: '100%', maxHeight: 'none', border: 0, borderRadius: 0, background: 'transparent' }
+            : panel
+              ? { ...S.stage, width: '100%', aspectRatio: natural ? natural.width + ' / ' + natural.height : '3 / 4', maxHeight: 'calc(100vh - 220px)' }
+              : { ...S.stage, aspectRatio: natural ? natural.width + ' / ' + natural.height : '3 / 4', maxHeight: '60vh', maxWidth: 'calc(60vh * ' + (natural && natural.height > 0 ? natural.width / natural.height : 3 / 4) + ')', margin: '0 auto' },
           'data-assets-stage': 'yes',
           'data-assets-stage-scale': String(scale),
           'data-assets-stage-full': full ? 'yes' : 'no',
@@ -888,10 +1280,13 @@ window.__ModuleLoader__.load({
             setBitmap({ width: el.naturalWidth, height: el.naturalHeight })
           },
         }),
-        h('span', { style: S.stageHint }, t('stage.hint')),
+        // THE FLOATING CARD LIVES AT THE BOTTOM-LEFT, so in the filled preview the hint and the zoom
+        // controls move to the TOP: the card must never cover the controls that fit and reset the
+        // picture. Gallery keeps both at the bottom, where its strip is below them.
+        h('span', { style: fill ? { ...S.stageHint, top: 8, bottom: 'auto' } : S.stageHint }, t('stage.hint')),
         h(
           'div',
-          { style: S.stageControls },
+          { style: fill ? { ...S.stageControls, top: 8, bottom: 'auto' } : S.stageControls },
           h('span', { style: S.stageScale, 'data-assets-stage-label': 'yes' }, String(Math.round(scale * 100)) + '%'),
           h('button', { type: 'button', style: S.stageButton, title: t('stage.fit'), 'data-assets-stage-fit': 'yes', onClick: () => setView(fitView(natural, frame)) }, t('stage.fit')),
           h(
@@ -933,6 +1328,12 @@ window.__ModuleLoader__.load({
      */
     function GalleryView({ assets, selected, onSelect, detail, t }) {
       const ready = detail && detail.path === selected
+      // THE FILMSTRIP, RESTORED (2026-10-18). The founder's words: *"the filmstrip gallery view
+      // attempts this but that view was not supposed to change"* — so this view keeps the shape it
+      // shipped with in 2026-09-26: ONE PICTURE BIG, the frames in a strip UNDER it. The inspection
+      // preview the split was built for belongs to the grid and the list, in their right-hand column;
+      // here the stage already is the pane's main column, and a second competing column would steal
+      // the width this view exists to give the picture.
       return h(
         'div',
         { style: S.gallery, 'data-assets-gallery': 'yes' },
@@ -955,7 +1356,8 @@ window.__ModuleLoader__.load({
                 key: asset.path,
                 type: 'button',
                 role: 'option',
-                title: stemOf(asset.name),
+                // THE FILE NAME, extension and all — the same label rule as the tiles (2026-10-18).
+                title: asset.name,
                 'aria-selected': asset.path === selected ? 'true' : 'false',
                 'data-assets-frame': asset.path,
                 'data-assets-frame-on': asset.path === selected ? 'yes' : 'no',
@@ -969,8 +1371,31 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function MetadataBlock({ detail, loading, t, openGenerate, generateReady, withStage = true, canTrash = false, asking = false, busy = false, trashError = null, onAsk, onCancel, onConfirm }) {
-      if (loading) return h('div', { style: S.meta, 'data-assets-meta': 'loading' }, h('span', { style: S.muted }, t('pane.loading')))
+    function MetadataBlock({ detail, loading, t, openGenerate, generateReady, withStage = true, floating = false, canTrash = false, asking = false, busy = false, trashError = null, onAsk, onCancel, onConfirm }) {
+      // THE FACTS ARE FOLDED AWAY (founder, 2026-10-17: *"the metadata info is better collapsed in
+      // accordion instead being visible all the time"*). At rest the block is the picture plus one
+      // line naming the file; everything the library knows about it is one press away.
+      //
+      // WHAT FOLDS AND WHAT DOES NOT: the facts, the run's provenance, the prompt and the values fold
+      // — they are information, and a person inspecting a picture reads them once. The ACTIONS do not:
+      // Regenerate and Delete sit outside the disclosure, because a destructive control behind a
+      // collapsed section is a trap, and "the way back into this run" is the block's whole point.
+      //
+      // THE HOOK IS UNCONDITIONAL. The early returns below (loading, no detail) come after it, because a
+      // component that calls a hook on some renders and not others is the one bug the verify shim
+      // would report as a wrong slot rather than a wrong design.
+      const [openFacts, setOpenFacts] = React.useState(false)
+      if (loading) {
+        return h(
+          'div',
+          {
+            style: { ...S.meta, ...(floating ? S.metaFloat : null) },
+            'data-assets-meta': 'loading',
+            'data-assets-meta-float': floating ? 'yes' : 'no',
+          },
+          h('span', { style: S.muted }, t('pane.loading')),
+        )
+      }
       if (!detail) return null
       const provenance = detail.provenance || null
       // The unit a run belongs to, as the record names it. The catalog reads the provider's
@@ -1009,39 +1434,86 @@ window.__ModuleLoader__.load({
           ]
         : []
       const picture = detail.where === 'present' && PICTURE_EXT.test(String(detail.ext || ''))
+      // THE SUMMARY LINE IS THE BLOCK'S ONE ALWAYS-ON SENTENCE: the file's name and the two facts that
+      // orient a person (format and size). It is also the disclosure's label, so the row that opens the
+      // facts is the row that already told you what you are looking at — no second heading needed.
+      const summary = [String(detail.ext || '').toUpperCase(), sizeOf(detail.bytes)].filter((part) => part !== '').join(' · ')
       return h(
         'div',
-        { style: S.meta, 'data-assets-meta': 'yes' },
+        {
+          // IN THE PREVIEW THE BLOCK IS A CARD OVER THE PICTURE (2026-10-18), not a column under it:
+          // `metaFloat` is bottom-anchored inside the side column, which is made `position: relative`
+          // by the pane. In gallery there is no second stage, so the block stays in flow.
+          style: { ...S.meta, ...(floating ? S.metaFloat : null) },
+          'data-assets-meta': 'yes',
+          'data-assets-meta-float': floating ? 'yes' : 'no',
+        },
         // The stage first: the facts describe the picture, so the picture leads.
         // In the gallery the stage is already the pane's main column, so the block draws its
         // facts only — one picture, not two (`withStage`).
-        withStage && picture ? h(InspectStage, { detail, t }) : null,
-        ...rows.map(([key, value]) => h('div', { key: 'f:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
-        provenance
+        withStage && picture ? h(InspectStage, { detail, t, panel: true }) : null,
+
+        // ── the disclosure: one row, and everything the library knows underneath ──
+        //
+        // A `button` rather than a `div` with a handler, so the keyboard, the focus ring and the
+        // screen reader get the control that a native element already is; `aria-expanded` is what
+        // says whether the facts are showing.
+        h(
+          'button',
+          {
+            type: 'button',
+            'aria-expanded': openFacts ? 'true' : 'false',
+            'data-assets-facts-toggle': 'yes',
+            title: openFacts ? t('meta.facts.hide') : t('meta.facts.show'),
+            onClick: () => setOpenFacts((was) => !was),
+            style: S.factsToggle,
+          },
+          openFacts && IconChevronDownOutline16 ? h(IconChevronDownOutline16, { size: 12 }) : h(FactsChevron, { size: 12 }),
+          h('span', { style: S.factsName, 'data-assets-facts-name': 'yes' }, detail.name),
+          summary === '' ? null : h('span', { style: S.factsSummary, 'data-assets-facts-summary': 'yes' }, summary),
+        ),
+
+        // THE FOLDED BODY. Mounted only when open — not hidden with CSS — so a collapsed block costs a
+        // picture's height and nothing else, and a suite can assert the facts are ABSENT rather than
+        // merely invisible.
+        openFacts
           ? h(
               'div',
-              { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-              h('span', { style: S.sectionLabel }, t('meta.run')),
-              ...runRows.map(([key, value]) => h('div', { key: 'r:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
-              detail.prompt ? h('span', { style: S.sectionLabel }, t('meta.prompt')) : null,
-              detail.prompt ? h('div', { style: S.prompt, 'data-assets-prompt': 'yes' }, detail.prompt) : null,
-              detail.values && detail.values.length > 0 ? h('span', { style: S.sectionLabel }, t('meta.values')) : null,
-              ...(detail.values || []).slice(0, 24).map((row) =>
-                h('div', { key: 'v:' + row.key, style: S.metaRow }, h('span', { style: S.metaKey }, row.key), h('span', { style: S.metaValue }, row.value.length > 300 ? row.value.slice(0, 300) + '…' : row.value)),
-              ),
-              // THE WAY BACK IN (epic 64 S7). It is the block's one action, so it sits after
-              // everything it acts on.
-              h(ContinueControl, {
-                jobId: provenance.jobId,
-                workflow,
-                provider: provenance.provider,
-                title: provenance.title || '',
-                ready: generateReady === true,
-                openGenerate,
-                t,
-              }),
+              { style: S.factsBody, 'data-assets-facts': 'yes' },
+              ...rows.map(([key, value]) => h('div', { key: 'f:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
+              provenance
+                ? h(
+                    'div',
+                    { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+                    h('span', { style: S.sectionLabel }, t('meta.run')),
+                    ...runRows.map(([key, value]) => h('div', { key: 'r:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
+                    detail.prompt ? h('span', { style: S.sectionLabel }, t('meta.prompt')) : null,
+                    detail.prompt ? h('div', { style: S.prompt, 'data-assets-prompt': 'yes' }, detail.prompt) : null,
+                    detail.values && detail.values.length > 0 ? h('span', { style: S.sectionLabel }, t('meta.values')) : null,
+                    ...(detail.values || []).slice(0, 24).map((row) =>
+                      h('div', { key: 'v:' + row.key, style: S.metaRow }, h('span', { style: S.metaKey }, row.key), h('span', { style: S.metaValue }, row.value.length > 300 ? row.value.slice(0, 300) + '…' : row.value)),
+                    ),
+                  )
+                : h('span', { style: S.muted, 'data-assets-meta-norecord': 'yes' }, t('meta.noRecord')),
             )
-          : h('span', { style: S.muted, 'data-assets-meta-norecord': 'yes' }, t('meta.noRecord')),
+          : null,
+
+        // ── THE ACTIONS, WHICH NEVER FOLD ─────────────────────────────────────
+        //
+        // THE WAY BACK IN (epic 64 S7) and the way out of the file. Both sit OUTSIDE the disclosure on
+        // purpose: a destructive control behind a collapsed section is a trap, and the one control this
+        // block exists for should not cost a press to find first.
+        provenance
+          ? h(ContinueControl, {
+              jobId: provenance.jobId,
+              workflow,
+              provider: provenance.provider,
+              title: provenance.title || '',
+              ready: generateReady === true,
+              openGenerate,
+              t,
+            })
+          : null,
 
         // ── the way out of the file, without leaving this app ─────────────────
         //
@@ -1113,14 +1585,71 @@ window.__ModuleLoader__.load({
       // of that were the founder's report (2026-09-26): *"confirmation works -- but it doesn't delete
       // (still there)"*, against a route that had answered `500 trash-failed` all along.
       const [trashError, setTrashError] = React.useState(null)
+      // THE DRAG'S LIVE VALUE (2026-10-17 split). The view file holds the share a person CHOSE; this
+      // holds where their pointer is while they are choosing, so the columns follow the pointer without
+      // a request per pixel. It is null at rest, which is what makes the stored value the only truth.
+      const [dragging, setDragging] = React.useState(null)
+      // A refresh that is running: the control spins and refuses a second press, so a slow folder is
+      // one read rather than a queue of them.
+      const [refreshing, setRefreshing] = React.useState(false)
+      // THE SPLIT ROW'S OWN WIDTH (2026-10-18). The share is a fraction of the row, but the two floors
+      // are pixels — so the pane has to know the width to decide (a) whether both columns fit at all
+      // and (b) how far the handle may travel before one column crosses its floor. A callback ref (not
+      // a `useRef`) is what re-runs the observer when the row mounts LATER: the pane renders a loading
+      // state first, so a one-time effect would observe nothing and the columns would never stack.
+      const [columnsNode, setColumnsNode] = React.useState(null)
+      const [columnsWidth, setColumnsWidth] = React.useState(0)
+      React.useEffect(() => {
+        if (!columnsNode || typeof ResizeObserver !== 'function') return () => {}
+        const observer = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const box = entry.contentRect || {}
+            setColumnsWidth(Number(box.width) || 0)
+          }
+        })
+        observer.observe(columnsNode)
+        return () => observer.disconnect()
+      }, [columnsNode])
 
-      const chosen = view.data || { view: 'grid', context: null, date: null, selected: null }
+      const chosen = view.data || { view: 'grid', folder: null, context: null, date: null, selected: null, split: SPLIT_DEFAULT }
       const layout = chosen.view === 'list' ? 'list' : chosen.view === 'gallery' ? 'gallery' : 'grid'
+      // THE FOLDER TAB (founder, 2026-10-17: *"folders should be like tabs not stacked"*). `null` is the
+      // All tab; a path is that folder's tab. It is a SCOPE, not a decoration — the tab a person is on is
+      // the folder the catalog was read for, which is why it travels to the route and lives in the view
+      // file beside the layout and the filters.
+      const folder = typeof chosen.folder === 'string' ? chosen.folder : null
       const context = chosen.context
       const date = chosen.date
       const selectedPath = chosen.selected
+      // THE HOST'S OWN RANGE, when it answers one (2026-10-18). The view route now ships
+      // `splitBounds`; a host from before that field is the 0.3–0.8 build, and `splitBounds` falls back
+      // to exactly that. This is the fix for *"it snaps back to bigger size"*: the pane no longer
+      // offers a share the host will clamp away the moment the pointer is released.
+      const hostLimits = chosen && chosen.splitBounds && Number.isFinite(chosen.splitBounds.min) && Number.isFinite(chosen.splitBounds.max)
+        ? { min: chosen.splitBounds.min, max: chosen.splitBounds.max }
+        : null
+      // The line the columns are drawn at: the pointer's value while dragging, the file's at rest.
+      const split = dragging === null ? splitOf(chosen.split) : dragging
+      // THE TWO-COLUMN STATE, IN ONE PLACE. `twoColumns` is grid/list with something selected; gallery
+      // keeps its own fixed filmstrip proportions (the founder asked for that view to stay as shipped),
+      // and with nothing selected there is nothing to divide. `stacked` is the pane's width saying two
+      // floors no longer fit — then the row stacks and the handle is gone. `liveSplit` is the share the
+      // stored value asks for, narrowed to what this width can draw, so the columns never wrap and the
+      // handle always sits where the divider actually is.
+      const twoColumns = selectedPath !== null && selectedPath !== undefined && selectedPath !== '' && layout !== 'gallery'
+      const stacked = twoColumns && columnsWidth > 0 && columnsWidth < STACK_BELOW
+      const bounds = splitBounds(columnsWidth, hostLimits)
+      const liveSplit = stacked ? split : Math.min(bounds.max, Math.max(bounds.min, split))
+      // A MEASURED ROW IS LAID OUT IN PIXELS (see `splitWidths`): exact, so no subpixel can wrap the
+      // preview. Before the first measurement (and in the offline suites) percentages are the fallback,
+      // with the side derived from the main so the pair always adds to exactly 100.
+      const widths = !stacked ? splitWidths(columnsWidth, liveSplit, hostLimits) : null
+      const shownSplit = widths ? widths.share : liveSplit
+      const mainShare = Math.round(liveSplit * 10000) / 100
+      const sideShare = 100 - mainShare
 
       const query = []
+      if (folder) query.push('folder=' + encodeURIComponent(folder))
       if (context) query.push('context=' + encodeURIComponent(context))
       if (date) query.push('date=' + encodeURIComponent(date))
       const catalogUrl = CATALOG_URL + (query.length > 0 ? '?' + query.join('&') : '')
@@ -1150,6 +1679,66 @@ window.__ModuleLoader__.load({
         setNotice(null)
         setTrashError(null)
         patchView({ selected: selectedPath === path ? null : path })
+      }
+
+      /**
+       * THE REFRESH (founder, 2026-10-17: *"it needs a refresh button to refresh the view so when agent
+       * does housecleaning the user can update the view"*).
+       *
+       * THE PANE HAS NO LIVE FEED, by design: the catalog is a directory walk the host makes per
+       * request, so a picture an agent deleted, renamed or added mid-session is invisible until
+       * something asks again. That something is this control — and it re-reads ALL THREE reads at
+       * once, because they are one fact seen three ways: the folders (a folder may have been added or
+       * removed), the catalog (the files), and the detail of the selection (which may be the file that
+       * just went away).
+       *
+       * A SELECTION WHOSE FILE IS GONE IS DROPPED, through the view file, so the pane does not sit on
+       * a metadata block describing a file that no longer exists and a stage that cannot load. The
+       * reload is awaited before the answer is judged: `useJson` refetches on a tick, so the new
+       * catalog is only on screen a moment later, and a person pressing a button deserves the button
+       * to look busy for as long as the read actually runs.
+       */
+      const refresh = async () => {
+        if (refreshing) return
+        setRefreshing(true)
+        setNotice(null)
+        setTrashError(null)
+        try {
+          const query = []
+          if (context) query.push('context=' + encodeURIComponent(context))
+          if (date) query.push('date=' + encodeURIComponent(date))
+          const answer = await fetch(CATALOG_URL + (query.length > 0 ? '?' + query.join('&') : ''), { cache: 'no-store' })
+          if (!answer.ok) throw new Error('http-' + answer.status)
+          const body = await answer.json()
+          const rows = Array.isArray(body && body.assets) ? body.assets : []
+          reloadRegistry()
+          reloadCatalog()
+          reloadDetail()
+          // The selection is checked against what the read actually returned, not against the host
+          // again: the catalog is the answer to "what is here now".
+          if (selectedPath !== null && selectedPath !== undefined && !rows.some((row) => row && row.path === selectedPath)) {
+            await patchView({ selected: null })
+          }
+          setNotice(t('pane.refreshed').replace('{n}', String(rows.length)))
+        } catch (error) {
+          setFailed(String((error && error.message) || error))
+        } finally {
+          setRefreshing(false)
+        }
+      }
+
+      /**
+       * THE SPLIT'S TWO WRITES. A drag reports every move so the columns follow the pointer, and the
+       * file is written once on release — a request per pixel would be one write per frame for a number
+       * that is only decided at the end. A double-click or an arrow key decides immediately, so it
+       * commits at once.
+       */
+      const moveSplit = (next) => setDragging(Math.min(bounds.max, Math.max(bounds.min, next)))
+      const commitSplit = async (next) => {
+        setDragging(null)
+        // THE FLOORS, APPLIED BEFORE THE WRITE: a share the pane could not draw is not the share to
+        // remember, or the next read would open with a divider somewhere the pointer never was.
+        await patchView({ split: Math.min(bounds.max, Math.max(bounds.min, next)) })
       }
 
       /**
@@ -1238,7 +1827,7 @@ window.__ModuleLoader__.load({
       if (registry.phase === 'loading' && catalog.phase === 'loading') {
         return h(
           'div',
-          { style: S.pane, 'data-assets-pane': 'loading' },
+          { style: { ...S.pane, overflow: 'auto' }, 'data-assets-pane': 'loading' },
           // The sentence stays (it is what a screen reader and a person both read); the spinner
           // became the pane's own shape, so the grid does not jump into place when the answer
           // lands (polish pass, 2026-09-26).
@@ -1249,7 +1838,7 @@ window.__ModuleLoader__.load({
 
       if (registry.phase === 'error' || catalog.phase === 'error') {
         const detail = (registry.error || catalog.error) || ''
-        return h('div', { style: S.pane, 'data-assets-pane': 'error' }, h('div', { style: S.centre }, h('span', { style: S.title }, t('pane.error')), h('span', { style: S.muted }, detail)))
+        return h('div', { style: { ...S.pane, overflow: 'auto' }, 'data-assets-pane': 'error' }, h('div', { style: S.centre }, h('span', { style: S.title }, t('pane.error')), h('span', { style: S.muted }, detail)))
       }
 
       const folders = (registry.data && registry.data.folders) || []
@@ -1284,7 +1873,7 @@ window.__ModuleLoader__.load({
       if (folders.length === 0) {
         return h(
           'div',
-          { style: S.pane, 'data-assets-pane': 'empty' },
+          { style: { ...S.pane, overflow: 'auto' }, 'data-assets-pane': 'empty' },
           h(
             'div',
             { style: { ...S.centre, 'data-assets-empty': 'yes' } },
@@ -1350,46 +1939,50 @@ window.__ModuleLoader__.load({
         ? t('pane.summary').replace('{n}', String(total))
         : t('pane.summary.filtered').replace('{shown}', String(shownAssets.length)).replace('{total}', String(total))
 
+      // THE FLOATING FACTS CARD (2026-10-18). In grid and list, side by side, the preview column is the
+      // picture and the facts float over its lower-right corner. In a stacked pair the side column is
+      // content-height (the row scrolls), so there is nothing to float over: the facts stay in flow
+      // with the stage inside the block. Gallery has no second stage, so its facts stay in flow too.
+      const floatFacts = layout !== 'gallery' && !stacked
+      const detailData = detail.data
+      const showStage = floatFacts && detailData && detailData.where === 'present' && PICTURE_EXT.test(String(detailData.ext || ''))
+
       return h(
         'div',
         { style: S.pane, 'data-assets-pane': 'ready', onKeyDown },
-        h('div', { style: S.head }, h('span', { style: S.title }, t('pane.where')), addControl),
+        // ── THE TOP THREE ROWS DO NOT SCROLL (2026-10-18) ─────────────────────
+        //
+        // The founder: *"the left panel can scroll but not the right, the top 3 rows are sticky"*.
+        // The pane used to be ONE scroll box, so the header, the folder tabs and the bar scrolled away
+        // with the pictures, and the preview column had no scroll container of its own — its facts
+        // were merely carried by the page. The top rows now live in a fixed block (`flex: 0 0 auto`)
+        // and only the columns below scroll, each in its own container: a long grid never pushes the
+        // preview's facts out of reach, and a tall preview never scrolls the thumbnails.
         h(
           'div',
-          { style: S.facts },
-          ...folders.map((folder, index) =>
-            h(
-              'div',
-              { key: folder.path + ':' + index, style: S.row },
-              h(
-                'button',
-                {
-                  type: 'button',
-                  title: t('pane.reveal') + ' — ' + folder.path,
-                  'aria-label': t('pane.reveal') + ' ' + (folder.label || folder.path),
-                  'data-assets-folder': folder.path,
-                  disabled: busy,
-                  onClick: () => post({ action: 'reveal', path: folder.path }),
-                  style: S.folderButton,
-                },
-                IconFolderOpen ? h(IconFolderOpen, { size: 14, style: S.glyph }) : null,
-                h('span', { style: S.folderName }, folder.label || folder.path),
-              ),
-              h(
-                'button',
-                {
-                  type: 'button',
-                  title: t('pane.remove'),
-                  'aria-label': t('pane.remove'),
-                  disabled: busy,
-                  onClick: () => post({ action: 'remove', path: folder.path }),
-                  style: { background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', display: 'flex' },
-                },
-                IconCloseOutline16 ? h(IconCloseOutline16, { size: 14 }) : null,
-              ),
-            ),
-          ),
-        ),
+          { style: S.top, 'data-assets-top': 'yes' },
+          h('div', { style: S.head }, h('span', { style: S.title }, t('pane.where')), addControl),
+        // ── THE FOLDERS ARE A STRIP (2026-10-17) ──────────────────────────────
+        //
+        // The stacked list became tabs: one row, the active tab scoping the catalog, the count behind each
+        // folder where the `×` is on the active one. The handler is the same write the old rows used —
+        // `folder` goes into the view file, which is also what the route reads — so a tab survives a
+        // reload exactly as the layout and the filters do.
+        h(FolderTabs, {
+          folders,
+          active: folder !== null && folders.some((entry) => entry.path === folder) ? folder : null,
+          counts: (path) => {
+            if (path === null) return total
+            const row = ((catalog.data && catalog.data.counts) || {}).folder || []
+            const match = row.find((entry) => entry.value === path)
+            return match ? match.count : 0
+          },
+          onPick: (path) => patchView({ folder: path, selected: null }),
+          onRemove: (path) => post({ action: 'remove', path }),
+          onReveal: (path) => post({ action: 'reveal', path }),
+          busy,
+          t,
+        }),
         canChoose
           ? null
           : h(
@@ -1439,8 +2032,26 @@ window.__ModuleLoader__.load({
             t,
           }),
           h('span', { style: S.summary, 'data-assets-summary': 'yes' }, summaryText),
+          // THE REFRESH SITS AFTER THE COUNT, at the bar's end, because it is the action on what the
+          // count counts. A glyph button (the app's own refresh mark) with the sentence on hover, so
+          // the row keeps its height and the control reads as a tool rather than a label.
+          h(
+            'button',
+            {
+              type: 'button',
+              title: t('pane.refresh.hint'),
+              'aria-label': t('pane.refresh'),
+              'data-assets-refresh': 'yes',
+              'data-assets-refreshing': refreshing ? 'yes' : 'no',
+              disabled: refreshing,
+              onClick: refresh,
+              style: { ...S.refreshButton, ...(refreshing ? S.refreshBusy : null) },
+            },
+            IconRefreshOutline16 ? h(IconRefreshOutline16, { size: 15 }) : h('span', { style: S.refreshFallback }, '↻'),
+          ),
         ),
         notice ? h('span', { style: S.notice, 'data-assets-notice': 'yes' }, notice) : null,
+        ),
 
         // ── the two columns: the pictures, and the one you picked ─────────────
         //
@@ -1448,12 +2059,62 @@ window.__ModuleLoader__.load({
         // meant scrolling past every tile in the library. Now the grid keeps the left and the
         // block takes the right while there is width for both; below their minima they stack, and
         // the block goes back under the grid where it is the only place left to be.
+        //
+        // AND THE LINE BETWEEN THEM IS A HANDLE (founder, 2026-10-17: *"a lot of times I need to see
+        // the larger image ... to inspect details"*). The shares come from the view file, so the split
+        // a person drags is the split they come back to. With nothing picked there is nothing to
+        // divide, so the grid keeps the whole width and no handle is drawn.
+        //
+        // EACH COLUMN SCROLLS ITSELF (2026-10-18). The row takes the height the top block leaves and
+        // clips; the left column scrolls its tiles and the right column scrolls its picture and facts,
+        // independently. Before this the PANE was the scroll box, so the whole surface — header, tabs,
+        // bar and both columns — moved as one sheet, and the preview's lower facts could not be
+        // reached at all while the grid was tall.
+        //
+        // GALLERY IS STILL TWO COLUMNS (restored 2026-10-18): the filmstrip is the main column and the
+        // facts are the side, so the same independent scrolling applies. It is the SPLIT that gallery
+        // does not take, not the columns.
         h(
           'div',
-          { style: S.columns, 'data-assets-columns': 'yes' },
+          {
+            // THE CALLBACK REF IS WHAT MAKES THE OBSERVER REAL (2026-10-18): the pane's first render is
+            // usually the loading state, so the row mounts on a later pass and a one-time effect would
+            // have observed nothing.
+            ref: setColumnsNode,
+            // No gap in the split layout: the handle IS the gap (a 12px item carved out of the side's
+            // share). Gallery keeps the 12px gap it shipped with, and so does a stacked pair.
+            style: {
+              ...S.columns,
+              gap: layout === 'gallery' || stacked ? 12 : 0,
+              // Side by side, both columns take the row's height so each can own its scrollbar. A
+              // stacked pair is content-height and the ROW scrolls instead (see the column styles);
+              // `alignContent: flex-start` packs the two stacked lines at the top so the overflow is
+              // real content rather than line space shared out to fill the row.
+              alignItems: stacked ? 'flex-start' : 'stretch',
+              alignContent: stacked ? 'flex-start' : 'stretch',
+              ...(stacked ? { overflowY: 'auto', overflowX: 'hidden' } : { overflow: 'hidden' }),
+            },
+            'data-assets-columns': 'yes',
+            'data-assets-stacked': stacked ? 'yes' : 'no',
+            'data-assets-columns-scroll': stacked ? 'row' : 'columns',
+          },
           h(
             'div',
-            { style: S.columnMain, 'data-assets-main': 'yes' },
+            {
+              style: layout === 'gallery'
+                ? { ...S.columnMain, flex: '3 1 0', minWidth: 260 }
+                : stacked
+                  // STACKED: the row is the scroll box, so the columns are content-height and show
+                  // their overflow instead of each owning a scrollbar inside a scrolling row.
+                  ? { ...S.columnMain, flex: '1 1 100%', minWidth: 0, height: 'auto', overflowY: 'visible', overflowX: 'visible' }
+                  : twoColumns
+                    ? widths
+                      ? { ...S.columnMain, flex: '0 0 ' + widths.main + 'px', minWidth: MAIN_FLOOR }
+                      : { ...S.columnMain, flex: '0 0 ' + String(mainShare) + '%', minWidth: MAIN_FLOOR }
+                    : S.columnMain,
+              'data-assets-main': 'yes',
+              'data-assets-main-split': twoColumns ? (stacked ? 'stacked' : String(Math.round(shownSplit * 100))) : 'full',
+            },
             shownAssets.length === 0
               ? h('span', { style: S.muted, 'data-assets-none': 'yes' }, total === 0 ? t('pane.none') : t('pane.none.match'))
               : layout === 'gallery'
@@ -1471,24 +2132,59 @@ window.__ModuleLoader__.load({
                   ),
             catalog.data && catalog.data.truncated ? h('span', { style: S.muted }, t('pane.truncated')) : null,
           ),
+          // THE HANDLE, ONLY WHEN BOTH COLUMNS ARE SIDE BY SIDE. A stacked pair has nothing to divide,
+          // so drawing a divider there would be a control that moves nothing.
+          twoColumns && !stacked
+            ? h(ColumnSplit, { split: shownSplit, min: bounds.min, max: bounds.max, onMove: moveSplit, onCommit: commitSplit, t })
+            : null,
+          // THE PREVIEW COLUMN. Gallery keeps the facts without a second stage (the main column is
+          // already the stage), and keeps the shipped 3:2 columns rather than the draggable split —
+          // *"that view was not supposed to change"*. Grid and list get the resizable column, whose
+          // stage is the inspection preview.
+          //
+          // THE FACTS FLOAT ON THE PICTURE (2026-10-18). In a side-by-side grid/list pair the side
+          // column is the picture (unframed, filling the column) and the metadata block is an
+          // absolutely positioned card over its lower-right corner. That is `floatFacts`; the stage is
+          // rendered here, outside the block, and the block is told `withStage: false` so there is
+          // only one picture. In a stacked pair the side is content-height and the row scrolls, so the
+          // block keeps its stage inside (`panel: true`); gallery has no second stage at all.
           selectedPath
             ? h(
                 'div',
-                { style: S.columnSide, 'data-assets-side': 'yes' },
+                {
+                  style: layout === 'gallery'
+                    ? { ...S.columnSide, flex: '2 1 0', minWidth: 240 }
+                    : stacked
+                      ? { ...S.columnSide, flex: '1 1 100%', minWidth: 0, height: 'auto', overflowY: 'visible', overflowX: 'visible' }
+                      : {
+                          ...S.columnSide,
+                          ...(widths ? { flex: '0 0 ' + widths.side + 'px' } : { flex: '0 0 calc(' + String(sideShare) + '% - ' + SPLIT_HANDLE + 'px)' }),
+                          minWidth: SIDE_FLOOR,
+                          // The card is positioned against this column, and the picture (not a
+                          // scrollbar) is what the column contains.
+                          position: 'relative',
+                          overflow: 'hidden',
+                        },
+                  'data-assets-side': 'yes',
+                  'data-assets-side-float': floatFacts ? 'yes' : 'no',
+                  'data-assets-side-split': twoColumns ? (stacked ? 'stacked' : String(Math.round((1 - shownSplit) * 100))) : 'full',
+                },
+                floatFacts && showStage ? h(InspectStage, { detail: detailData, t, fill: true }) : null,
                 h(MetadataBlock, {
-                  detail: detail.data,
+                  detail: detailData,
                   loading: detail.phase === 'loading',
                   t,
                   openGenerate,
                   generateReady,
-                  withStage: layout !== 'gallery',
+                  withStage: layout !== 'gallery' && !floatFacts,
+                  floating: floatFacts,
                   canTrash: canTrash,
                   asking,
                   busy,
                   trashError: trashError,
                   onAsk: () => { setTrashError(null); setAsking(true) },
                   onCancel: () => setAsking(false),
-                  onConfirm: () => remove(detail.data && detail.data.path ? detail.data.path : selectedPath),
+                  onConfirm: () => remove(detailData && detailData.path ? detailData.path : selectedPath),
                 }),
               )
             : null,
@@ -1536,6 +2232,122 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * THE DIVIDER BETWEEN THE TWO COLUMNS (founder, 2026-10-17: *"the panel should be constructed w 2
+     * resizable panels, a lot of times I need to see the larger image to fill in order to inspect
+     * details"*).
+     *
+     * THE ARITHMETIC IS NOT HERE, for the same reason the inspect stage's is not: `splitFrom` and
+     * `splitBounds` are pure functions above this component, so "a drag from this pointer lands on
+     * this share" and "the floors are never crossed" are asserted without a browser (verify/views.mjs
+     * does exactly that, and the factory exposes them).
+     *
+     * THE CONTAINER IS WHAT IS MEASURED, not the handle: the share is of the free width the two
+     * columns divide, so the frame is read once at pointer-down (a rect per move would be a layout
+     * read per frame for a number that cannot change while the pointer is held — the pane does not
+     * resize mid-drag).
+     *
+     * IT WRITES ONCE, ON RELEASE. The drag keeps its own live value so the columns follow the pointer
+     * without a request per pixel; the view file is written when the pointer is up, which is the one
+     * moment the person has decided where the line goes.
+     */
+    function ColumnSplit({ split, min = SPLIT_MIN, max = SPLIT_MAX, onMove, onCommit, t }) {
+      const [dragging, setDragging] = React.useState(false)
+      const [hovered, setHovered] = React.useState(false)
+      const drag = React.useRef(null)
+      // THE PANE'S OWN RANGE (2026-10-18): the static 15–85% narrowed by the two pixel floors at the
+      // width the row actually has. Clamping here — not only in the pane's handler — keeps the live
+      // value, and so the stored value on release, inside what the columns can draw.
+      const clamp = (value) => Math.min(max, Math.max(min, value))
+
+      const onPointerDown = (event) => {
+        const frame = event && event.currentTarget && event.currentTarget.parentElement
+        const box = frame && frame.getBoundingClientRect ? frame.getBoundingClientRect() : null
+        if (!box || !(box.width > 0)) return
+        if (event.preventDefault) event.preventDefault()
+        // WHERE THE HANDLE WAS GRABBED, not where the pointer is: the handle is 12px wide, so pressing
+        // its edge must not snap the divider 6px to the pointer before the first move.
+        const offset = (event && event.clientX ? event.clientX : 0) - (box.left + split * box.width)
+        drag.current = { left: box.left, width: box.width, at: split, offset }
+        setDragging(true)
+        // THE REST OF THE GESTURE BELONGS TO THE WINDOW. See onMove/endDrag below.
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+          window.addEventListener('pointermove', dragMove)
+          window.addEventListener('pointerup', endDrag)
+          window.addEventListener('pointercancel', endDrag)
+        }
+      }
+      // THE DRAG LISTENS ON THE WINDOW, NOT ON THE HANDLE.
+      //
+      // This is why the handle "did not work" (founder, 2026-10-17). The pointer handlers were on the
+      // 12px divider itself, so the moment the pointer moved faster than the handle — or simply off its
+      // edge, which is most of a drag — `pointermove` stopped arriving, and `pointerleave` ended the
+      // gesture. The divider therefore only followed the pointer while the pointer was ON it, which is
+      // a control that moves a pixel at a time if you are very careful and does nothing otherwise.
+      //
+      // A drag is a gesture of the WHOLE WINDOW until the button is released. This is what the stage's
+      // own pan already gets away with (it is a large target); a 12px handle cannot.
+      //
+      // The listeners are attached on pointerdown and removed on release, so nothing is left listening
+      // after a drag, and they are removed by name — the same function objects — not by a new arrow.
+      const dragMove = (event) => {
+        if (drag.current === null) return
+        const x = (event ? event.clientX : 0) - (drag.current.offset || 0)
+        const next = splitFrom(drag.current.left, drag.current.width, x)
+        if (next === null) return
+        const held = clamp(next)
+        drag.current.at = held
+        onMove(held)
+      }
+      const endDrag = () => {
+        const held = drag.current
+        if (held === null) return
+        drag.current = null
+        setDragging(false)
+        if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+          window.removeEventListener('pointermove', dragMove)
+          window.removeEventListener('pointerup', endDrag)
+          window.removeEventListener('pointercancel', endDrag)
+        }
+        // Only a drag that MOVED is written; a click on the handle with no movement would otherwise
+        // post the value it already holds.
+        if (held.at !== split) onCommit(held.at)
+      }
+      const onKeyDown = (event) => {
+        const key = event && event.key
+        if (key !== 'ArrowLeft' && key !== 'ArrowRight') return
+        if (event.preventDefault) event.preventDefault()
+        onCommit(clamp(splitOf(split + (key === 'ArrowLeft' ? -0.02 : 0.02))))
+      }
+      const lit = dragging || hovered
+      return h(
+        'div',
+        {
+          role: 'separator',
+          tabIndex: 0,
+          'aria-orientation': 'vertical',
+          'aria-label': t('pane.split'),
+          'aria-valuenow': Math.round(split * 100),
+          'aria-valuemin': Math.round(min * 100),
+          'aria-valuemax': Math.round(max * 100),
+          title: t('pane.split'),
+          'data-assets-split': 'yes',
+          'data-assets-split-on': dragging ? 'drag' : (hovered ? 'hover' : 'no'),
+          style: S.split,
+          onPointerDown,
+          // NO onPointerMove/onPointerUp HERE: the drag listens on the window (see onMove/endDrag), so it
+          // keeps working when the pointer leaves this 12px target — which is most of any real drag.
+          onPointerLeave: () => setHovered(false),
+          onPointerEnter: () => setHovered(true),
+          onKeyDown,
+          // DOUBLE-CLICK IS THE WAY BACK. A divider dragged to a limit is otherwise only undoable by
+          // hitting the same limit from the other side, which is a puzzle rather than a control.
+          onDoubleClick: () => onCommit(clamp(SPLIT_DEFAULT)),
+        },
+        h('span', { style: { ...S.splitLine, ...(lit ? S.splitLineOn : null) }, 'aria-hidden': 'true' }),
+      )
+    }
+
+    /**
      * THE VIEW SWITCH'S THREE GLYPHS — Lucide's `layout-grid`, `list` and `gallery-thumbnails`
      * (founder, 2026-09-26: *"lucide icons: layout-grid, list, gallery-thumbnails"*), drawn here
      * rather than resolved from the harness. Mixing families was the reason: the harness's own grid
@@ -1571,6 +2383,26 @@ window.__ModuleLoader__.load({
       Object.defineProperty(ViewGlyph, 'name', { value: name })
       return ViewGlyph
     }
+
+    /**
+     * THE DISCLOSURE'S CHEVRON, drawn here for one reason: the harness ships two chevrons at two sizes
+     * and this row needs the 12px down one — but the verify stub has no icon set at all, so a host
+     * without the primitives would draw a nameless button with no mark to say it opens. Same 24-unit
+     * grid and 1.5 stroke as the view switch's glyphs, so it sits at the family's weight.
+     */
+    const FactsChevron = viewGlyph('FactsChevron', [
+      h('path', { key: 'a', d: 'M6 9l6 6 6-6' }),
+    ])
+
+    /**
+     * THE FOLDER TAB'S "SHOW IN FINDER" MARK. Lucide's `arrow-up-right`: the glyph that says "this leaves
+     * the app", which is what the reveal action does — it opens the folder in Finder, not in a pane. Drawn
+     * here rather than resolved so a host without the icon set still shows the direction.
+     */
+    const RevealGlyph = viewGlyph('RevealGlyph', [
+      h('path', { key: 'a', d: 'M7 17L17 7' }),
+      h('path', { key: 'b', d: 'M9 7h8v8' }),
+    ])
 
     const IconLayoutGrid = viewGlyph('IconLayoutGrid', [
       h('rect', { key: 'a', x: 3, y: 3, width: 7, height: 7, rx: 1 }),
@@ -1730,6 +2562,11 @@ window.__ModuleLoader__.load({
      * what lets verify/inspect.mjs assert "the point under the cursor stays under the cursor"
      * as arithmetic rather than by rendering and squinting at a transform.
      */
-    return { inject, apply, zoom: { ZOOM_MIN, ZOOM_MAX, clampZoom, fitScale, fitView, centreOffset, zoomAt, panBy, oneToOne } }
+    return {
+      inject,
+      apply,
+      zoom: { ZOOM_MIN, ZOOM_MAX, clampZoom, fitScale, fitView, centreOffset, zoomAt, panBy, oneToOne },
+      split: { SPLIT_MIN, SPLIT_MAX, SPLIT_DEFAULT, SPLIT_HANDLE, MAIN_FLOOR, SIDE_FLOOR, STACK_BELOW, splitOf, splitBounds, splitWidths, splitFrom },
+    }
   },
 })

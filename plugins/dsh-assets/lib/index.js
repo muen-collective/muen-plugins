@@ -88,6 +88,30 @@ const VIEW_SCHEMA = 'muen-assets-view/v1'
  */
 const VIEWS = ['grid', 'list', 'gallery']
 
+/**
+ * THE SPLIT, as a share of the free width the pictures column takes (founder, 2026-10-17: *"the panel
+ * should be constructed w 2 resizable panels, a lot of times I need to see the larger image"*).
+ *
+ * It lives in the view file with the layout and the filters, for the same reason they do: the pane is
+ * re-created on every reload and a drag that vanished with it would have to be redone each time. The
+ * bounds are the drag's own — never zero (a collapsed column with no divider to grab is a dead end)
+ * and never one (the block would be unreachable), so a corrupt file cannot write a pane a person
+ * cannot get out of.
+ */
+// 2026-10-18: the range widened so the inspection preview can take most of the frame. The pane's
+// dynamic floors (160px thumbnails + 240px preview + the 12px handle) narrow this further at the
+// width it actually has, and the pane's copy of these three numbers must agree with this one.
+const SPLIT_MIN = 0.15
+const SPLIT_MAX = 0.85
+const SPLIT_DEFAULT = 0.6
+
+/** A ratio from anywhere — a view file, a drag — that is safe to lay a pane out with. */
+const splitOf = (value) => {
+  const number = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(number)) return SPLIT_DEFAULT
+  return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, number))
+}
+
 /** Refuse a body past this — the only bodies here are a path and a verb. */
 const MAX_BODY_BYTES = 8192
 
@@ -283,6 +307,7 @@ export function apply(ctx, config = {}) {
       return
     }
     const url = new URL(req.url || '/', 'http://127.0.0.1')
+    const folder = str(url.searchParams.get('folder')) || null
     const context = str(url.searchParams.get('context')) || null
     const date = str(url.searchParams.get('date')) || null
     if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -290,11 +315,15 @@ export function apply(ctx, config = {}) {
       return
     }
     const registry = await readFolders(own.root)
-    const catalog = await readCatalog({ folders: registry.folders, recordsRoot: records.root, context, date })
+    // A TAB NAMES A FOLDER, AND A FOLDER CAN BE REMOVED while that tab is on screen (another window, or
+    // this one). An unknown path is dropped rather than answered with an empty library: "no assets" and
+    // "that folder is gone" look the same on screen, and only one of them is true.
+    const scoped = folder !== null && registry.folders.some((entry) => entry.path === folder) ? folder : null
+    const catalog = await readCatalog({ folders: registry.folders, recordsRoot: records.root, folder: scoped, context, date })
     send(res, 200, {
       ...catalog,
       folders: registry.folders,
-      filter: { context, date },
+      filter: { folder: scoped, context, date },
       // Where it looked, with the rule that answered each root — the two facts a person
       // needs when the library is empty and the folders are not.
       root: own.root,
@@ -422,17 +451,21 @@ export function apply(ctx, config = {}) {
   const readView = async () => {
     try {
       const parsed = JSON.parse(await readFile(viewPath(), 'utf8'))
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { schema: VIEW_SCHEMA, view: 'grid', context: null, date: null, selected: null }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { schema: VIEW_SCHEMA, view: 'grid', folder: null, context: null, date: null, selected: null, split: SPLIT_DEFAULT }
       return {
         schema: VIEW_SCHEMA,
         known: parsed.schema === VIEW_SCHEMA,
         view: VIEWS.includes(parsed.view) ? parsed.view : 'grid',
+        // THE FOLDER TAB a person is on. `null` is the All tab; a path is that folder's tab.
+        folder: typeof parsed.folder === 'string' ? parsed.folder : null,
         context: typeof parsed.context === 'string' ? parsed.context : null,
         date: typeof parsed.date === 'string' ? parsed.date : null,
         selected: typeof parsed.selected === 'string' ? parsed.selected : null,
+        // The two columns' dividing line, as the pictures' share of the free width.
+        split: splitOf(parsed.split),
       }
     } catch {
-      return { schema: VIEW_SCHEMA, view: 'grid', context: null, date: null, selected: null }
+      return { schema: VIEW_SCHEMA, view: 'grid', folder: null, context: null, date: null, selected: null, split: SPLIT_DEFAULT }
     }
   }
 
@@ -523,10 +556,16 @@ export function apply(ctx, config = {}) {
     send(res, 200, { trashed: true, path: allowed.path, name: basename(allowed.path), where: answer.where || 'Trash' })
   }
 
+  // THE SPLIT'S LIVE BOUNDS SHIP WITH THE VIEW (2026-10-18). The pane and the host each clamp a
+  // share, and a client that offers a range the host will clamp away is a divider that snaps back the
+  // moment it is released. The bounds are answered on the READ (and on every write) so the pane uses
+  // THIS host's range rather than guessing from its own constants; a host from before this field
+  // simply omits it, and the pane falls back to that host's 0.3–0.8.
+  const splitBoundsAnswer = () => ({ min: SPLIT_MIN, max: SPLIT_MAX })
   const viewRoute = async (req, res) => {
     const method = (req.method || 'GET').toUpperCase()
     if (method === 'GET') {
-      send(res, 200, await readView())
+      send(res, 200, { ...(await readView()), splitBounds: splitBoundsAnswer() })
       return
     }
     if (method !== 'POST') {
@@ -543,9 +582,14 @@ export function apply(ctx, config = {}) {
     const next = {
       schema: VIEW_SCHEMA,
       view: VIEWS.includes(body.view) ? body.view : current.view,
+      folder: body.folder === undefined ? current.folder : (body.folder === null ? null : str(body.folder)),
       context: body.context === undefined ? current.context : (body.context === null ? null : str(body.context)),
       date: body.date === undefined ? current.date : (body.date === null ? null : str(body.date)),
       selected: body.selected === undefined ? current.selected : (body.selected === null ? null : str(body.selected)),
+      // A drag that lands outside the bounds is CLAMPED, not refused: the person is holding a
+      // divider, and answering 400 mid-drag would leave the pane stuck where the last accepted
+      // write put it while the pointer keeps moving.
+      split: body.split === undefined ? current.split : splitOf(body.split),
     }
     if (next.date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(next.date)) {
       send(res, 400, { error: 'bad-date', detail: 'date is YYYY-MM-DD' })
@@ -553,7 +597,7 @@ export function apply(ctx, config = {}) {
     }
     await mkdir(own.root, { recursive: true })
     await writeFile(viewPath(), JSON.stringify(next, null, 2) + '\n', 'utf8')
-    send(res, 200, next)
+    send(res, 200, { ...next, splitBounds: splitBoundsAnswer() })
   }
 
   /**

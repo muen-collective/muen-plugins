@@ -115,10 +115,28 @@ export async function readRecords(recordsRoot, { listDir = readdir, readText = r
 /**
  * Every media file under the added folders, with what can be said about it without opening
  * it. Depth and count are bounded, and the bound is reported rather than silent.
+ *
+ * NESTED FOLDERS ARE NOT DOUBLE-COUNTED (measured on the founder's own library, 2026-10-17: `people`
+ * holds `rin-nakamura`). Both were added, so a plain walk found every file under `rin-nakamura` TWICE —
+ * once as a child of `people`, once as its own root — and the two folder tabs showed the same pictures,
+ * which reads as a tab that does nothing. Two rules fix it:
+ *
+ *   1. A folder that sits INSIDE another added folder is not walked at the top level; its files arrive
+ *      through the parent, exactly once.
+ *   2. Each file belongs to the MOST SPECIFIC added folder above it. So `rin-nakamura/x.png` is
+ *      `rin-nakamura`'s file, not `people`'s — which is what makes the inner tab a real subset rather
+ *      than a duplicate, and keeps the two tabs' counts added up to the whole.
  */
 export async function scanFolders(folders, { listDir = readdir, statFile = stat } = {}) {
   const files = []
   let truncated = false
+  const clean = (value) => String(value || '').replace(/\/+$/, '')
+  const roots = folders.map((folder) => ({ ...folder, key: clean(folder.path) })).filter((folder) => folder.key !== '')
+  const nested = (path) => roots.some((root) => root.key !== path && path.startsWith(root.key + '/'))
+  /** The most specific added folder that contains this path. */
+  const owner = (path) => roots
+    .filter((root) => path === root.key || path.startsWith(root.key + '/'))
+    .sort((a, b) => b.key.length - a.key.length)[0]
   const walk = async (root, dir, depth) => {
     if (truncated || depth > MAX_DEPTH) return
     let entries = []
@@ -149,10 +167,22 @@ export async function scanFolders(folders, { listDir = readdir, statFile = stat 
       } catch {
         continue
       }
-      files.push({ path: full, name, ext, bytes: info.size, mtime: new Date(info.mtimeMs).toISOString(), folder: root.path, label: root.label || '' })
+      // A FILE CARRIES TWO FOLDER FACTS, and the difference is what makes nested folders work:
+      //
+      //   `folder`  the added root this walk belongs to. The OUTER tab shows everything beneath it, so a
+      //             folder that contains another added folder must still list the nested files.
+      //   `nested`  the most specific added folder at or above the file, or null. It is what decides
+      //             which tab OWNS the file, so the inner tab is a subset and a file is never counted
+      //             twice across tabs.
+      const nearest = owner(full)
+      const nested = nearest && nearest.key !== root.key ? nearest.key : null
+      files.push({ path: full, name, ext, bytes: info.size, mtime: new Date(info.mtimeMs).toISOString(), folder: root.key, nested, label: root.label || '' })
     }
   }
-  for (const folder of folders) await walk(folder, folder.path, 0)
+  for (const folder of roots) {
+    if (nested(folder.key)) continue
+    await walk(folder, folder.path, 0)
+  }
   return { files, truncated }
 }
 
@@ -279,9 +309,14 @@ export async function assetDetail({ folders = [], recordsRoot, path, statFile = 
 export function summarise(assets) {
   const context = new Map()
   const years = new Map()
+  // PER FOLDER, because the folder tabs say how much is behind each one (2026-10-17). Counted over ALL
+  // assets — before any filter — so a tab's number does not change when the other tabs are scoped.
+  const folders = new Map()
   for (const asset of assets) {
     const key = asset.context || ''
     context.set(key, (context.get(key) || 0) + 1)
+    const folderPath = asset.folder || ''
+    folders.set(folderPath, (folders.get(folderPath) || 0) + 1)
     const day = asset.date
     if (day === null) continue
     const [year, month] = day.split('-')
@@ -296,6 +331,7 @@ export function summarise(assets) {
     else m.days.push({ day, count: 1 })
   }
   return {
+    folder: [...folders.entries()].map(([value, count]) => ({ value, count })),
     context: [...context.entries()]
       .map(([value, count]) => ({ value, count }))
       .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value)),
@@ -317,10 +353,11 @@ export function summarise(assets) {
  * @param {object} options
  * @param {Array} options.folders - the registry (each `{ path, label }`)
  * @param {string} options.recordsRoot - the Generate plugin's root
+ * @param {string} [options.folder] - keep one folder, by PATH (the tab a person is on)
  * @param {string} [options.context] - keep one context (the folder's label)
  * @param {string} [options.date] - keep one day (`YYYY-MM-DD`)
  */
-export async function readCatalog({ folders = [], recordsRoot, context = null, date = null, listDir = readdir, readFileImpl = readFile, statFile = stat } = {}) {
+export async function readCatalog({ folders = [], recordsRoot, folder = null, context = null, date = null, listDir = readdir, readFileImpl = readFile, statFile = stat } = {}) {
   const { byPath } = await readRecords(recordsRoot, { listDir, readText: readFileImpl })
   const { files, truncated } = await scanFolders(folders, { listDir, statFile })
   const assets = files.map((file) => {
@@ -336,13 +373,22 @@ export async function readCatalog({ folders = [], recordsRoot, context = null, d
       // remembers, and mtime can be anything a copy tool left behind.
       date: dayOf(record && (record.settledAt || record.at)) || dayOf(file.mtime),
       context: file.label || '',
-      folder: file.folder,
+      // `folder` is where the file LIVES for the purposes of a tab: the nearest added folder, so the
+      // per-folder counts add up and no file is in two tabs at once.
+      folder: file.nested || file.folder,
+      // Every added folder this file is visible under — the inner one and each containing one.
+      scopes: [...new Set([file.folder, file.nested].filter((value) => typeof value === 'string' && value !== ''))],
       hasRecord: record !== null,
       provenance: record,
     }
   })
   const counts = summarise(assets)
-  const kept = assets.filter((asset) => (context === null || asset.context === context) && (date === null || asset.date === date))
+  const kept = assets.filter(
+    (asset) =>
+      (folder === null || asset.scopes.includes(folder)) &&
+      (context === null || asset.context === context) &&
+      (date === null || asset.date === date),
+  )
   kept.sort((a, b) => (a.date === b.date ? String(b.mtime).localeCompare(String(a.mtime)) : String(b.date).localeCompare(String(a.date))))
   // The list is deliberately light — names, sizes, dates — and `assetDetail` is the read
   // that opens a file for its dimensions. So no `dimensions` field here on purpose.

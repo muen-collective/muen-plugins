@@ -231,6 +231,13 @@ sheets.document = {
 export async function loadClient({ React, stubs = {} }) {
   const source = await readFile(join(ROOT, 'lib/client.js'), 'utf8')
   let captured = null
+  /**
+   * THE SANDBOX'S OWN LISTENERS. A drag attaches `pointermove`/`pointerup` to `window` (the drawer's
+   * divider does, because a 12px target cannot own a gesture), and that `window` is the vm's — a
+   * `globalThis.window` set by a suite would never be seen from inside. So the sandbox records what the
+   * client registered, and a suite drives the gesture through `sandboxListeners`.
+   */
+  const sandboxListeners = new Map()
   const sandbox = {
     window: {
       __ModuleLoader__: {
@@ -238,7 +245,12 @@ export async function loadClient({ React, stubs = {} }) {
           captured = registration
         },
       },
+      addEventListener: (name, fn) => sandboxListeners.set(name, fn),
+      removeEventListener: (name, fn) => {
+        if (sandboxListeners.get(name) === fn) sandboxListeners.delete(name)
+      },
     },
+    sandboxListeners,
     // The client half runs in the vm, so a global it reads at call time (`fetch`) has to be
     // the sandbox's own — a `globalThis.fetch` set out here would never be seen from inside.
     fetch: (...args) => net.fetch(...args),
@@ -336,7 +348,7 @@ export async function loadClient({ React, stubs = {} }) {
     if (spec === '@deepseek-ai/dsh-client-ui-primitives') return primitives
     throw new Error('unexpected require: ' + spec)
   })
-  return { registration: captured, exports: factory, primitives, source }
+  return { registration: captured, exports: factory, primitives, source, sandboxListeners }
 }
 
 /** The recording ctx the browser's own services stand in for. */

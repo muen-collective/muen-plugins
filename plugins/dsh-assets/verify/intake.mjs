@@ -208,8 +208,38 @@ const call = (handler, method, path, body) => callRoute(handler, method, path, b
   const badDate = await call(viewHandler, 'POST', VIEW_PATH, { date: '26-09-2026' })
   check('and a date that is not YYYY-MM-DD is refused, not stored', badDate.statusCode === 400 && badDate.json().error === 'bad-date', badDate.statusCode + ' ' + JSON.stringify(badDate.json()))
 
+  // THE SPLIT (2026-10-17; range widened 2026-10-18 for detail inspection). The pane and the host both
+  // clamp a share to 0.15–0.85, and the two halves ship as separate files — so what the STORE answers is
+  // asserted here, not assumed from the pane.
+  const fresh = await call(viewHandler, 'GET', VIEW_PATH)
+  check('a view file with no split answers the default 0.6', fresh.json().split === 0.6, JSON.stringify(fresh.json().split))
+  // THE PANE MUST KNOW THE HOST'S RANGE (2026-10-18). Without it, a pane built for 0.15–0.85 lets a
+  // drag reach 0.15, this host clamps the write to 0.3, and the divider snaps back on release.
+  const freshBounds = fresh.json().splitBounds
+  check('the read answers the split bounds, so the pane can stay inside what this host will store', !!freshBounds && freshBounds.min === 0.15 && freshBounds.max === 0.85, JSON.stringify(freshBounds))
+
+  const stored = await call(viewHandler, 'POST', VIEW_PATH, { split: 0.72 })
+  check('the host stores the share a drag asked for', stored.statusCode === 200 && stored.json().split === 0.72, stored.statusCode + ' ' + JSON.stringify(stored.json().split))
+  check('and a write answers those bounds too, so a release uses the host it just talked to', !!stored.json().splitBounds && stored.json().splitBounds.min === 0.15 && stored.json().splitBounds.max === 0.85, JSON.stringify(stored.json().splitBounds))
+  // The bounds are an ANSWER, not a fact: the view file holds what a person chose, nothing else.
+  const rawView = JSON.parse(readFileSync(join(dataRoot, 'view.json'), 'utf8'))
+  check('the bounds are not written into the view file', rawView.splitBounds === undefined, JSON.stringify(Object.keys(rawView)))
+  const reread = await call(viewHandler, 'GET', VIEW_PATH)
+  check('and it survives the next read, which is what makes a drag worth making', reread.json().split === 0.72, JSON.stringify(reread.json().split))
+
+  // A DRAG PAST A LIMIT IS CLAMPED, NOT REFUSED: the person is holding the divider, and a 400 mid-drag
+  // would leave the pane stuck at the last accepted value while the pointer kept moving.
+  const tooWide = await call(viewHandler, 'POST', VIEW_PATH, { split: 0.95 })
+  check('a share past the ceiling is clamped to 0.85 rather than refused', tooWide.statusCode === 200 && tooWide.json().split === 0.85, tooWide.statusCode + ' ' + JSON.stringify(tooWide.json().split))
+  const tooNarrow = await call(viewHandler, 'POST', VIEW_PATH, { split: 0.01 })
+  check('and a share under the floor is clamped to 0.15', tooNarrow.statusCode === 200 && tooNarrow.json().split === 0.15, tooNarrow.statusCode + ' ' + JSON.stringify(tooNarrow.json().split))
+  const nonsense = await call(viewHandler, 'POST', VIEW_PATH, { split: 'wide' })
+  check('a split that is not a number falls back to the default, not NaN', nonsense.statusCode === 200 && nonsense.json().split === 0.6, nonsense.statusCode + ' ' + JSON.stringify(nonsense.json().split))
+  const untouched = await call(viewHandler, 'POST', VIEW_PATH, { view: 'list' })
+  check('a write that does not mention the split leaves the stored one alone', untouched.json().split === 0.6, JSON.stringify(untouched.json().split))
+
   // Leave the file where the suite found it.
-  await call(viewHandler, 'POST', VIEW_PATH, { view: 'grid', date: null, selected: null })
+  await call(viewHandler, 'POST', VIEW_PATH, { view: 'grid', date: null, selected: null, split: 0.6 })
 }
 
 // ── 2. it starts empty ──────────────────────────────────────────────────────
@@ -522,6 +552,82 @@ let catalog = null
   check('a malformed date is a bad request, not a silent empty list', bad.statusCode === 400 && bad.json().error === 'bad-date', bad.statusCode + ' ' + JSON.stringify(bad.json().error))
   const posted = await call(catalogHandler, 'POST', CATALOG_PATH)
   check('the catalog is read-only', posted.statusCode === 405 && posted.headers.allow === 'GET', posted.statusCode)
+}
+
+// ── 7a. NESTED FOLDERS ARE NOT DOUBLE-COUNTED (2026-10-17) ─────────────────
+//
+// Measured on the founder's own library: `people` CONTAINS `rin-nakamura`, and both were added. A plain
+// walk found every file under the inner folder twice — once as a child of the outer, once as its own root
+// — so the two folder tabs showed the SAME pictures and clicking one changed nothing visible. That reads
+// as "the tab does not work", which is exactly how it was reported.
+//
+// The rules the fix makes true: each file appears once, and it belongs to the MOST SPECIFIC added folder
+// above it — so the inner tab is a real subset of the outer one, not a duplicate of it.
+
+{
+  const outer = mkdtempSync(join(tmpdir(), 'nest-outer-'))
+  const inner = join(outer, 'inner')
+  mkdirSync(inner, { recursive: true })
+  writeFileSync(join(outer, 'outer-only.png'), PNG)
+  writeFileSync(join(inner, 'inner-one.png'), PNG)
+  writeFileSync(join(inner, 'inner-two.png'), PNG)
+
+  writeFileSync(join(dataRoot, 'folders.json'), JSON.stringify({
+    schema: 'muen-assets-folders/v1',
+    folders: [
+      { path: outer, label: 'outer', addedAt: '2026-10-17T00:00:00.000Z' },
+      { path: inner, label: 'inner', addedAt: '2026-10-17T00:00:00.000Z' },
+    ],
+  }))
+
+  const all = (await call(catalogHandler, 'GET', CATALOG_PATH)).json()
+  const paths = all.assets.map((asset) => asset.path)
+  check('a file under a nested folder appears exactly once', paths.length === new Set(paths).size, paths.length + ' rows, ' + new Set(paths).size + ' distinct')
+  check('and the whole library is the three files, not four', all.total === 3, String(all.total))
+  check('the file inside the inner folder belongs to the INNER folder', all.assets.filter((asset) => asset.path.includes('inner-one.png')).every((asset) => asset.folder === inner), JSON.stringify(all.assets.filter((a) => a.path.includes('inner')).map((a) => a.folder)))
+  check('and the file only the outer folder has belongs to the outer one', all.assets.filter((asset) => asset.path.includes('outer-only.png')).every((asset) => asset.folder === outer), JSON.stringify(all.assets.filter((a) => a.path.includes('outer-only')).map((a) => a.folder)))
+
+  const outerTab = (await call(catalogHandler, 'GET', CATALOG_PATH + '?folder=' + encodeURIComponent(outer))).json()
+  const innerTab = (await call(catalogHandler, 'GET', CATALOG_PATH + '?folder=' + encodeURIComponent(inner))).json()
+  check('the outer tab shows its own file plus the nested ones', outerTab.assets.length === 3, String(outerTab.assets.length))
+  check('and the inner tab shows only the nested ones — a subset, not a copy of the outer', innerTab.assets.length === 2 && innerTab.assets.every((asset) => asset.folder === inner), String(innerTab.assets.length))
+  check('so the two tabs are different lists, which is what makes clicking one do something', outerTab.assets.length !== innerTab.assets.length, outerTab.assets.length + ' vs ' + innerTab.assets.length)
+  check('and the per-folder counts add up to the library', (outerTab.counts.folder || []).reduce((sum, row) => sum + row.count, 0) === all.total, JSON.stringify(outerTab.counts.folder))
+
+  // Back to the fixture the later sections expect.
+  writeFileSync(join(dataRoot, 'folders.json'), JSON.stringify({
+    schema: 'muen-assets-folders/v1',
+    folders: [
+      { path: projectA, label: 'yammaman', addedAt: '2026-09-26T00:00:00.000Z' },
+      { path: projectB, label: 'vent', addedAt: '2026-09-26T00:00:00.000Z' },
+    ],
+  }))
+}
+
+// ── 7b. THE FOLDER TAB SCOPES THE LIBRARY (2026-10-17) ─────────────────────
+//
+// The folders became tabs, and a tab is a SCOPE: the catalog is read for the folder that tab names. Two
+// things have to be true beyond "it filters" — an unknown path (a folder removed while its tab was open)
+// must NOT answer with an empty library, and the counts behind the other tabs must not move.
+
+{
+  const everything = (await call(catalogHandler, 'GET', CATALOG_PATH)).json()
+  const scoped = (await call(catalogHandler, 'GET', CATALOG_PATH + '?folder=' + encodeURIComponent(projectA))).json()
+  check('a folder tab reads only that folder’s files', scoped.assets.length >= 1 && scoped.assets.every((asset) => asset.folder === projectA), scoped.shown + ' of ' + scoped.total)
+  check('and the total is still the whole library, so the tab is a view and not a second library', scoped.total === everything.total, scoped.total + ' vs ' + everything.total)
+  check('the folder that answered is echoed back', scoped.filter && scoped.filter.folder === projectA, JSON.stringify(scoped.filter))
+
+  const other = (await call(catalogHandler, 'GET', CATALOG_PATH + '?folder=' + encodeURIComponent(projectB))).json()
+  check('a second folder tab reads a different set', other.assets.length >= 1 && other.assets.every((asset) => asset.folder === projectB), other.shown + ' shown')
+
+  // THE COUNTS ARE PER FOLDER AND OVER EVERYTHING, so a tab can say how much is behind it while another
+  // tab is open.
+  check('each tab can say how many assets are behind it', Array.isArray(scoped.counts.folder) && scoped.counts.folder.length >= 2 && scoped.counts.folder.every((row) => typeof row.count === 'number' && row.count > 0), JSON.stringify(scoped.counts.folder))
+
+  // A FOLDER REMOVED WHILE ITS TAB IS OPEN: the path is not in the registry, so the route drops the scope
+  // rather than answering with nothing — the difference between "empty" and "that folder is gone".
+  const stale = (await call(catalogHandler, 'GET', CATALOG_PATH + '?folder=' + encodeURIComponent('/Users/nobody/gone'))).json()
+  check('a folder that is not in the library is not a scope — the library still answers', stale.assets.length === everything.assets.length && stale.filter.folder === null, JSON.stringify({ shown: stale.shown, filter: stale.filter }))
 }
 
 // ── 8. a file that is not ours says so ──────────────────────────────────────

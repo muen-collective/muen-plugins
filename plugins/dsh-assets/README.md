@@ -94,15 +94,20 @@ trailing slash makes only the bare path match and everything below it answer 404
 ## The grid, the tile, and the metadata block
 
 The grid is the one hand-me-up-os shipped and the founder kept: `repeat(auto-fit, minmax(240px, 1fr))`, a
-240px floor, **no breakpoints** — the pane's own width is the only input. A tile is the `3/4` thumbnail, the
-name, and two badges that are deliberately unlike each other: the **context is filled** (where the asset
-belongs) and the **size is outlined** (how big it is). It is a button a keyboard can reach, and it is
-**draggable only when there are bytes** — a row with a name and no file is still listed, and nothing invents a
-file to carry.
+240px floor, **no breakpoints** — the pane's own width is the only input. A tile is **the picture and then its
+facts** (2026-10-18): the thumbnail is the card, edge to edge, and the text sits below it — the **full file
+name** (`lee_facecard.png`, extension and all), then an **outlined size chip** (`1.6 MB`) with the date and
+the Run/File marker. There is **no overlay on the picture any more**: the filled context chip is gone, so
+nothing hides a corner of the photograph; the folder is a fact of the metadata card. It is a button a
+keyboard can reach, and it is **draggable only when there are bytes** — a row with a name and no file is
+still listed, and nothing invents a file to carry.
 
 The metadata block is what the catalog job is for. With a run behind the file it names the provider, the job,
 the workflow, the app, the date it settled, **the prompt verbatim** and the values it ran with; without one it
-says so and shows the file's own facts. Both cases carry **where it is**.
+says so and shows the file's own facts. Both cases carry **where it is**. In the grid/list preview it is a
+**floating accordion card** over the picture (2026-10-18): the picture fills the panel, the card sits on its
+lower-right corner in the app's raised surface, and opening the accordion grows it upward. Gallery keeps the
+facts in their own column, and a stacked pair keeps them in flow under the stage.
 
 ## Finder's switch, the dropdowns, and the three views (2026-09-26)
 
@@ -150,6 +155,72 @@ the view file from inside a render). **The switch's three glyphs are Lucide's ow
 hand-drawn in the bundle so the control carries ONE drawing style: the harness's grid and rows marks are a
 different family (filled 16-unit geometry) and it ships no gallery glyph at all. All three are 24-unit at
 stroke 1.5, the same grid and weight as the card's mark.
+
+**THE INSPECTION SPLIT BELONGS TO GRID AND LIST, NOT GALLERY** (founder, 2026-10-18: *"the grid view is
+missing the large image on right, should be able to expand so the thumbnails small and large preview takes
+up most of the frame. the filmstrip gallery view attempts this but that view was not supposed to change,
+list view should also have resizable panels"*). In grid and list, selecting an asset opens the **inspection
+column on the right** — A4's stage, then the folded facts — and the line between them is a draggable
+handle. Dragging it left gives the thumbnail column less room and the picture more: the share runs 15–85%,
+and the pixel floors are **160px of thumbnails** and **240px of preview**, so the pane always knows the
+smallest legal pair. Below `160 + 240 + 12 = 412px` there is no room for two columns, so the pane stacks
+them and the handle goes with them.
+
+The arithmetic that makes it fit is one line: **the 12px handle is carved out of the preview's share, not
+added beside it.** The row has no `gap`, the main column is `0 0 60%`, the handle `0 0 12px`, and the
+preview `0 0 calc(40% - 12px)` — exactly 100%. The first cut added the handle as a third flex item while
+the two columns' bases already summed to 100% **and** the row kept its 12px gap on both sides: `100% +
+24px` cannot fit, so flex wrapping dropped the preview *under* the grid. That is why the large image was
+"missing on the right" even though the component existed. The grid's own track floor also yields now —
+`minmax(min(240px, 100%), 1fr)` — so a narrow thumbnail column shrinks its one tile instead of overflowing.
+
+**THE PANE USES THE HOST'S RANGE, NOT ITS OWN** (founder, 2026-10-18: *"i can resize the left panel to
+narrowest width but it snaps back to bigger size"*). The widened 15–85% range shipped in both halves, but a
+running app from before that build still clamps every write to 0.3–0.8. The pane was offering the new floor,
+the host stored the old one, and the divider jumped back the moment it was released. The view route now
+answers `splitBounds` on every read and write; the pane intersects that with its own range and the two pixel
+floors. A host from before the field (the one still running) omits it, and the pane falls back to exactly
+that host's **0.3–0.8** — so a drag to the floor stays where it was dropped. Restart the app and the new host
+answers 0.15, and the full range opens without another edit.
+
+`gallery` keeps the shape it shipped with: the stage at the pane's width, the 56×74 frames in one strip
+under it, the facts in the side column at the fixed 3:2 pair, and **no handle**. The founder asked for that
+view to be left alone; the resizable inspection column is grid/list's job.
+
+**THE TOP THREE ROWS STAY, AND EACH COLUMN SCROLLS ITSELF** (founder, 2026-10-18: *"the left panel can
+scroll but not the right, the top 3 rows are sticky"*). The pane used to be **one scroll box**, so the
+header, the folder tabs and the bar scrolled away with the pictures, and the preview column had no scroll
+container of its own — its facts were simply carried by the page. The pane is now a fixed frame
+(`overflow: hidden`): the header, folder tabs and bar live in a non-scrolling top block (`flex: 0 0 auto`),
+the columns row takes the remaining height (`flex: 1 1 0`), and **each column owns its own scrollbar**
+(`overflow-y: auto`). A tall grid no longer pushes the preview's facts out of reach, and a tall preview does
+not scroll the thumbnails. Two CSS facts make it real, and both were measured in headless Chromium rather
+than assumed: the row needs a **zero flex basis** (`1 1 0`) so it takes the space left by the top block, and
+each column needs **`height: 100%`** — `align-items: stretch` does **not** shrink a flex line whose content
+is taller than the row, so without the explicit height the columns were 2,000px tall inside a 646px row and
+`overflow-y: auto` had nothing to scroll. When the pane is narrower than 412px the pair stacks, the columns
+go back to `height: auto` / `overflow: visible`, and the **row** becomes the scroll box instead, because two
+column scrollbars in a stacked pair would nest.
+
+The loading, error and empty states still scroll as one sheet — they have no columns to divide, and the
+fixed frame is only useful once there is a library to move through.
+
+**THE PICTURE IS THE PANEL, AND THE FACTS FLOAT ON IT** (founder, 2026-10-18: *"make the metadata a floating
+accordion card"*). In a side-by-side grid/list pair the preview column is now one unframed stage filling the
+column (`width: 100%; height: 100%; border: 0; border-radius: 0`), and the metadata block is an **absolutely
+positioned card** on its lower-right corner: `bg-layer-2`, a `border-l3` hairline, a 12px radius and the app's
+prominent elevation. It is bottom-anchored, so opening the facts grows the card **upward** over the picture;
+`max-height: calc(100% - 64px)` (the top 56px are the stage's controls and hint) and its own `overflow-y` keep it inside the preview and scroll the facts once
+they outgrow it. Because the card owns the lower-right corner, the stage's **hint and zoom controls move to the
+top** (`top: 8`) in this mode — the card can never cover Fit or 1:1.
+
+Two cases deliberately do NOT float: **gallery** already has a second stage in its main column and a facts
+column of its own, and a **stacked** pair has no side-by-side preview to float over (its row scrolls). Both
+keep the block in flow; the card is the grid/list inspection layout's own.
+
+The tile changed with the same pass: the on-image badges are gone, the thumbnail is the card, the name is the
+**full file name**, and the **size chip is below the picture** in the text area. A tile no longer repeats the
+folder it came from; that is a fact of the metadata card.
 
 ### The harness grew a `Button`, and that closed a real gap
 
@@ -376,7 +447,10 @@ The stage sits in the metadata block, above the facts: the picture is **fitted a
 the wheel zooms about the cursor, a drag pans, and **1:1 asks for the original file** — the stage
 draws the `&w=1024` preview until you ask, because a grid of tiles should never cost originals.
 The frame is measured with a `ResizeObserver`, so the fit follows the pane as it resizes (docked,
-split, fullscreen).
+split, fullscreen). **The inspection column asks for `fill`** (2026-10-18): the stage takes the column's
+own width and only the viewport height caps it, so dragging the split wider really makes the picture
+bigger. Gallery does not ask for it and keeps the shipped `60vh` ceiling with the ratio's matching width
+cap.
 
 **THE FRAME IS THE PICTURE'S SHAPE, AND THE PICTURE'S BOX IS ITS OWN PIXELS** (founder, 2026-09-26:
 *"fix the main preview it should be same aspect as the image or we can lock view as 3:4 as default"*). Two
@@ -494,5 +568,5 @@ The review layer (stars, colour tags, keywords) — it waits on the founder's vo
 one MVP part this plugin does not have; A4 (zoom inspect) and A5 (the optional sync) are the other two slices
 of epic 63. The plan of record is `docs/plans/63-assets-library-epic.md` in the dsh-mitsu
 workspace, and the surface reference is hand-me-up-os's own `AssetPanel.tsx`
-(`repeat(auto-fit, minmax(240px, 1fr))`, no breakpoints, a grid/list toggle, a filled context badge beside an
-outlined size badge).
+(`repeat(auto-fit, minmax(240px, 1fr))`, no breakpoints, a grid/list toggle, an outlined size chip under the
+thumbnail rather than a badge on it).

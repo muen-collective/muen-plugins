@@ -231,25 +231,35 @@ async function render() {
   check('with a transform driven by the scale the math produced', !!image && /scale\(1\)/.test(String(image.props.style.transform)), image ? String(image.props.style.transform) : 'no image')
   check('and a scale label a person can read', !!find(tree, 'data-assets-stage-label', 'yes') && textIn(tree).includes('100%'), textIn(tree).slice(0, 60))
 
-  // THE FRAME IS THE PICTURE'S SHAPE, AND THE PICTURE'S BOX IS ITS OWN PIXELS (founder, 2026-09-26:
-  // *"fix the main preview it should be same aspect as the image or we can lock view as 3:4 as default"*).
-  // The stage was a fixed 280px box, and the `<img>` was laid out at the PREVIEW bitmap's size while the
-  // fit divided the FILE's width — so a 1440-pixel file drawn from a 1024-pixel bitmap opened at 54% of
-  // the fit, which is the "11%" on a picture that filled a third of the stage. Both halves are asserted:
-  // the box's shape and the box's size.
-  check('the stage takes the picture’s own shape, not a fixed box', stage.props.style.aspectRatio === '1440 / 1920', String(stage.props.style.aspectRatio))
+  // THE PICTURE'S BOX IS ITS OWN PIXELS (founder, 2026-09-26: *"fix the main preview it should be same
+  // aspect as the image or we can lock view as 3:4 as default"*). The `<img>` was laid out at the
+  // PREVIEW bitmap's size while the fit divided the FILE's width — so a 1440-pixel file drawn from a
+  // 1024-pixel bitmap opened at 54% of the fit, which is the "11%" on a picture that filled a third of
+  // the stage. The picture is still laid out at its declared pixel size.
   check(
-    'and the picture is laid out at its own pixel size, so the fit scale means what the label says',
+    'the picture is laid out at its own pixel size, so the fit scale means what the label says',
     image.props.style.width === 1440 && image.props.style.height === 1920,
     image.props.style.width + '×' + image.props.style.height,
   )
-  check('with the ceiling and the width cap the ratio needs', stage.props.style.maxHeight === '60vh' && String(stage.props.style.maxWidth).startsWith('calc(60vh * '), String(stage.props.style.maxHeight) + ' / ' + String(stage.props.style.maxWidth))
-  // A FRAME, SO THE PICTURE HAS AN EDGE (founder, 2026-09-26: *"add border around the side preview"*).
-  // The app's own card ink, and border-box so the hairline cannot widen the frame past the column.
+  // THE STAGE IS THE PANEL, NOT A FRAME AROUND IT (2026-10-18). With the metadata floating over the
+  // picture, the preview column is the picture: the stage fills its width and height, and the ratio is
+  // carried by the image inside it (the fit) rather than by a box that could be a different shape.
   check(
-    'and the preview is framed in the app’s own hairline, measured inside its own box',
-    String(stage.props.style.border).includes('var(--dsw-alias-border-l3)') && stage.props.style.boxSizing === 'border-box',
-    String(stage.props.style.border) + ' / ' + String(stage.props.style.boxSizing),
+    'the stage fills the preview panel, so a wider split is a bigger picture',
+    stage.props.style.width === '100%' && stage.props.style.height === '100%' && stage.props.style.maxHeight === 'none',
+    String(stage.props.style.width) + ' / ' + String(stage.props.style.height) + ' / ' + String(stage.props.style.maxHeight),
+  )
+  check(
+    'and no width cap or aspect box of its own fights that — the column decides',
+    stage.props.style.maxWidth === undefined && stage.props.style.aspectRatio === undefined,
+    String(stage.props.style.maxWidth) + ' / ' + String(stage.props.style.aspectRatio),
+  )
+  // UNFRAMED, BECAUSE THE PICTURE IS THE PANEL (2026-10-18). The framed form stays in gallery, where
+  // the stage sits above a strip and needs an edge to read as one picture.
+  check(
+    'and the preview is unframed — the picture is the panel, not a card inside it',
+    stage.props.style.border === 0 && stage.props.style.borderRadius === 0 && stage.props.style.boxSizing === 'border-box',
+    String(stage.props.style.border) + ' / ' + String(stage.props.style.borderRadius) + ' / ' + String(stage.props.style.boxSizing),
   )
 
   const before = String(image.props.style.transform)
@@ -305,7 +315,7 @@ async function render() {
   view = { ...view, selected: LOOSE }
   let tree = await render()
   const stage = find(tree, 'data-assets-stage', 'yes')
-  check('a picture that declares no size falls back to the 3:4 lock', !!stage && stage.props.style.aspectRatio === '3 / 4', stage ? String(stage.props.style.aspectRatio) : 'no stage')
+  check('the filled stage stays the panel even when the picture declares no size', !!stage && stage.props.style.height === '100%' && stage.props.style.aspectRatio === undefined, stage ? String(stage.props.style.height) + ' / ' + String(stage.props.style.aspectRatio) : 'no stage')
   let image = find(tree, 'data-assets-stage-image', 'yes')
   check('and is laid out by the bitmap rather than by a guess', !!image && image.props.style.width === undefined, image ? String(image.props.style.width) : 'no image')
 
@@ -315,8 +325,8 @@ async function render() {
   image = find(tree, 'data-assets-stage-image', 'yes')
   const landed = find(tree, 'data-assets-stage', 'yes')
   check(
-    'when the bitmap lands, the box becomes its size and the frame follows its shape',
-    image.props.style.width === 800 && image.props.style.height === 600 && landed.props.style.aspectRatio === '800 / 600',
+    'when the bitmap lands, the picture takes its size inside the panel',
+    image.props.style.width === 800 && image.props.style.height === 600 && landed.props.style.aspectRatio === undefined,
     image.props.style.width + '×' + image.props.style.height + ' in a ' + String(landed.props.style.aspectRatio),
   )
 

@@ -219,7 +219,10 @@ function press(tree, label) {
   tree = alonePane({ locale: { bind: () => t }, useTabInfo: () => ({ tab: { actions: { openTab: (...args) => opened.push(args) }, navigation: { params: null, revision: 0 } } }) })
 
   const text = textOf(tree).join(' | ')
-  check('with no Generate tab type registered, the library still draws the file’s own facts', text.includes(EN['meta.file']) && text.includes('job-aaa') && text.includes('qwen-2-1-image-edit'), text.slice(0, 100))
+  // THE FACTS ARE FOLDED (2026-10-17), so what is always on screen is the disclosure's own row: the file
+  // is named, and the run is one press away. The ACTION beside it — what this section is about — does
+  // not fold, which is why the sentence below is still asserted at rest.
+  check('with no Generate tab type registered, the library still names the file at rest', text.includes('20260926-job-aaa.png'), text.slice(0, 100))
   const sentence = collect(tree, (node) => node.props && node.props['data-assets-no-continue'] === 'no-generate')[0]
   check('plus ONE sentence saying why the run cannot be opened here', !!sentence && textOf(sentence).join(' ').includes(EN['meta.continue.noPlugin']), sentence ? textOf(sentence).join(' ') : 'no sentence')
   check('and never a dead control', collect(tree, (node) => node.props && node.props['data-assets-continue'] !== undefined).length === 0, '')
@@ -245,9 +248,14 @@ function press(tree, label) {
   // A FILE NO RUN MADE: neither a control nor a sentence — there is no run to speak of, and
   // the block already says so in its own words.
   view = { ...view, selected: LOOSE }
-  const tree = await render({ openTab: () => {} })
+  let tree = await render({ openTab: () => {} })
   const text = textOf(tree).join(' | ')
   check('a file no run made draws no handoff at all', collect(tree, (node) => node.props && node.props['data-assets-continue'] !== undefined).length === 0 && collect(tree, (node) => node.props && node.props['data-assets-no-continue'] !== undefined).length === 0, text.slice(0, 80))
+  // THE SENTENCE IS A FACT, so it lives in the folded body (2026-10-17): open the disclosure, then
+  // re-render the same component with the hook slots the collapsed pass filled.
+  collect(tree, (node) => node.props && node.props['data-assets-facts-toggle'] === 'yes')[0].props.onClick()
+  mini.reset()
+  tree = pane({ locale: { bind: () => t }, useTabInfo: () => ({ tab: { actions: { openTab: () => {} }, navigation: { params: null, revision: 0 } } }) })
   check('and it still says the file has no run behind it', !!collect(tree, (node) => node.props && node.props['data-assets-meta-norecord'] === 'yes')[0], '')
 }
 
