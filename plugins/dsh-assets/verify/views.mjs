@@ -254,36 +254,34 @@ async function render(passes = 4) {
   view = { ...view, selected: RECORDED }
   const tree = await render()
   const text = textOf(tree).join(' | ')
-  // NO HEADING AND NO SEPARATOR (founder, 2026-09-26: *"remove separator and Metadata label"*): the block
-  // is named by the facts it holds, not by a word over them, and it draws no hairline of its own.
+  // THE METADATA IS A PILL NOW (2026-10-18: *"make the floating metadata card just a pill with 2 icon
+  // buttons, expand and trash. all views are like this"*). At rest the block is the capsule and
+  // nothing else; the facts and the Regenerate live in the panel the chevron opens.
   const block = collect(tree, (node) => node.props && node.props['data-assets-meta'] === 'yes')[0]
-  check('a selected tile opens the facts block, with no heading over it', !!block && !text.includes('Metadata'), text.slice(0, 80))
-  check('and the block draws no separator of its own', !!block && block.props.style.borderTop === undefined && block.props.style.paddingTop === undefined, block ? JSON.stringify({ borderTop: block.props.style.borderTop, paddingTop: block.props.style.paddingTop }) : 'no block')
-
-  // ── THE FACTS ARE FOLDED (founder, 2026-10-17: *"the metadata info is better collapsed in accordion
-  // instead being visible all the time"*). At rest: one row naming the file, and none of the facts.
-  const toggle = collect(tree, (node) => node.props && node.props['data-assets-facts-toggle'] === 'yes')[0]
-  check('the block opens with ONE row, not a wall of facts', !!toggle && toggle.props['aria-expanded'] === 'false', toggle ? String(toggle.props['aria-expanded']) : 'no toggle')
-  check('that row names the file and sums it up — format and size', !!toggle && textOf(toggle).join(' ').includes('20260926-job-aaa.png') && textOf(toggle).join(' ').includes('PNG') && textOf(toggle).join(' ').includes('2.8 MB'), toggle ? textOf(toggle).join(' ') : 'none')
-  check('and the facts themselves are NOT on screen until asked for', collect(tree, (node) => node.props && node.props['data-assets-facts'] === 'yes').length === 0, 'the body was mounted while collapsed')
-  check('nothing folded away is even in the tree — the body is unmounted, not hidden', !text.includes('1440 × 1920') && !text.includes('Where it is'), text.slice(0, 100))
-
-  // THE ACTIONS DO NOT FOLD: a destructive control behind a collapsed section is a trap.
-  check('Delete stays outside the disclosure', collect(tree, (node) => node.props && node.props['data-assets-delete'] === 'yes').length === 1, 'no delete control at rest')
-  check('and so does the way back into the run', collect(tree, (node) => node.props && (node.props['data-assets-continue'] !== undefined || node.props['data-assets-no-continue'] !== undefined)).length === 1, 'no Regenerate at rest')
+  const expand = collect(tree, (node) => node.props && node.props['data-assets-pill-expand'] === 'yes')[0]
+  const trash = collect(tree, (node) => node.props && node.props['data-assets-pill-trash'] === 'yes')[0]
+  check('a selected tile opens the metadata pill', !!block && !!expand && !!trash, JSON.stringify({ block: !!block, expand: !!expand, trash: !!trash }))
+  check('the pill is two icon buttons and no text at rest', !!block && textOf(block).join('').trim() === '' && !text.includes('Metadata'), textOf(block || tree).join('').slice(0, 60))
+  check('the expand button is shut and says so', !!expand && expand.props['aria-expanded'] === 'false', expand ? String(expand.props['aria-expanded']) : 'no expand')
+  check('the trash is present at rest', !!trash && trash.props['data-assets-delete'] === 'yes', trash ? 'drawn' : 'no trash')
+  check('the facts are NOT in the tree until asked for', collect(tree, (node) => node.props && node.props['data-assets-facts'] === 'yes').length === 0, 'the panel was mounted while shut')
+  check('nothing folded away is even in the tree — the panel is unmounted, not hidden', !text.includes('1440 × 1920') && !text.includes('Where it is'), text.slice(0, 100))
+  check('and Regenerate is not a third pill control', collect(tree, (node) => node.props && (node.props['data-assets-continue'] !== undefined || node.props['data-assets-no-continue'] !== undefined)).length === 0, 'the handoff is outside the panel')
 
   // OPENING IT. The press flips the same component's state, so a re-render (not a re-read) is what
-  // shows the facts — that is what a disclosure is, and it is why this section re-renders in place
-  // with the hook slots the collapsed render already filled.
+  // shows the panel.
   const rerender = () => {
     mini.reset()
     return pane({ locale: { bind: () => t } })
   }
-  toggle.props.onClick()
+  expand.props.onClick()
   const opened = rerender()
   const openedText = textOf(opened).join(' | ')
-  const openedToggle = collect(opened, (node) => node.props && node.props['data-assets-facts-toggle'] === 'yes')[0]
-  check('pressing the row opens the facts', !!openedToggle && openedToggle.props['aria-expanded'] === 'true' && collect(opened, (node) => node.props && node.props['data-assets-facts'] === 'yes').length === 1, openedToggle ? String(openedToggle.props['aria-expanded']) : 'none')
+  const openedExpand = collect(opened, (node) => node.props && node.props['data-assets-facts-toggle'] === 'yes')[0]
+  check('pressing the expand opens the facts panel', !!openedExpand && openedExpand.props['aria-expanded'] === 'true' && collect(opened, (node) => node.props && node.props['data-assets-facts'] === 'yes').length === 1, openedExpand ? String(openedExpand.props['aria-expanded']) : 'none')
+  const head = collect(opened, (node) => node.props && node.props['data-assets-facts-name'] === 'yes')[0]
+  const summary = collect(opened, (node) => node.props && node.props['data-assets-facts-summary'] === 'yes')[0]
+  check('the panel names the file and sums it up — format and size', !!head && textOf(head).join('') === '20260926-job-aaa.png' && !!summary && textOf(summary).join('') === 'PNG · 2.8 MB', JSON.stringify({ head: head && textOf(head).join(''), summary: summary && textOf(summary).join('') }))
   check('it names the file and its dimensions', openedText.includes('20260926-job-aaa.png') && openedText.includes('1440 × 1920'), '')
   check('and its format, size and date', openedText.includes('PNG') && openedText.includes('2.8 MB') && openedText.includes('2026-09-26'), '')
   check('and WHERE IT IS, which is the catalog job', openedText.includes('Where it is') && openedText.includes('here'), '')
@@ -291,9 +289,10 @@ async function render(passes = 4) {
   const prompt = collect(opened, (node) => node.props && node.props['data-assets-prompt'] === 'yes')
   check('the prompt is shown verbatim', prompt.length === 1 && prompt[0].children[0] === 'The woman in Image 1 wears the outfit from Image 2.', prompt.length ? String(prompt[0].children[0]).slice(0, 60) : 'none')
   check('and the values it ran with', openedText.includes('cfg') && openedText.includes('image'), '')
+  check('and the way back into the run is in the panel', collect(opened, (node) => node.props && (node.props['data-assets-continue'] !== undefined || node.props['data-assets-no-continue'] !== undefined)).length === 1, 'no Regenerate in the panel')
 
-  // AND CLOSING IT AGAIN puts the block back the way it was found.
-  openedToggle.props.onClick()
+  // AND CLOSING IT AGAIN puts the capsule back the way it was found.
+  openedExpand.props.onClick()
   const shut = rerender()
   check('pressing it again folds the facts away', collect(shut, (node) => node.props && node.props['data-assets-facts'] === 'yes').length === 0, 'still open')
 }
@@ -666,21 +665,22 @@ async function render(passes = 4) {
 
   // ── THE FACTS ARE A FLOATING CARD OVER THE PICTURE (2026-10-18) ──────────
   //
-  // The founder: *"make the metadata a floating accordion card"*. The side column is the picture (one
-  // unframed stage filling it), the metadata block is absolutely positioned on its lower-right corner,
-  // and the block is told `withStage: false` so there is exactly one picture in the column.
+  // THE METADATA IS THE PILL (2026-10-18). The side column is the picture (one unframed stage
+  // filling it), and the pill is absolutely positioned on its lower-right corner. There is no stage
+  // inside the pill any more.
   const floatMeta = collect(side, (node) => node.props && node.props['data-assets-meta'] === 'yes')[0]
   check(
-    'the facts are a floating card, anchored to the preview column',
+    'the pill is anchored to the preview column',
     !!floatMeta && floatMeta.props['data-assets-meta-float'] === 'yes' && floatMeta.props.style.position === 'absolute' && !!side && side.props.style.position === 'relative' && side.props['data-assets-side-float'] === 'yes',
-    floatMeta ? JSON.stringify({ card: floatMeta.props.style.position, side: side && side.props.style.position, float: side && side.props['data-assets-side-float'] }) : 'no card',
+    floatMeta ? JSON.stringify({ pill: floatMeta.props.style.position, side: side && side.props.style.position, float: side && side.props['data-assets-side-float'] }) : 'no pill',
   )
+  const floatPill = collect(floatMeta, (node) => node.props && node.props['data-assets-pill'] === 'yes')[0]
   check(
-    'the card is bottom-RIGHT, in the app’s raised surface, and never grows past the preview',
-    !!floatMeta && floatMeta.props.style.bottom === 8 && floatMeta.props.style.right === 8 && String(floatMeta.props.style.background).includes('--dsw-alias-bg-layer-2') && String(floatMeta.props.style.maxHeight).includes('100%'),
-    floatMeta ? JSON.stringify({ bottom: floatMeta.props.style.bottom, right: floatMeta.props.style.right, bg: floatMeta.props.style.background }) : 'no card',
+    'the pill is bottom-RIGHT, in the app’s raised surface, and never grows past the preview',
+    !!floatMeta && floatMeta.props.style.bottom === 8 && floatMeta.props.style.right === 8 && String(floatMeta.props.style.maxHeight).includes('100%') && !!floatPill && String(floatPill.props.style.background).includes('--dsw-alias-bg-layer-2') && String(floatPill.props.style.boxShadow).length > 0,
+    floatMeta ? JSON.stringify({ bottom: floatMeta.props.style.bottom, right: floatMeta.props.style.right, bg: floatPill && floatPill.props.style.background }) : 'no pill',
   )
-  check('and the picture is the panel behind it, with a single stage in the column', !!side && collect(side, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 1 && !!floatMeta && collect(floatMeta, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 0, 'the card contains a second stage')
+  check('and the picture is the panel behind it, with a single stage in the column', !!side && collect(side, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 1 && !!floatMeta && collect(floatMeta, (node) => node.props && node.props['data-assets-stage'] === 'yes').length === 0, 'the pill contains a second stage')
 
   // ── THE TOP ROWS STAY, AND EACH COLUMN SCROLLS ITSELF (2026-10-18) ────────
   //
@@ -990,7 +990,7 @@ async function render(passes = 4) {
   check('the block offers Delete when the host has a trash verb', !!control, control ? textOf(control).join('') : 'none')
   check('without a Delete control there is nothing to press — the checks below would be guesses', !!control, control ? 'pressable' : 'no control')
   check('and it says which key does the same thing', !!control && String(control.props.title).includes('⌘⌫'), control ? String(control.props.title) : 'no title')
-  check('through the app’s own Button, not the fallback a host without primitives gets', !!control && control.props['data-stub-button'] === 'ghost:sm', control ? String(control.props['data-stub-button']) : 'no stub button')
+  check('the trash is an icon button, not a text control', !!control && control.props['data-assets-pill-trash'] === 'yes' && Boolean(control.props['aria-label']), control ? JSON.stringify({ pill: control.props['data-assets-pill-trash'], label: control.props['aria-label'] }) : 'no trash')
 
   if (control) control.props.onClick()
   tree = rerender()
@@ -1009,6 +1009,7 @@ async function render(passes = 4) {
   tree = rerender()
   const confirm = collect(tree, (node) => node.props && node.props['data-assets-delete-confirm'] === 'yes')[0]
   check('the question offers the act itself', !!confirm, confirm ? textOf(confirm).join('') : 'no confirm')
+  check('and the confirm is the app’s own Button, not a hand-rolled one', !!confirm && confirm.props['data-stub-button'] === 'primary:sm', confirm ? String(confirm.props['data-stub-button']) : 'no stub button')
   if (confirm) await confirm.props.onClick()
   tree = rerender()
   const sent = deletePosts()

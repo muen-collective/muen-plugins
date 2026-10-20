@@ -321,11 +321,8 @@ window.__ModuleLoader__.load({
       itemMeta: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, display: 'flex', gap: 8, minWidth: 0 },
       input: { width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l3)', background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12.5 },
       error: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5 },
-      // The one destructive row in the pane, and the one line that says where a file went.
-      deleteRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 },
+      // The trash confirm's own words, drawn in the pill's transient bubble.
       deleteAsk: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5 },
-      // The pane's own error ink, worn by the control: a ghost button that says what it does.
-      deleteInk: { color: 'var(--dsw-alias-state-error-primary)' },
       notice: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, padding: '0 2px' },
       // THE GRID, from the OS that shipped this surface: fluid columns, a 240px floor, no
       // breakpoints — the pane's own width is the only input (`repeat(auto-fit, minmax(240px, 1fr))`).
@@ -449,37 +446,6 @@ window.__ModuleLoader__.load({
       frame: { flex: '0 0 auto', width: 56, height: 74, padding: 0, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-2)', cursor: 'pointer', overflow: 'hidden' },
       frameOn: { borderColor: 'var(--dsw-alias-brand-primary)' },
       frameImage: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
-      // No separator and no heading (founder, 2026-09-26: *"remove separator and Metadata label"*). The
-      // block already sits in its own column of the bar's own layout, so a hairline between them drew a
-      // line where the layout had already drawn one, and a word naming a list of a file's facts is the
-      // list's least informative line.
-      meta: { display: 'flex', flexDirection: 'column', gap: 6 },
-      // THE FACTS ARE A FLOATING CARD IN THE PREVIEW (2026-10-18: *"make the metadata a floating
-      // accordion card"*). The picture is the panel; the facts sit on top of its lower-right corner in
-      // the app's own raised surface — the same card ink the menus use — instead of taking a column of
-      // their own and pushing the picture smaller. The card is bottom-anchored, so opening the
-      // accordion grows it UPWARD over the image; `maxHeight` keeps it inside the preview and its own
-      // `overflowY` scrolls the facts once they outgrow that. The stage's controls move to the
-      // TOP-right when the card is present, so the card never covers them.
-      metaFloat: {
-        position: 'absolute',
-        right: 8,
-        bottom: 8,
-        zIndex: 3,
-        width: 'min(360px, calc(100% - 16px))',
-        // THE TOP 56px ARE THE STAGE'S: the hint and the Fit / 1:1 controls live up there in fill
-        // mode, and a card that could grow to the full height would cover them exactly when a person
-        // opened the long facts. The card scrolls instead.
-        maxHeight: 'calc(100% - 64px)',
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        boxSizing: 'border-box',
-        padding: '8px 10px',
-        borderRadius: 12,
-        border: '0.5px solid var(--dsw-alias-border-l3)',
-        background: 'var(--dsw-alias-bg-layer-2)',
-        boxShadow: 'var(--dsw-elevation-prominent, 0 8px 24px rgba(0, 0, 0, 0.28))',
-      },
       // THE INSPECT STAGE (epic 63 A4): the picture in a frame of its own, above the facts.
       // THE FRAME IS THE PICTURE'S SHAPE (founder, 2026-09-26: *"fix the main preview it should be same
       // aspect as the image or we can lock view as 3:4 as default"*). It was a fixed 280px-tall box, so a
@@ -500,17 +466,30 @@ window.__ModuleLoader__.load({
       metaRow: { display: 'flex', gap: 10, justifyContent: 'space-between', minWidth: 0 },
       metaKey: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11.5, whiteSpace: 'nowrap' },
       metaValue: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11.5, textAlign: 'right', overflowWrap: 'anywhere', minWidth: 0 },
-      // ── the disclosure (2026-10-17) ────────────────────────────────────────
+      // ── THE METADATA PILL (2026-10-18) ─────────────────────────────────────
       //
-      // THE BLOCK'S ALWAYS-ON ROW: a chevron, the file's name, and the two facts that orient a person.
-      // It is a `button`, so it carries no border or fill of its own — the row should read as the
-      // block's caption, not as a control sitting in a card. The name is the flexible part and clips;
-      // the summary is tabular so two pictures of the same size line up under each other.
-      factsToggle: { display: 'flex', alignItems: 'baseline', gap: 6, width: '100%', minWidth: 0, margin: 0, padding: '2px 0', border: 0, background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', textAlign: 'left', cursor: 'pointer' },
+      // The founder: *"make the floating metadata card just a pill with 2 icon buttons, expand and
+      // trash. all views are like this"*. At rest the metadata is a small capsule at the preview's
+      // lower-right: a chevron and a trash can, nothing else. The facts panel grows UPWARD from the
+      // pill when the chevron is pressed; the pill itself stays put. The confirm for the trash is a
+      // transient bubble above the pill, not a permanent row.
+      //
+      // THE PILL IS ABSOLUTE against the caller's positioned preview box (the grid/list side column,
+      // the stacked stage, or the gallery stage). `maxHeight: calc(100% - 64px)` reserves the top
+      // strip for the stage's hint and Fit / 1:1 controls; the panel is the flexible child that
+      // scrolls when the facts outgrow the space.
+      pillWrap: { position: 'absolute', right: 8, bottom: 8, zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, maxWidth: 'calc(100% - 16px)', maxHeight: 'calc(100% - 64px)', boxSizing: 'border-box' },
+      pill: { display: 'inline-flex', alignItems: 'center', gap: 2, padding: 3, borderRadius: 999, border: '0.5px solid var(--dsw-alias-border-l3)', background: 'var(--dsw-alias-bg-layer-2)', boxShadow: 'var(--dsw-elevation-prominent, 0 8px 24px rgba(0, 0, 0, 0.28))', flex: '0 0 auto' },
+      pillButton: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, padding: 0, border: 0, borderRadius: '50%', background: 'transparent', color: 'var(--dsw-alias-label-primary)', cursor: 'pointer' },
+      pillDanger: { color: 'var(--dsw-alias-state-error-primary)' },
+      pillPanel: { display: 'flex', flexDirection: 'column', gap: 6, flex: '0 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', width: 'min(360px, 100%)', padding: '10px 12px', borderRadius: 12, border: '0.5px solid var(--dsw-alias-border-l3)', background: 'var(--dsw-alias-bg-layer-2)', boxShadow: 'var(--dsw-elevation-prominent, 0 8px 24px rgba(0, 0, 0, 0.28))' },
+      pillHead: { display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 },
+      pillAsk: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', maxWidth: '100%', flex: '0 0 auto', padding: '7px 9px', borderRadius: 10, border: '0.5px solid var(--dsw-alias-border-l3)', background: 'var(--dsw-alias-bg-layer-2)', boxShadow: 'var(--dsw-elevation-prominent, 0 8px 24px rgba(0, 0, 0, 0.28))' },
+      pillError: { maxWidth: '100%', flex: '0 0 auto', padding: '6px 9px', borderRadius: 10, border: '0.5px solid var(--dsw-alias-border-l3)', background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-state-error-primary)', fontSize: 11.5 },
       factsName: { flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 500 },
       factsSummary: { flex: '0 0 auto', color: 'var(--dsw-alias-label-tertiary)', fontSize: 11, fontVariantNumeric: 'tabular-nums' },
-      // The folded body, indented under the row that opened it so the hierarchy is visible at a glance.
-      factsBody: { display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 18, paddingTop: 2 },
+      // The panel's facts, under its filename row. No extra indent: the panel itself is the inset.
+      factsBody: { display: 'flex', flexDirection: 'column', gap: 6 },
       // THE HANDOFF'S ROW. The control is the block's one action, so it sits on its own line
       // under the run it belongs to rather than inside a fact row where it would read as one
       // more piece of metadata.
@@ -1296,13 +1275,13 @@ window.__ModuleLoader__.load({
             setBitmap({ width: el.naturalWidth, height: el.naturalHeight })
           },
         }),
-        // THE FLOATING CARD LIVES AT THE BOTTOM-LEFT, so in the filled preview the hint and the zoom
-        // controls move to the TOP: the card must never cover the controls that fit and reset the
-        // picture. Gallery keeps both at the bottom, where its strip is below them.
-        h('span', { style: fill ? { ...S.stageHint, top: 8, bottom: 'auto' } : S.stageHint }, t('stage.hint')),
+        // THE PILL LIVES AT THE BOTTOM-RIGHT, so wherever it floats — the filled preview, the framed
+        // panel a stacked pair uses, and the gallery stage — the hint and the zoom controls move to the
+        // TOP. The pill must never cover Fit or 1:1.
+        h('span', { style: fill || panel ? { ...S.stageHint, top: 8, bottom: 'auto' } : S.stageHint }, t('stage.hint')),
         h(
           'div',
-          { style: fill ? { ...S.stageControls, top: 8, bottom: 'auto' } : S.stageControls },
+          { style: fill || panel ? { ...S.stageControls, top: 8, bottom: 'auto' } : S.stageControls },
           h('span', { style: S.stageScale, 'data-assets-stage-label': 'yes' }, String(Math.round(scale * 100)) + '%'),
           h('button', { type: 'button', style: S.stageButton, title: t('stage.fit'), 'data-assets-stage-fit': 'yes', onClick: () => setView(fitView(natural, frame)) }, t('stage.fit')),
           h(
@@ -1460,32 +1439,81 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function MetadataBlock({ detail, loading, t, openGenerate, generateReady, withStage = true, floating = false, canTrash = false, asking = false, busy = false, trashError = null, onAsk, onCancel, onConfirm }) {
-      // THE FACTS ARE FOLDED AWAY (founder, 2026-10-17: *"the metadata info is better collapsed in
-      // accordion instead being visible all the time"*). At rest the block is the picture plus one
-      // line naming the file; everything the library knows about it is one press away.
+    function MetadataBlock({ detail, loading, t, openGenerate, generateReady, canTrash = false, asking = false, busy = false, trashError = null, onAsk, onCancel, onConfirm }) {
+      // THE METADATA IS A PILL NOW (2026-10-18). The founder: *"make the floating metadata card just
+      // a pill with 2 icon buttons, expand and trash. all views are like this"*. At rest the block is
+      // two 30px icon buttons in a capsule at the preview's lower-right; the picture keeps the rest.
       //
-      // WHAT FOLDS AND WHAT DOES NOT: the facts, the run's provenance, the prompt and the values fold
-      // — they are information, and a person inspecting a picture reads them once. The ACTIONS do not:
-      // Regenerate and Delete sit outside the disclosure, because a destructive control behind a
-      // collapsed section is a trap, and "the way back into this run" is the block's whole point.
+      // WHAT THE CHEVRON OPENS: every fact the library has — the file's own rows, the run's
+      // provenance, the prompt and the values, and the way back into Generate — in a panel that grows
+      // UPWARD from the pill. The trash opens a transient confirm bubble; it never deletes on the
+      // first press. The pill and its panel are ABSOLUTE against the caller's positioned preview box
+      // (the grid/list side column, the stacked stage, or the gallery stage).
       //
-      // THE HOOK IS UNCONDITIONAL. The early returns below (loading, no detail) come after it, because a
-      // component that calls a hook on some renders and not others is the one bug the verify shim
+      // THE HOOK IS UNCONDITIONAL. The early returns below (loading, no detail) come after it, because
+      // a component that calls a hook on some renders and not others is the one bug the verify shim
       // would report as a wrong slot rather than a wrong design.
       const [openFacts, setOpenFacts] = React.useState(false)
-      if (loading) {
-        return h(
+      // THE CONFIRM REPLACES THE PANEL, whichever path opened it (the trash button or ⌘⌫ on the pane).
+      React.useEffect(() => {
+        if (asking) setOpenFacts(false)
+      }, [asking])
+
+      /** The capsule, with whatever transient bubbles sit above it (facts panel, confirm, error). */
+      const pill = (extra) =>
+        h(
           'div',
-          {
-            style: { ...S.meta, ...(floating ? S.metaFloat : null) },
-            className: floating ? 'dsh-assets-scroll' : undefined,
-            'data-assets-meta': 'loading',
-            'data-assets-meta-float': floating ? 'yes' : 'no',
-          },
-          h('span', { style: S.muted }, t('pane.loading')),
+          { style: S.pillWrap, 'data-assets-meta': loading ? 'loading' : 'yes', 'data-assets-meta-float': 'yes' },
+          extra,
+          trashError ? h('div', { style: S.pillError, 'data-assets-trash-failed': 'yes' }, trashError) : null,
+          h(
+            'div',
+            { style: S.pill, 'data-assets-pill': 'yes' },
+            h(
+              'button',
+              {
+                type: 'button',
+                'data-assets-pill-expand': 'yes',
+                // The old disclosure's attribute too: the facts are one press away, whichever name a
+                // suite knows them by.
+                'data-assets-facts-toggle': 'yes',
+                'aria-expanded': openFacts ? 'true' : 'false',
+                'aria-label': openFacts ? t('meta.facts.hide') : t('meta.facts.show'),
+                title: openFacts ? t('meta.facts.hide') : t('meta.facts.show'),
+                disabled: loading,
+                onClick: () => setOpenFacts((was) => !was),
+                className: 'dsh-assets-pill-btn',
+                style: S.pillButton,
+              },
+              // A down chevron when the panel is open (it would close it), an up one when it is shut
+              // (the panel grows upward).
+              h(FactsChevron, { size: 16, style: { transform: openFacts ? 'none' : 'rotate(180deg)' } }),
+            ),
+            canTrash && !loading
+              ? h(
+                  'button',
+                  {
+                    type: 'button',
+                    'data-assets-pill-trash': 'yes',
+                    'data-assets-delete': 'yes',
+                    'aria-label': t('meta.delete'),
+                    title: t('meta.delete') + ' ⌘⌫',
+                    disabled: busy,
+                    onClick: () => {
+                      // The confirm replaces the facts panel rather than stacking on it.
+                      setOpenFacts(false)
+                      if (onAsk) onAsk()
+                    },
+                    className: 'dsh-assets-pill-btn dsh-assets-pill-danger',
+                    style: { ...S.pillButton, ...S.pillDanger },
+                  },
+                  h(TrashGlyph, { size: 16 }),
+                )
+              : null,
+          ),
         )
-      }
+
+      if (loading) return pill(null)
       if (!detail) return null
       const provenance = detail.provenance || null
       // The unit a run belongs to, as the record names it. The catalog reads the provider's
@@ -1523,77 +1551,29 @@ window.__ModuleLoader__.load({
             [t('meta.settled'), provenance.settledAt || provenance.at || '—'],
           ]
         : []
-      const picture = detail.where === 'present' && PICTURE_EXT.test(String(detail.ext || ''))
-      // THE SUMMARY LINE IS THE BLOCK'S ONE ALWAYS-ON SENTENCE: the file's name and the two facts that
-      // orient a person (format and size). It is also the disclosure's label, so the row that opens the
-      // facts is the row that already told you what you are looking at — no second heading needed.
+      // The panel's one-line caption: the full file name and the facts that orient a person.
       const summary = [String(detail.ext || '').toUpperCase(), sizeOf(detail.bytes)].filter((part) => part !== '').join(' · ')
-      return h(
+
+      const facts = h(
         'div',
-        {
-          // IN THE PREVIEW THE BLOCK IS A CARD OVER THE PICTURE (2026-10-18), not a column under it:
-          // `metaFloat` is bottom-anchored inside whatever box the caller makes `position: relative` —
-          // the grid/list side column, or the gallery's stage box. A stacked pair stays in flow.
-          style: { ...S.meta, ...(floating ? S.metaFloat : null) },
-          className: floating ? 'dsh-assets-scroll' : undefined,
-          'data-assets-meta': 'yes',
-          'data-assets-meta-float': floating ? 'yes' : 'no',
-        },
-        // The stage first: the facts describe the picture, so the picture leads. Gallery and the
-        // grid/list float pass `withStage: false` because they draw the stage themselves; only a
-        // stacked pair lets the block draw it (`panel: true`).
-        withStage && picture ? h(InspectStage, { detail, t, panel: true }) : null,
-
-        // ── the disclosure: one row, and everything the library knows underneath ──
-        //
-        // A `button` rather than a `div` with a handler, so the keyboard, the focus ring and the
-        // screen reader get the control that a native element already is; `aria-expanded` is what
-        // says whether the facts are showing.
-        h(
-          'button',
-          {
-            type: 'button',
-            'aria-expanded': openFacts ? 'true' : 'false',
-            'data-assets-facts-toggle': 'yes',
-            title: openFacts ? t('meta.facts.hide') : t('meta.facts.show'),
-            onClick: () => setOpenFacts((was) => !was),
-            style: S.factsToggle,
-          },
-          openFacts && IconChevronDownOutline16 ? h(IconChevronDownOutline16, { size: 12 }) : h(FactsChevron, { size: 12 }),
-          h('span', { style: S.factsName, 'data-assets-facts-name': 'yes' }, detail.name),
-          summary === '' ? null : h('span', { style: S.factsSummary, 'data-assets-facts-summary': 'yes' }, summary),
-        ),
-
-        // THE FOLDED BODY. Mounted only when open — not hidden with CSS — so a collapsed block costs a
-        // picture's height and nothing else, and a suite can assert the facts are ABSENT rather than
-        // merely invisible.
-        openFacts
+        { style: S.factsBody },
+        ...rows.map(([key, value]) => h('div', { key: 'f:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
+        provenance
           ? h(
               'div',
-              { style: S.factsBody, 'data-assets-facts': 'yes' },
-              ...rows.map(([key, value]) => h('div', { key: 'f:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
-              provenance
-                ? h(
-                    'div',
-                    { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-                    h('span', { style: S.sectionLabel }, t('meta.run')),
-                    ...runRows.map(([key, value]) => h('div', { key: 'r:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
-                    detail.prompt ? h('span', { style: S.sectionLabel }, t('meta.prompt')) : null,
-                    detail.prompt ? h('div', { style: S.prompt, 'data-assets-prompt': 'yes' }, detail.prompt) : null,
-                    detail.values && detail.values.length > 0 ? h('span', { style: S.sectionLabel }, t('meta.values')) : null,
-                    ...(detail.values || []).slice(0, 24).map((row) =>
-                      h('div', { key: 'v:' + row.key, style: S.metaRow }, h('span', { style: S.metaKey }, row.key), h('span', { style: S.metaValue }, row.value.length > 300 ? row.value.slice(0, 300) + '…' : row.value)),
-                    ),
-                  )
-                : h('span', { style: S.muted, 'data-assets-meta-norecord': 'yes' }, t('meta.noRecord')),
+              { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+              h('span', { style: S.sectionLabel }, t('meta.run')),
+              ...runRows.map(([key, value]) => h('div', { key: 'r:' + key, style: S.metaRow }, h('span', { style: S.metaKey }, key), h('span', { style: S.metaValue }, value))),
+              detail.prompt ? h('span', { style: S.sectionLabel }, t('meta.prompt')) : null,
+              detail.prompt ? h('div', { style: S.prompt, 'data-assets-prompt': 'yes' }, detail.prompt) : null,
+              detail.values && detail.values.length > 0 ? h('span', { style: S.sectionLabel }, t('meta.values')) : null,
+              ...(detail.values || []).slice(0, 24).map((row) =>
+                h('div', { key: 'v:' + row.key, style: S.metaRow }, h('span', { style: S.metaKey }, row.key), h('span', { style: S.metaValue }, row.value.length > 300 ? row.value.slice(0, 300) + '…' : row.value)),
+              ),
             )
-          : null,
-
-        // ── THE ACTIONS, WHICH NEVER FOLD ─────────────────────────────────────
-        //
-        // THE WAY BACK IN (epic 64 S7) and the way out of the file. Both sit OUTSIDE the disclosure on
-        // purpose: a destructive control behind a collapsed section is a trap, and the one control this
-        // block exists for should not cost a press to find first.
+          : h('span', { style: S.muted, 'data-assets-meta-norecord': 'yes' }, t('meta.noRecord')),
+        // THE WAY BACK INTO THE RUN lives in the facts panel now: the pill is exactly two icons, and
+        // Regenerate is information-adjacent rather than a destructive act.
         provenance
           ? h(ContinueControl, {
               jobId: provenance.jobId,
@@ -1605,46 +1585,39 @@ window.__ModuleLoader__.load({
               t,
             })
           : null,
-
-        // ── the way out of the file, without leaving this app ─────────────────
-        //
-        // The founder's ask (2026-09-26): *"a feature to delete the asset as if I am deleting from
-        // finder so I don't have to leave mitsumeru ui"*. It ASKS first, and the host will not move
-        // anything without `confirm: true`, so a press here is never a surprise; the render only
-        // draws this row at all when the host has a trash verb to offer (`canTrash`).
-        canTrash
-          ? h(
-              'div',
-              { style: S.deleteRow, 'data-assets-delete-row': 'yes' },
-              asking
-                ? [
-                    h('span', { key: 'ask', style: S.deleteAsk, 'data-assets-delete-ask': 'yes' }, t('meta.deleteAsk')),
-                    Button
-                      ? h(Button, { key: 'yes', variant: 'primary', size: 'sm', disabled: busy, 'data-assets-delete-confirm': 'yes', onClick: onConfirm }, t('meta.deleteYes'))
-                      : h('button', { key: 'yes', type: 'button', disabled: busy, 'data-assets-delete-confirm': 'yes', onClick: onConfirm }, t('meta.deleteYes')),
-                    Button
-                      ? h(Button, { key: 'no', variant: 'ghost', size: 'sm', 'data-assets-delete-cancel': 'yes', onClick: onCancel }, t('meta.deleteCancel'))
-                      : h('button', { key: 'no', type: 'button', 'data-assets-delete-cancel': 'yes', onClick: onCancel }, t('meta.deleteCancel')),
-                  ]
-                : [
-                    Button
-                      ? h(Button, { key: 'del', variant: 'ghost', size: 'sm', disabled: busy, style: S.deleteInk, title: t('meta.delete') + ' ⌘⌫', 'data-assets-delete': 'yes', onClick: onAsk }, t('meta.delete'))
-                      // The fallback carries the same affordances as the primitive — a title with the
-                      // key that does the same thing — because a host without the primitives is a host
-                      // whose controls still have to explain themselves.
-                      : h('button', { key: 'del', type: 'button', disabled: busy, style: S.deleteInk, title: t('meta.delete') + ' ⌘⌫', 'data-assets-delete': 'yes', onClick: onAsk }, t('meta.delete')),
-                  ],
-            )
-          : null,
-
-        // THE DESTRUCTIVE ACT ANSWERS WHERE IT WAS PRESSED. A refused trash used to be reported by
-        // the room — the pane's `failed` line, above the two columns and wearing the folder-add
-        // sentence — so the founder's press left the picture on screen and the explanation off to
-        // the side (2026-09-26). It belongs under the control that asked, in the trash's own words.
-        // The SUCCESS notice stays in the room instead: a delete that lands clears the selection,
-        // which unmounts this block along with the file.
-        trashError ? h('span', { style: S.error, 'data-assets-trash-failed': 'yes' }, trashError) : null,
       )
+
+      const panel = openFacts
+        ? h(
+            'div',
+            { style: S.pillPanel, className: 'dsh-assets-scroll', 'data-assets-facts': 'yes', role: 'region', 'aria-label': detail.name },
+            h(
+              'div',
+              { style: S.pillHead },
+              h('span', { style: S.factsName, title: detail.path, 'data-assets-facts-name': 'yes' }, detail.name),
+              summary === '' ? null : h('span', { style: S.factsSummary, 'data-assets-facts-summary': 'yes' }, summary),
+            ),
+            facts,
+          )
+        : null
+
+      // THE TRASH ASKS FIRST. The probe is a small bubble above the pill, never a bare destructive
+      // press; the host also refuses a delete without `confirm: true`.
+      const confirm = asking
+        ? h(
+            'div',
+            { style: S.pillAsk, 'data-assets-delete-row': 'yes' },
+            h('span', { style: S.deleteAsk, 'data-assets-delete-ask': 'yes' }, t('meta.deleteAsk')),
+            Button
+              ? h(Button, { variant: 'primary', size: 'sm', disabled: busy, 'data-assets-delete-confirm': 'yes', onClick: onConfirm }, t('meta.deleteYes'))
+              : h('button', { type: 'button', disabled: busy, 'data-assets-delete-confirm': 'yes', onClick: onConfirm }, t('meta.deleteYes')),
+            Button
+              ? h(Button, { variant: 'ghost', size: 'sm', 'data-assets-delete-cancel': 'yes', onClick: onCancel }, t('meta.deleteCancel'))
+              : h('button', { type: 'button', 'data-assets-delete-cancel': 'yes', onClick: onCancel }, t('meta.deleteCancel')),
+          )
+        : null
+
+      return pill(panel || confirm ? [panel, confirm] : null)
     }
 
     /**
@@ -2030,17 +2003,15 @@ window.__ModuleLoader__.load({
         ? t('pane.summary').replace('{n}', String(total))
         : t('pane.summary.filtered').replace('{shown}', String(shownAssets.length)).replace('{total}', String(total))
 
-      // THE FLOATING FACTS CARD (2026-10-18). In grid and list, side by side, the preview column is the
-      // picture and the facts float over its lower-right corner. Gallery does the same inside its stage
-      // box (the card is rendered by `GalleryView`, so it cannot cover the strip). In a stacked pair
-      // the side column is content-height (the row scrolls), so there is nothing to float over: the
-      // facts stay in flow with the stage inside the block.
-      const floatFacts = layout !== 'gallery' && !stacked
+      // THE METADATA IS A PILL IN EVERY VIEW (2026-10-18). The stage is drawn by the caller — the
+      // side column for grid/list (filling it side by side, by its ratio when stacked), the gallery
+      // stage for gallery — and the pill is the metadata in all three. The pill is absolute, so the
+      // caller's box must be `position: relative`; the facts panel grows upward from it.
+      const sideStage = layout !== 'gallery'
       const detailData = detail.data
-      const showStage = floatFacts && detailData && detailData.where === 'present' && PICTURE_EXT.test(String(detailData.ext || ''))
-      // ONE SET OF FACTS PROPS FOR BOTH PLACES (2026-10-18): the grid/list side column and the gallery's
-      // floating card are the same block, so they get the same detail, loading and actions — only the
-      // placement (`withStage`, `floating`) differs.
+      const showStage = sideStage && detailData && detailData.where === 'present' && PICTURE_EXT.test(String(detailData.ext || ''))
+      // ONE SET OF FACTS PROPS FOR EVERY PLACE: the grid/list side and the gallery stage are the same
+      // pill, so they get the same detail, loading and actions.
       const metaProps = {
         detail: detailData,
         loading: detail.phase === 'loading',
@@ -2238,7 +2209,7 @@ window.__ModuleLoader__.load({
                     t,
                     // THE GALLERY'S FACTS ARE THE FLOATING CARD TOO (2026-10-18): over the stage's
                     // lower-right corner, so the picture keeps the full width and the strip stays under.
-                    meta: selectedPath ? h(MetadataBlock, { ...metaProps, withStage: false, floating: true }) : null,
+                    meta: selectedPath ? h(MetadataBlock, metaProps) : null,
                   })
                 : layout === 'grid'
                 ? h(
@@ -2258,22 +2229,20 @@ window.__ModuleLoader__.load({
           twoColumns && !stacked
             ? h(ColumnSplit, { split: shownSplit, min: bounds.min, max: bounds.max, onMove: moveSplit, onCommit: commitSplit, t })
             : null,
-          // THE PREVIEW COLUMN (grid and list). In a side-by-side pair the side column is the picture
-          // (unframed, filling the column) and the metadata block is an absolutely positioned card
-          // over its lower-right corner. That is `floatFacts`; the stage is rendered here, outside the
-          // block, and the block is told `withStage: false` so there is only one picture. In a stacked
-          // pair the side is content-height and the row scrolls, so the block keeps its stage inside
-          // (`panel: true`).
+          // THE PREVIEW COLUMN (grid and list). The stage is the picture — filling the column side by
+          // side, keeping its ratio when stacked — and the metadata is the PILL over its lower-right
+          // corner in both. The pill is absolute, so the column is `position: relative`. There is no
+          // stage inside the block any more.
           //
           // GALLERY HAS NO SIDE COLUMN (2026-10-18): its main thumb takes the whole width and height,
-          // the strip is a fixed row under it, and its facts are the floating card inside the gallery
-          // stage (`GalleryView`), so the picture is as large as the pane can make it.
+          // the strip is a fixed row under it, and its pill is rendered inside the gallery stage
+          // (`GalleryView`), so the picture is as large as the pane can make it.
           selectedPath && layout !== 'gallery'
             ? h(
                 'div',
                 {
                   style: stacked
-                    ? { ...S.columnSide, flex: '1 1 100%', minWidth: 0, height: 'auto', overflowY: 'visible', overflowX: 'visible' }
+                    ? { ...S.columnSide, flex: '1 1 100%', minWidth: 0, minHeight: showStage ? 0 : 120, height: 'auto', overflowY: 'visible', overflowX: 'visible', position: 'relative' }
                     : {
                         ...S.columnSide,
                         ...(widths ? { flex: '0 0 ' + widths.side + 'px' } : { flex: '0 0 calc(' + String(sideShare) + '% - ' + SPLIT_HANDLE + 'px)' }),
@@ -2285,11 +2254,11 @@ window.__ModuleLoader__.load({
                       },
                   className: 'dsh-assets-scroll',
                   'data-assets-side': 'yes',
-                  'data-assets-side-float': floatFacts ? 'yes' : 'no',
+                  'data-assets-side-float': 'yes',
                   'data-assets-side-split': twoColumns ? (stacked ? 'stacked' : String(Math.round((1 - shownSplit) * 100))) : 'full',
                 },
-                floatFacts && showStage ? h(InspectStage, { detail: detailData, t, fill: true }) : null,
-                h(MetadataBlock, { ...metaProps, withStage: !floatFacts, floating: floatFacts }),
+                showStage ? h(InspectStage, { detail: detailData, t, fill: !stacked, panel: stacked }) : null,
+                h(MetadataBlock, metaProps),
               )
             : null,
         ),
@@ -2541,6 +2510,15 @@ window.__ModuleLoader__.load({
       h('path', { key: 'a', d: 'M9 18l6-6-6-6' }),
     ])
 
+    // THE PILL'S TRASH, Lucide's `trash-2` geometry, same 24-unit grid and 1.5 stroke as the rest.
+    const TrashGlyph = viewGlyph('TrashGlyph', [
+      h('path', { key: 'a', d: 'M3 6h18' }),
+      h('path', { key: 'b', d: 'M8 6V4h8v2' }),
+      h('path', { key: 'c', d: 'M19 6l-1 14H6L5 6' }),
+      h('path', { key: 'd', d: 'M10 11v6' }),
+      h('path', { key: 'e', d: 'M14 11v6' }),
+    ])
+
     /** The chip beside the DSH glyph: the library's own mark, then the name — the guide tab's own shape. */
     function AssetsTitle(props) {
       const t = props && props.locale ? props.locale.bind(NS) : (key) => EN[key] || key
@@ -2641,6 +2619,9 @@ window.__ModuleLoader__.load({
           '.dsh-assets-scroll::-webkit-scrollbar-thumb { background: var(--dsw-alias-border-l3); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }\n' +
           '.dsh-assets-scroll::-webkit-scrollbar-thumb:hover { background: var(--dsw-alias-label-tertiary); background-clip: padding-box; }\n' +
           '.dsh-assets-scroll::-webkit-scrollbar-track { background: transparent; }\n' +
+          // The pill's icon buttons read as buttons on hover even without the primitives.
+          '.dsh-assets-pill-btn:hover { background: var(--dsw-alias-interactive-bg-hover); }\n' +
+          '.dsh-assets-pill-btn:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }\n' +
           '.dsh-assets-menu { background: var(--dsw-alias-bg-layer-2); backdrop-filter: none; border: 0.5px solid var(--dsw-alias-border-l3); --dsw-elevation-stroke-color: transparent; }\n'
         document.head.appendChild(style)
         return () => {

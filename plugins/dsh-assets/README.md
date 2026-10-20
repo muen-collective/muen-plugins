@@ -104,10 +104,11 @@ still listed, and nothing invents a file to carry.
 
 The metadata block is what the catalog job is for. With a run behind the file it names the provider, the job,
 the workflow, the app, the date it settled, **the prompt verbatim** and the values it ran with; without one it
-says so and shows the file's own facts. Both cases carry **where it is**. In the grid/list preview it is a
-**floating accordion card** over the picture (2026-10-18): the picture fills the panel, the card sits on its
-lower-right corner in the app's raised surface, and opening the accordion grows it upward. Gallery keeps the
-facts in their own column, and a stacked pair keeps them in flow under the stage.
+says so and shows the file's own facts. Both cases carry **where it is**. In every view the metadata is a
+**PILL** (2026-10-18: *"make the floating metadata card just a pill with 2 icon buttons, expand and trash.
+all views are like this"*): two 30px icon buttons — a chevron that opens the facts and a trash that asks
+before deleting — in a capsule at the preview's lower-right. The facts panel grows upward from the pill; the
+Regenerate control lives in that panel. There is no facts side column in any view.
 
 ## Finder's switch, the dropdowns, and the three views (2026-09-26)
 
@@ -150,8 +151,7 @@ the same shape is `gallery-thumbnails`.
 `InspectStage`, now FILLING THE TOP of the view (2026-10-18: *"fix the main thumb top+filmstrip bottom. it
 should also have metadata bottom right to make the main thumb bigger"*): the stage takes the column's width
 and the height the 56×74 strip leaves, the frames are one fixed row under it, and the facts are the same
-bottom-right floating accordion card as grid/list — rendered INSIDE the stage box, so it can never cover the
-strip. There is no facts side column any more; that column was what made the main thumb smaller. Nothing
+bottom-right pill as grid/list — rendered INSIDE the stage box, so it can never cover the strip. There is no facts side column any more; that column was what made the main thumb smaller. Nothing
 selected says so rather than auto-selecting the first thumbnail (that would write to the view file from
 inside a render). **The switch's three glyphs are Lucide's own — `layout-grid`, `list` and
 `gallery-thumbnails`** —
@@ -208,18 +208,21 @@ column scrollbars in a stacked pair would nest.
 The loading, error and empty states still scroll as one sheet — they have no columns to divide, and the
 fixed frame is only useful once there is a library to move through.
 
-**THE PICTURE IS THE PANEL, AND THE FACTS FLOAT ON IT** (founder, 2026-10-18: *"make the metadata a floating
-accordion card"*). In a side-by-side grid/list pair the preview column is now one unframed stage filling the
-column (`width: 100%; height: 100%; border: 0; border-radius: 0`), and the metadata block is an **absolutely
-positioned card** on its lower-right corner: `bg-layer-2`, a `border-l3` hairline, a 12px radius and the app's
-prominent elevation. It is bottom-anchored, so opening the facts grows the card **upward** over the picture;
-`max-height: calc(100% - 64px)` (the top 56px are the stage's controls and hint) and its own `overflow-y` keep it inside the preview and scroll the facts once
-they outgrow it. Because the card owns the lower-right corner, the stage's **hint and zoom controls move to the
-top** (`top: 8`) in this mode — the card can never cover Fit or 1:1.
+**THE PICTURE IS THE PANEL, AND THE METADATA IS A PILL ON IT** (founder, 2026-10-18: *"make the floating
+metadata card just a pill with 2 icon buttons, expand and trash. all views are like this"*). In a
+side-by-side grid/list pair the preview column is one unframed stage filling the column (`width: 100%;
+height: 100%; border: 0; border-radius: 0`); the metadata is an **absolutely positioned capsule** on its
+lower-right corner with exactly two controls — a chevron and a trash can. The chevron opens a panel that grows
+**upward** with all the facts (and Regenerate); `max-height: calc(100% - 64px)` (the top 56px are the stage's
+controls and hint) and its own `overflow-y` keep it inside the preview and scroll the facts once they outgrow
+it. Because the pill owns the lower-right corner, the stage's **hint and zoom controls move to the top**
+(`top: 8`) — the pill can never cover Fit or 1:1. The trash opens a transient confirm bubble, never a bare
+delete.
 
-Gallery floats too (2026-10-18), with one difference: its card is rendered **inside the gallery stage**, above
-the strip, so the 56×74 filmstrip stays fully visible. One case deliberately does NOT float: a **stacked**
-pair has no side-by-side preview to float over (its row scrolls), so the block stays in flow under the stage.
+**All views are like this.** Gallery renders the same pill **inside the gallery stage**, above the strip, so
+the 56×74 filmstrip stays visible; a **stacked** pair renders the same pill over the framed stage panel, so a
+narrow pane still gets two icons rather than a wall of text. The only thing the stacked case does differently is
+the stage's own sizing (its ratio, not a fill).
 
 The tile changed with the same pass: the on-image badges are gone, the thumbnail is the card, the name is the
 **full file name**, and the **size chip is below the picture** in the text area. A tile no longer repeats the
@@ -233,7 +236,7 @@ newly selected frame into view with `scrollIntoView({ inline: 'nearest' })`. The
 picture is clean at rest) and carry `aria-label`s for a screen reader.
 
 The scrollbar itself is also easier to hit: every scroll container in the pane — the thumbnail column, the
-preview column, the floating facts card, the stacked row and the filmstrip — wears `dsh-assets-scroll`, and
+preview column, the pill's facts panel, the stacked row and the filmstrip — wears `dsh-assets-scroll`, and
 the bundle's sheet styles `::-webkit-scrollbar` as a **10px track with a 6px thumb** (the thumb brightens on
 hover). macOS's overlay bar is a few transparent pixels until it is already scrolling; this makes it a
 visible target. The filmstrip keeps its horizontal bar as a fallback for a long folder.
@@ -391,7 +394,7 @@ declared in that sheet, which is the rabbit the sibling plugin's undeclared spin
 
 The library is the front door, not the last step (founder, 2026-09-25: *"we designed Generate first as the
 control surface … but the session starts with an asset and the user clicks regenerate"*). So a file a run made
-carries a **Regenerate** control in its metadata block, and pressing it opens that run where it was made:
+carries a **Regenerate** control in the facts panel its pill opens, and pressing it opens that run where it was made:
 
 ```
 openTab('generate', { params: { run, unit, provider } })
@@ -459,7 +462,7 @@ floor from walking the picture a pixel at a time. `fitScale` never magnifies pas
 picture is shown at its own size) and a fit is deliberately NOT clamped to the zoom floor, because
 a fit that refused to go below it would open a 10,000-pixel plate as a crop.
 
-The stage sits in the metadata block, above the facts: the picture is **fitted and centred**,
+The stage is the preview column (or the gallery stage); the metadata is the pill over it: the picture is **fitted and centred**,
 the wheel zooms about the cursor, a drag pans, and **1:1 asks for the original file** — the stage
 draws the `&w=1024` preview until you ask, because a grid of tiles should never cost originals.
 The frame is measured with a `ResizeObserver`, so the fit follows the pane as it resizes (docked,
@@ -502,7 +505,7 @@ the suite assert the math without rendering.
 A picture is not only pixels. ComfyUI writes its graph into the PNG it saves, and RunningHub
 adds a provenance label — so a **canvas export** opens in a local ComfyUI while a **provider
 result** does not, and a person looking at an asset deserves to know which one they have.
-`lib/carrier.js` reads the file's own `tEXt` chunks and the metadata block draws **one row**:
+`lib/carrier.js` reads the file's own `tEXt` chunks and the pill's facts panel draws **one row**:
 *Graph inside — Yes, 25 nodes* / *No, only the provider's label*.
 
 **Three answers, never two.** A PNG carrying only the label says **no graph**; a format this
