@@ -1,0 +1,13 @@
+# @muen/dsh-styling — bundle patch layer.
+#
+# One row: mount the package into the profile tree. The host half answers the folder
+# registry, the probe, the per-look decisions and the image bytes; the client half
+# registers the `styling` right-panel tab type, its chip, its body and the guide card
+# that puts "Styling" on the right panel's start page.
+#
+# Row id `styling` is also the directory this plugin's own state lives under
+# (`<profile>/styling/`). The person's photos stay in the folder they added; this
+# plugin writes only its own root.json / manifest.json / state.json / proxies.
+- insert:
+    - id: styling
+      name: '@muen/dsh-styling'
