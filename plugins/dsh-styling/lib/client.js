@@ -166,7 +166,7 @@ window.__ModuleLoader__.load({
       'pdp.before': 'before',
       'pdp.after': 'after',
       'pdp.noFinal': 'No final for this view yet.',
-      'pdp.noFinal.body': 'Press re-generate to style this look.',
+      'pdp.noFinal.body': 'Press regenerate to style this view.',
       'pdp.fit': 'fit',
       'pdp.one': '1:1',
       'pdp.fill': 'fill',
@@ -175,7 +175,8 @@ window.__ModuleLoader__.load({
       'pdp.approveView': 'approve this view',
       'pdp.approvedView': 'view approved',
       'pdp.approveViewHint': 'approval is per view',
-      'pdp.regenerate': 're-generate this look',
+      'pdp.regenerate': 'regenerate this view',
+      'pdp.queuedView': 'This view is queued.',
       'pdp.queued': 'Queued.',
       'pdp.lastRun': 'last run {when}',
       'pdp.noRuns': 'no runs yet',
@@ -247,7 +248,7 @@ window.__ModuleLoader__.load({
       'pdp.before': '原图',
       'pdp.after': '成图',
       'pdp.noFinal': '这个视图还没有成图。',
-      'pdp.noFinal.body': '按重新生成来为这个造型做图。',
+      'pdp.noFinal.body': '按重新生成来为这个视图做图。',
       'pdp.fit': '适应',
       'pdp.one': '1:1',
       'pdp.fill': '填满',
@@ -256,7 +257,8 @@ window.__ModuleLoader__.load({
       'pdp.approveView': '通过这个视图',
       'pdp.approvedView': '视图已通过',
       'pdp.approveViewHint': '按视图逐个通过',
-      'pdp.regenerate': '重新生成这个造型',
+      'pdp.regenerate': '重新生成这个视图',
+      'pdp.queuedView': '这个视图已排队。',
       'pdp.queued': '已排队。',
       'pdp.lastRun': '上次运行 {when}',
       'pdp.noRuns': '还没有运行',
@@ -2009,7 +2011,7 @@ window.__ModuleLoader__.load({
             PaneButton,
             {
               kind: 'primary',
-              onClick: () => onRegenerate(look.id),
+              onClick: () => onRegenerate(look.id, index),
               disabled: busy,
               dataName: 'pdp-regenerate',
             },
@@ -2120,7 +2122,7 @@ window.__ModuleLoader__.load({
                 PaneButton,
                 {
                   kind: 'primary',
-                  onClick: () => onRegenerate(look.id),
+                  onClick: () => onRegenerate(look.id, index),
                   disabled: busy,
                   dataName: 'fs-regenerate',
                 },
@@ -2321,16 +2323,13 @@ window.__ModuleLoader__.load({
       )
 
       const regenerateOne = useCallback(
-        async (id) => {
+        async (id, view) => {
           setBusy(true)
           setNotice(null)
           try {
-            const job = await postJson(REGENERATE_URL, { looks: [id] })
+            const job = await postJson(REGENERATE_URL, { looks: [id], view })
             setData((current) => (current ? { ...current, job } : current))
-            setNotice(job.count === 0 ? t('plp.noneQueued') : replace(t('plp.queued'), { n: job.count }))
-            // The per-look button names one look: the queue holds just that look,
-            // approved or not. It is the same queue the top button writes, narrowed.
-            setNotice(t('pdp.queued'))
+            setNotice(job.count === 0 ? t('plp.noneQueued') : t('pdp.queuedView'))
           } catch (err) {
             setNotice(String((err && err.message) || err))
           } finally {

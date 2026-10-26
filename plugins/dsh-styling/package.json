@@ -1,6 +1,6 @@
 {
   "name": "@muen/dsh-styling",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Look styling for DeepSeek Harness: add the folder your look photos live in, let the host probe it into one folder per look (originals + final), review every look as a cover on the PLP, open a 2048px before/after wipe with pan and zoom on the PDP, and queue only the looks you have not approved.",
   "license": "MIT",
   "repository": {

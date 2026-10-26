@@ -440,19 +440,26 @@ export function apply(ctx, config = {}) {
     if (body === undefined) return send(res, 400, { error: 'bad-request' })
     const includeApproved = body.includeApproved === true
     const wanted = Array.isArray(body.looks) ? body.looks.map((value) => str(value)).filter((value) => value !== '') : null
+    const view = Number.isInteger(body.view) ? body.view : null
     const manifest = await readManifest(own.root)
     const state = await readState(own.root)
     const looks = manifest.looks.filter((look) => {
-      // A call that names looks (the PDP's "re-generate this look") means those
+      // A call that names looks (the PDP's "regenerate this view") means those
       // looks, approved or not. Otherwise the switch decides.
       if (wanted !== null && wanted.length > 0) return wanted.includes(look.id)
       if (includeApproved) return true
       return lookApproved(state, look) !== true
     })
+    if (view !== null) {
+      if (looks.length !== 1) return send(res, 400, { error: 'view-needs-one-look' })
+      const count = Array.isArray(looks[0].views) ? looks[0].views.length : 4
+      if (view < 0 || view >= count) return send(res, 400, { error: 'bad-view', detail: 'view must be 0..' + String(count - 1) })
+    }
     const job = {
       schema: JOB_SCHEMA,
       status: looks.length === 0 ? 'empty' : 'queued',
       includeApproved,
+      view,
       root: (await readRoot(own.root) || {}).root || null,
       looks: looks.map((look) => look.id),
       count: looks.length,
@@ -460,7 +467,9 @@ export function apply(ctx, config = {}) {
       message:
         looks.length === 0
           ? 'nothing to queue: every look is approved'
-          : 'queued ' + looks.length + ' look(s) · ask the agent to run the styling queue',
+          : view !== null
+            ? 'queued 1 view · ask the agent to run the styling queue'
+            : 'queued ' + looks.length + ' look(s) · ask the agent to run the styling queue',
     }
     await writeJob(own.root, job)
     send(res, 200, job)

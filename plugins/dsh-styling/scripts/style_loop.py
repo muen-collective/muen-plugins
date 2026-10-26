@@ -172,17 +172,78 @@ def looks_in_queue(manifest, job):
     return queue
 
 
-def plan_for(look, models_dir, model):
+DEFAULT_VIEWS = ["front", "side", "back", "detail"]
+
+
+def plan_for(look, models_dir, model, view_index=None):
     num = int(look["num"])
     final_dir = Path(look["finalDir"])
-    final = final_dir / f"look-{num:03d}.png"
+    views = look.get("views") or []
+    pair = None
+    index = None
+    if isinstance(view_index, int) and 0 <= view_index < len(views):
+        pair = views[view_index]
+        index = view_index
+    else:
+        # The look-level queue works on the front view; fall back to the first
+        # view that already has a final when a legacy manifest has no labels.
+        for at, entry in enumerate(views):
+            if entry.get("view") == "front":
+                pair = entry
+                index = at
+                break
+        if pair is None:
+            for at, entry in enumerate(views):
+                if entry.get("final"):
+                    pair = entry
+                    index = at
+                    break
+    if pair is None:
+        original = Path(look["coverOriginal"])
+        label = "front"
+        existing = None
+    else:
+        original = Path(pair["original"])
+        label = pair.get("view") or (
+            DEFAULT_VIEWS[index] if isinstance(index, int) and index < len(DEFAULT_VIEWS) else "front"
+        )
+        existing = Path(pair["final"]) if pair.get("final") else None
+    stem = f"look-{num:03d}" if label == "front" else f"look-{num:03d}-{label}"
+    final = final_dir / (stem + ".png")
     return {
         "look": look,
-        "original": Path(look["coverOriginal"]),
+        "original": original,
         "model_ref": models_dir / f"{model}_full.png",
         "final": final,
         "final_dir": final_dir,
+        "view_index": index if isinstance(index, int) else 0,
+        "view_label": label,
+        "existing_final": existing,
     }
+
+
+def archive_view_final(final_dir, existing, views_path, stamp):
+    """Move the current final for one view into ``archive/`` and unlabel it.
+
+    The old final is still a picture the person may want; archive it instead of
+    deleting it, and remove it from ``views.json`` so the probe does not pair the
+    archived copy as the current final.
+    """
+    if not existing or not existing.exists():
+        return None
+    archive_dir = final_dir / "archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    target = archive_dir / (existing.stem + "_r" + stamp + existing.suffix)
+    existing.rename(target)
+    try:
+        view_map = json.loads(views_path.read_text()) if views_path.exists() else {}
+        if not isinstance(view_map, dict):
+            view_map = {}
+    except Exception:
+        view_map = {}
+    view_map.pop(existing.name, None)
+    views_path.write_text(json.dumps(view_map, indent=2) + "\n")
+    return target
 
 
 def archive_existing(final_dir, stem):
@@ -236,6 +297,9 @@ def main():
         queue = [look for look in queue if look["id"] in wanted]
     if args.limit > 0:
         queue = queue[: args.limit]
+    selected_view = None
+    if job and isinstance(job.get("view"), int) and len(queue) == 1:
+        selected_view = job["view"]
 
     models_dir = Path(__file__).resolve().parent.parent / "assets" / "models"
     model_ref = models_dir / f"{args.model}_full.png"
@@ -248,7 +312,7 @@ def main():
     print("-" * 108)
     total = 0
     for look in queue:
-        plan = plan_for(look, models_dir, args.model)
+        plan = plan_for(look, models_dir, args.model, selected_view)
         if not plan["original"].exists():
             print(f"{look['id']:10} {'MISSING ' + plan['original'].name:34}")
             continue
@@ -278,7 +342,7 @@ def main():
     failures = []
     done = 0
     for index, look in enumerate(queue):
-        plan = plan_for(look, models_dir, args.model)
+        plan = plan_for(look, models_dir, args.model, selected_view)
         look_id = look["id"]
         print("")
         print(f"[{index + 1}/{len(queue)}] {look_id} · {plan['original'].name}")
@@ -302,35 +366,35 @@ def main():
             plan["final_dir"].mkdir(parents=True, exist_ok=True)
             suffix = extension_of(result["url"])
             final = plan["final"].with_suffix(suffix)
+            views_path = plan["final_dir"] / "views.json"
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            existing = plan.get("existing_final")
+            if existing and existing.exists() and existing != final:
+                moved = archive_view_final(plan["final_dir"], existing, views_path, stamp)
+                if moved:
+                    print("  archived " + moved.name)
             for old in archive_existing(plan["final_dir"], final.stem):
                 print("  archived " + old.name)
             final.write_bytes(response.content)
-            # The VL label for the final the loop just wrote: the cover view. The
-            # probe pairs finals by view, so an unlabelled loop output would fall
-            # back to file order.
-            cover_view = "front"
-            for pair in look.get("views", []):
-                if pair.get("original") == look.get("coverOriginal") and pair.get("view"):
-                    cover_view = pair["view"]
-                    break
-            views_path = plan["final_dir"] / "views.json"
+            # The VL label for this output: the view whose original was sent to
+            # the workflow. The probe pairs finals by view, so the label is what
+            # makes the new final land on the right strip tile.
             try:
                 view_map = json.loads(views_path.read_text()) if views_path.exists() else {}
                 if not isinstance(view_map, dict):
                     view_map = {}
             except Exception:
                 view_map = {}
-            view_map[final.name] = cover_view
+            view_map[final.name] = plan["view_label"]
             views_path.write_text(json.dumps(view_map, indent=2) + "\n")
             entry = state["looks"].setdefault(look_id, {})
-            # A NEW FINAL IS NOT AN APPROVAL. The loop writes the cover view (view 0);
-            # that view goes back to review while any other approved view keeps its
-            # decision.
+            # A NEW FINAL IS NOT AN APPROVAL. Only the view that was regenerated
+            # goes back to review; the other approved views keep their decision.
             count = len(look.get("views") or []) or 4
             approvals = entry.get("viewApprovals")
             if not isinstance(approvals, list) or len(approvals) != count:
                 approvals = [False] * count
-            approvals[0] = False
+            approvals[plan["view_index"]] = False
             entry["viewApprovals"] = approvals
             entry["approved"] = any(approvals)
             entry["reviewed"] = False
@@ -342,6 +406,8 @@ def main():
                     "cost": EST_COST,
                     "taskId": result.get("taskId"),
                     "model": args.model,
+                    "view": plan["view_label"],
+                    "viewIndex": plan["view_index"],
                 }
             )
             write_json(root / "state.json", state)
