@@ -27,8 +27,8 @@ duplicated. A file system that refuses a link (another volume) gets a copy.
 
 | Screen | What you see |
 |---|---|
-| **PLP** | A grid of covers (the final when one exists, the original otherwise), the look number, the name, the status line `approved 3/4` (`4/4` with a check), and the counts. There are no thumbnail badges and no approve switch on the card. The top bar has `re-generate N` (it opens the queue dialog), the `regenerate approved` switch, and the last queue. The pane header and the right-panel tab use the Lucide **shirt**; the market icon is `assets/icon.svg`. |
-| **PDP** | The look name (editable), a strip of the four views above, a 2048px stage that **fills the pane** below. The stage draws the original under the final; drag the divider to wipe, drag anywhere else to pan, scroll to zoom, with `fit` / `fill` / `1:1` at the bottom right. A single **wipe / side by side** button in the header switches the mode; side by side shares one camera, so pan and zoom move both images together. The strip marks each approved view with a check; the approve switch under the stage applies to the **selected view only**. A **fullscreen** control sits at the top right and in the stage controls. **`regenerate this view`** sits under the stage: it queues the selected view, not the whole look. |
+| **PLP** | A grid of covers (the final when one exists, the original otherwise), the look number, the name, the status line `approved 3/4` (`4/4` with a check), and the counts. There are no thumbnail badges and no approve switch on the card. The top bar reads **`generate N`** before the queue has a final or run and **`regenerate N`** after (it opens the queue dialog); the `regenerate approved` switch and the last queue sit beside it. The pane header and the right-panel tab use the Lucide **shirt**; the market icon is `assets/icon.svg`. |
+| **PDP** | The look name (editable), a strip of the four views above, a 2048px stage that **fills the pane** below. The stage draws the original under the final; drag the divider to wipe, drag anywhere else to pan, scroll to zoom, with `fit` / `fill` / `1:1` at the bottom right. A single **wipe / side by side** button in the header switches the mode; side by side shares one camera, so pan and zoom move both images together. The strip marks each approved view with a check; the approve switch under the stage applies to the **selected view only**. A **fullscreen** control sits at the top right and in the stage controls. **`generate this view`** sits under the stage on a view with no final or run; it becomes **`regenerate this view`** once that view has a final or run. It queues the selected view, not the whole look. |
 
 The same stage fills the pane inline and the window in the fullscreen dialog. The
 dialog requests the browser Fullscreen API where the host allows it, so the inspection
@@ -48,8 +48,10 @@ approved view; `4/4` is full completion.
 **all at once**, **one look at a time** (the next look; review it before the next), and
 **only this look** (a dropdown of every look, approved or not). The dialog writes the
 queue; it does not start an agent. The `regenerate approved` switch applies to the
-first two scopes; the third can pick any look. The agent runs the queue only when
-you tell it to.
+first two scopes; the third can pick any look. The dialog title follows the queue
+(`Generate looks` / `Regenerate looks`), and the third's primary follows the selected
+look (`Generate this look` / `Regenerate this look`). The agent runs the queue only
+when you tell it to.
 
 **The VL view pass.** A final is paired to an original by camera view, not by its
 position in the folder. The `styling-look-views` skill has the pass: label every image

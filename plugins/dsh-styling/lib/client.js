@@ -131,7 +131,8 @@ window.__ModuleLoader__.load({
       'pane.summary.filtered': '{approved} approved · {toStyle} to style',
       'pane.noFinal': '{n} without a final',
       'pane.add.failed': 'The folder could not be added.',
-      'plp.regenerate': 're-generate {n}',
+      'plp.generate': 'generate {n}',
+      'plp.regenerate': 'regenerate {n}',
       'plp.regenerating': 'queueing…',
       'plp.regenerateApproved': 'regenerate approved',
       'plp.regenerateApprovedHint': 'Include the looks you already approved.',
@@ -144,6 +145,8 @@ window.__ModuleLoader__.load({
       'plp.open': 'open look',
       'plp.viewProgress': '{approved}/{total} views',
       'queue.title': 'Re-generate looks',
+      'queue.generateTitle': 'Generate looks',
+      'queue.regenerateTitle': 'Regenerate looks',
       'queue.body': 'Choose the scope. Writing the queue does not start the agent; it runs when you tell it to.',
       'queue.all': 'All at once',
       'queue.allHint': 'Queue {n} look(s); review the batch afterwards.',
@@ -152,6 +155,7 @@ window.__ModuleLoader__.load({
       'queue.only': 'Only this look',
       'queue.onlyHint': 'Pick one look; only it is queued.',
       'queue.queueOnly': 'Regenerate this look',
+      'queue.generateOnly': 'Generate this look',
       'queue.noLooks': 'No looks are in this folder yet.',
       'queue.pick': 'Pick a look',
       'queue.queueAll': 'Queue all {n}',
@@ -166,7 +170,8 @@ window.__ModuleLoader__.load({
       'pdp.before': 'before',
       'pdp.after': 'after',
       'pdp.noFinal': 'No final for this view yet.',
-      'pdp.noFinal.body': 'Press regenerate to style this view.',
+      'pdp.noFinal.body': 'Press generate to style this view.',
+      'pdp.noFinal.regenerate': 'Press regenerate to style this view.',
       'pdp.fit': 'fit',
       'pdp.one': '1:1',
       'pdp.fill': 'fill',
@@ -175,6 +180,7 @@ window.__ModuleLoader__.load({
       'pdp.approveView': 'approve this view',
       'pdp.approvedView': 'view approved',
       'pdp.approveViewHint': 'approval is per view',
+      'pdp.generate': 'generate this view',
       'pdp.regenerate': 'regenerate this view',
       'pdp.queuedView': 'This view is queued.',
       'pdp.queued': 'Queued.',
@@ -213,6 +219,7 @@ window.__ModuleLoader__.load({
       'pane.summary.filtered': '{approved} 已通过 · {toStyle} 待造型',
       'pane.noFinal': '{n} 个还没有成图',
       'pane.add.failed': '无法添加文件夹。',
+      'plp.generate': '生成 {n} 个',
       'plp.regenerate': '重新生成 {n} 个',
       'plp.regenerating': '正在排队…',
       'plp.regenerateApproved': '重新生成已通过',
@@ -226,6 +233,8 @@ window.__ModuleLoader__.load({
       'plp.open': '打开造型',
       'plp.viewProgress': '{approved}/{total} 个视图',
       'queue.title': '重新生成',
+      'queue.generateTitle': '生成造型',
+      'queue.regenerateTitle': '重新生成造型',
       'queue.body': '选择范围。写队列不会启动 agent，只有你让它跑时才会生成。',
       'queue.all': '全部一起',
       'queue.allHint': '加入 {n} 个造型，跑完一起审。',
@@ -234,6 +243,7 @@ window.__ModuleLoader__.load({
       'queue.only': '只重新生成这个造型',
       'queue.onlyHint': '选一个造型，只加入它。',
       'queue.queueOnly': '重新生成这个造型',
+      'queue.generateOnly': '生成这个造型',
       'queue.noLooks': '文件夹里还没有造型。',
       'queue.pick': '选一个造型',
       'queue.queueAll': '加入全部 {n} 个',
@@ -248,7 +258,8 @@ window.__ModuleLoader__.load({
       'pdp.before': '原图',
       'pdp.after': '成图',
       'pdp.noFinal': '这个视图还没有成图。',
-      'pdp.noFinal.body': '按重新生成来为这个视图做图。',
+      'pdp.noFinal.body': '按生成来为这个视图做图。',
+      'pdp.noFinal.regenerate': '按重新生成来为这个视图做图。',
       'pdp.fit': '适应',
       'pdp.one': '1:1',
       'pdp.fill': '填满',
@@ -257,6 +268,7 @@ window.__ModuleLoader__.load({
       'pdp.approveView': '通过这个视图',
       'pdp.approvedView': '视图已通过',
       'pdp.approveViewHint': '按视图逐个通过',
+      'pdp.generate': '生成这个视图',
       'pdp.regenerate': '重新生成这个视图',
       'pdp.queuedView': '这个视图已排队。',
       'pdp.queued': '已排队。',
@@ -1042,7 +1054,7 @@ window.__ModuleLoader__.load({
     }
 
     // ── the wipe stage ─────────────────────────────────────────────────────────
-    function WipeStage({ original, final, wipe, setWipe, mode, t, full, fill, fullscreen, onFullscreen }) {
+    function WipeStage({ original, final, wipe, setWipe, mode, t, full, fill, fullscreen, onFullscreen, generated }) {
       const frameRef = useRef(null)
       const [frame, setFrame] = useState({ width: 0, height: 0 })
       const [natural, setNatural] = useState(null)
@@ -1240,7 +1252,7 @@ window.__ModuleLoader__.load({
                   'div',
                   { style: S.noFinal },
                   h('span', { style: S.title }, t('pdp.noFinal')),
-                  h('span', { style: S.muted }, t('pdp.noFinal.body')),
+                  h('span', { style: S.muted }, t(generated ? 'pdp.noFinal.regenerate' : 'pdp.noFinal.body')),
                 ),
             final ? h('span', { style: { ...S.label, right: 8 } }, t('pdp.after')) : null,
           ),
@@ -1318,7 +1330,7 @@ window.__ModuleLoader__.load({
               { style: S.noFinal },
               h(IconSparkle, { size: 18 }),
               h('span', { style: S.title }, t('pdp.noFinal')),
-              h('span', { style: S.body }, t('pdp.noFinal.body')),
+              h('span', { style: S.body }, t(generated ? 'pdp.noFinal.regenerate' : 'pdp.noFinal.body')),
             )
           : null,
       )
@@ -1377,7 +1389,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function QueueDialog({ t, open, looks, queued, includeApproved, setIncludeApproved, scope, setScope, pick, setPick, onClose, onQueue, busy }) {
+    function QueueDialog({ t, open, looks, queued, generated, includeApproved, setIncludeApproved, scope, setScope, pick, setPick, onClose, onQueue, busy }) {
       const cardRef = useRef(null)
       const closeRef = useRef(null)
       const previousRef = useRef(null)
@@ -1424,6 +1436,13 @@ window.__ModuleLoader__.load({
       }, [open])
       if (!open) return null
       const none = looks.length === 0
+      const title = t(generated ? 'queue.regenerateTitle' : 'queue.generateTitle')
+      const picked = looks.find((look) => look.id === pick) || null
+      const pickedGenerated = Boolean(
+        picked &&
+          ((Array.isArray(picked.finals) && picked.finals.length > 0) ||
+            (Array.isArray(picked.runs) && picked.runs.length > 0)),
+      )
       const nextLook = queued[0] || null
       const allCount = queued.length
       const canGo = scope === 'all' ? allCount > 0 : scope === 'next' ? Boolean(nextLook) : Boolean(pick)
@@ -1449,7 +1468,7 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { style: S.queueHead },
-            h('span', { id: 'styling-queue-title', style: S.queueTitle }, t('queue.title')),
+            h('span', { id: 'styling-queue-title', style: S.queueTitle }, title),
             h(
               'button',
               { ref: closeRef, type: 'button', style: S.queueClose, 'data-styling-button': 'queue-close', onClick: onClose, 'aria-label': t('queue.close') },
@@ -1472,7 +1491,7 @@ window.__ModuleLoader__.load({
             ? h('p', { style: S.queueNote }, t('queue.noLooks'))
             : h(
                 'div',
-                { role: 'radiogroup', 'aria-label': t('queue.title'), style: S.queueOptions },
+                { role: 'radiogroup', 'aria-label': title, style: S.queueOptions },
                 h(
                   'button',
                   {
@@ -1580,7 +1599,9 @@ window.__ModuleLoader__.load({
                 disabled: busy || none || !canGo,
               },
               scope === 'one'
-                ? t('queue.queueOnly')
+                ? pickedGenerated
+                  ? t('queue.queueOnly')
+                  : t('queue.generateOnly')
                 : scope === 'next'
                   ? t('queue.queueOne')
                   : replace(t('queue.queueAll'), { n: allCount }),
@@ -1601,6 +1622,11 @@ window.__ModuleLoader__.load({
       const allLooks = [...looks].sort((a, b) => a.num - b.num)
       const queueLooks = allLooks.filter((look) => includeApproved || !look.approved)
       const queueCount = queueLooks.length
+      const queueGenerated = queueLooks.some(
+        (look) =>
+          (Array.isArray(look.finals) && look.finals.length > 0) ||
+          (Array.isArray(look.runs) && look.runs.length > 0),
+      )
       const [queueOpen, setQueueOpen] = useState(false)
       const [queueScope, setQueueScope] = useState('all')
       const [queuePick, setQueuePick] = useState(null)
@@ -1738,10 +1764,17 @@ window.__ModuleLoader__.load({
                 disabled: busy || allLooks.length === 0,
                 onClick: openQueue,
                 dataName: 'regenerate',
-                title: queueCount === 0 ? t('plp.noneQueued') : t('plp.regenerate').replace('{n}', String(queueCount)),
+                title:
+                  queueCount === 0
+                    ? t('plp.noneQueued')
+                    : (queueGenerated ? t('plp.regenerate') : t('plp.generate')).replace('{n}', String(queueCount)),
               },
               h(IconSparkle, { size: 14 }),
-              busy ? t('plp.regenerating') : replace(t('plp.regenerate'), { n: queueCount }),
+              busy
+                ? t('plp.regenerating')
+                : queueGenerated
+                  ? replace(t('plp.regenerate'), { n: queueCount })
+                  : replace(t('plp.generate'), { n: queueCount }),
             ),
             h(Switch, {
               checked: includeApproved === true,
@@ -1779,6 +1812,7 @@ window.__ModuleLoader__.load({
           open: queueOpen,
           looks: allLooks,
           queued: queueLooks,
+          generated: queueGenerated,
           includeApproved,
           setIncludeApproved,
           scope: queueScope,
@@ -1871,6 +1905,10 @@ window.__ModuleLoader__.load({
       const hasFinal = Boolean(look.coverFinal)
       const viewApprovals = Array.isArray(look.viewApprovals) ? look.viewApprovals : []
       const viewApproved = viewApprovals[index] === true
+      const viewGenerated =
+        Boolean(pair.final) ||
+        (Array.isArray(look.runs) &&
+          look.runs.some((run) => run && (run.viewIndex === index || (pair.view && run.view === pair.view))))
 
       const modeControl = () =>
         h(
@@ -1994,6 +2032,7 @@ window.__ModuleLoader__.load({
             fill: true,
             fullscreen: false,
             onFullscreen: () => setFullscreen(true),
+            generated: viewGenerated,
           }),
         ),
         h(
@@ -2016,7 +2055,7 @@ window.__ModuleLoader__.load({
               dataName: 'pdp-regenerate',
             },
             h(IconSparkle, { size: 14 }),
-            t('pdp.regenerate'),
+            t(viewGenerated ? 'pdp.regenerate' : 'pdp.generate'),
           ),
         ),
         h(
@@ -2105,6 +2144,7 @@ window.__ModuleLoader__.load({
                 fill: true,
                 fullscreen: true,
                 onFullscreen: () => setFullscreen(false),
+                generated: viewGenerated,
               }),
             ),
             h(
@@ -2127,7 +2167,7 @@ window.__ModuleLoader__.load({
                   dataName: 'fs-regenerate',
                 },
                 h(IconSparkle, { size: 14 }),
-                t('pdp.regenerate'),
+                t(viewGenerated ? 'pdp.regenerate' : 'pdp.generate'),
               ),
               h('span', { style: S.muted }, hasFinal ? pair.view ? replace(t('pdp.viewName'), { n: index + 1, total: views.length, view: pair.view }) : replace(t('pdp.view'), { n: index + 1, total: views.length }) : t('pdp.noFinal')),
               notice ? h('span', { style: S.notice }, notice) : null,
