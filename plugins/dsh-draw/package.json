@@ -22,7 +22,9 @@
     "README.md"
   ],
   "scripts": {
-    "verify:host": "node verify/host.mjs"
+    "verify": "node verify/host.mjs && node verify/client.mjs",
+    "verify:host": "node verify/host.mjs",
+    "verify:client": "node verify/client.mjs"
   },
   "dsh": {
     "bundle": {

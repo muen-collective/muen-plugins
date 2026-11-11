@@ -68,12 +68,21 @@ without a refresh. The dot in the toolbar is the save state.
 ## Verify
 
 ```bash
-node verify/host.mjs     # 19 checks, no harness needed
+npm run verify           # host + client, no harness and no restart
 ```
 
-It mounts the real `apply()` against a fake `webServer` + `tools`, serves it over real
-HTTP, and asserts both directions: what the page writes the tool reads, and what the tool
-writes the page sees.
+**Host** (`verify/host.mjs`, 19 checks) mounts the real `apply()` against a fake
+`webServer` + `tools`, serves it over real HTTP, and asserts both directions: what the page
+writes the tool reads, and what the tool writes the page sees.
+
+**Client** (`verify/client.mjs`, 24 checks) proves the bundle parses, mounts through a stub
+loader, only requires react/primitives, registers through `ctx.effect`, exposes **thunks**
+where the tab registry calls them (a bare string there crashes the start guide), consults
+the host's `t` with both dictionaries covering every key, and renders an iframe pointing at
+`/plugins/draw/` — including when the icon seam is empty, which is a crash rather than a
+blank if the fallback is wrong.
+
+Neither replaces the composed app: only a launch proves the plugin is not inert.
 
 ## Deliberately not in this version
 

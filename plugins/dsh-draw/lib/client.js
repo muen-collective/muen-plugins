@@ -19,8 +19,8 @@ window.__ModuleLoader__.load({
     const IconSparkle = icon('IconSparkleRegular', 'IconSparkle16')
 
     const PLUGIN_ID = '@muen/dsh-draw'
-    const KIND = 'board'
-    const NS = 'board'
+    const KIND = 'draw'
+    const NS = 'draw'
     const BASE = '/plugins/draw/'
 
     const EN = {
