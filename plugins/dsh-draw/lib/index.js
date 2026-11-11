@@ -3,8 +3,8 @@
  *
  * Two seams, no more:
  *
- *   webServer  serves the drawing page at /plugins/board/ and the JSON it saves;
- *   tools      gives the agent `board_read` and `board_apply` over the same store.
+ *   webServer  serves the drawing page at /plugins/draw/ and the JSON it saves;
+ *   tools      gives the agent `draw_read` and `draw_apply` over the same store.
  *
  * Both halves read the SAME file, so what the person drew on screen is exactly what
  * the tool returns. There is no second representation to drift — the failure we
@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-const PREFIX = '/plugins/board'
+const PREFIX = '/plugins/draw'
 const MAX_BODY = 2 * 1024 * 1024
 const MAX_ELEMENTS = 400
 const MAX_POINTS = 4000
@@ -29,8 +29,8 @@ const ASSETS = join(here, '..', 'assets')
 
 /* ------------------------------------------------------------------ store */
 
-function boardRoot(env = process.env) {
-  return env.MUEN_BOARD_DIR || join(homedir(), '.dsh', 'muen-board')
+function drawRoot(env = process.env) {
+  return env.MUEN_DRAW_DIR || join(homedir(), '.dsh', 'muen-draw')
 }
 
 function emptyBoard() {
@@ -92,7 +92,7 @@ function normaliseBoard(input) {
 
 async function readBoard(root) {
   try {
-    const raw = await fsp.readFile(join(root, 'board.json'), 'utf8')
+    const raw = await fsp.readFile(join(root, 'draw.json'), 'utf8')
     const parsed = JSON.parse(raw)
     return {
       revision: Number.isFinite(parsed.revision) ? parsed.revision : 0,
@@ -108,7 +108,7 @@ async function writeBoard(root, board) {
   await fsp.mkdir(root, { recursive: true })
   const tmp = join(root, `.board.${process.pid}.${Date.now()}.json`)
   await fsp.writeFile(tmp, JSON.stringify(board), 'utf8')
-  await fsp.rename(tmp, join(root, 'board.json'))
+  await fsp.rename(tmp, join(root, 'draw.json'))
 }
 
 /* ------------------------------------------------------------------- http */
@@ -143,9 +143,9 @@ function readBody(req) {
 
 let htmlCache = null
 
-async function boardHtml() {
+async function drawHtml() {
   if (htmlCache) return htmlCache
-  const raw = await fsp.readFile(join(ASSETS, 'board.html'), 'utf8')
+  const raw = await fsp.readFile(join(ASSETS, 'draw.html'), 'utf8')
   htmlCache = raw.replaceAll('__PREFIX__', PREFIX)
   return htmlCache
 }
@@ -169,7 +169,7 @@ function createHandler(root) {
           sendJson(res, 405, { ok: false, error: 'method' })
           return true
         }
-        const html = await boardHtml()
+        const html = await drawHtml()
         res.writeHead(200, {
           'content-type': 'text/html; charset=utf-8',
           'cache-control': 'no-store',
@@ -253,7 +253,7 @@ function mountTools(ctx, root) {
   ctx.effect(
     () =>
       tools.register({
-        name: 'board_read',
+        name: 'draw_read',
         description:
           'Read the board the person is drawing on. This is their way of explaining something they could not put into words — so treat its labels as instructions, not as copy, and ask before assuming grouping. Returns the revision and one compact summary per shape: boxes and arrows as a bbox, scribbles as a scribble with its bbox, text as the words written. Read it before you answer anything about it; do not guess what is on the board.',
         parameters: { type: 'object', properties: {} },
@@ -281,7 +281,7 @@ function mountTools(ctx, root) {
   ctx.effect(
     () =>
       tools.register({
-        name: 'board_apply',
+        name: 'draw_apply',
         description:
           'Change the board the person is looking at — use it to answer with a diagram instead of prose when the thing is spatial (a flow, a tree, a layout). Operations apply in order: {op:"add", element}, {op:"update", id, props}, {op:"delete", id}, {op:"clear"}. Read the board first and keep its existing shapes unless the change means replacing them. Coordinates are board pixels; the board is roughly 640 wide by 640 tall, so keep shapes inside that.',
         parameters: {
@@ -382,7 +382,7 @@ function mountTools(ctx, root) {
 /* ------------------------------------------------------------------ apply */
 
 export function apply(ctx, config = {}) {
-  const root = (config && config.dir) || boardRoot()
+  const root = (config && config.dir) || drawRoot()
 
   const mounted = mountTools(ctx, root)
 
@@ -399,4 +399,4 @@ export function apply(ctx, config = {}) {
   return { root, tools: mounted, routes: true }
 }
 
-export { createHandler, readBoard, writeBoard, normaliseBoard, boardRoot, PREFIX }
+export { createHandler, readBoard, writeBoard, normaliseBoard, drawRoot, PREFIX }

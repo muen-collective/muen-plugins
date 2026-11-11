@@ -12,7 +12,7 @@
     "pack:brand": "npm pack --pack-destination dist ./plugins/dsh-brand-swap",
     "pack:browser-skill": "npm pack --pack-destination dist ./plugins/dsh-browser-skill",
     "pack:turn-summary": "npm pack --pack-destination dist ./plugins/dsh-turn-summary",
-    "pack:board": "npm pack --pack-destination dist ./plugins/dsh-board",
+    "pack:draw": "npm pack --pack-destination dist ./plugins/dsh-draw",
     "pack:changes-card": "npm pack --pack-destination dist ./plugins/dsh-changes-card",
     "pack:cms": "npm pack --pack-destination dist ./plugins/dsh-cms",
     "pack:codex-fold": "npm pack --pack-destination dist ./plugins/dsh-codex-fold",

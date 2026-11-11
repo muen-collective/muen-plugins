@@ -1,6 +1,6 @@
-# @muen/dsh-board
+# @muen/dsh-draw
 
-A board the agent can see.
+Draw what you cannot say — and the agent reads it.
 
 You sketch the thing that is too fiddly to describe; the agent reads it as
 **element summaries** — shapes, labels, bboxes — not as pixels. No vision model, no OCR,
@@ -12,18 +12,18 @@ A person who can prompt a working demo still hits moments where the thing in the
 takes several attempts to say. In those moments a drawing is the cheaper encoding.
 
 The failure this avoids: a design canvas that is a *second writable truth* beside the code.
-The board here is a **message**, not a document. It is the only store, it holds no code,
+The drawing here is a **message**, not a document. It is the only store, it holds no code,
 and the agent never renders anything — so there is nothing to drift.
 
 ## The two seams
 
 | Half | Seam | What it does |
 |---|---|---|
-| Host | `webServer` | serves the drawing page at `/plugins/board/`, plus the JSON store |
-| Host | `tools` | `board_read` and `board_apply` over that same file |
-| Client | `slots` + `sidebarRightTabs` | the right-panel **Board** tab; frames the host page |
+| Host | `webServer` | serves the drawing page at `/plugins/draw/`, plus the JSON store |
+| Host | `tools` | `draw_read` and `draw_apply` over that same file |
+| Client | `slots` + `sidebarRightTabs` | the right-panel **Draw** tab; frames the host page |
 
-Both halves read one file (`~/.dsh/muen-board/board.json`, or `MUEN_BOARD_DIR`), so the
+Both halves read one file (`~/.dsh/muen-draw/draw.json`, or `MUEN_DRAW_DIR`), so the
 page and the tool can never disagree.
 
 **The Host half imports nothing from `@deepseek-ai/*`.** A workspace-linked bundle cannot
@@ -32,7 +32,7 @@ while `install_bundle` still reported success. Keep it that way.
 
 ## Tools
 
-**`board_read`** → `{ ok, revision, updatedAt, elements[], note }`
+**`draw_read`** → `{ ok, revision, updatedAt, elements[], note }`
 
 Each element is one of:
 
@@ -43,7 +43,7 @@ Each element is one of:
 { "kind": "arrow",    "bbox": [300,120,60,-80] }
 ```
 
-**`board_apply`** → `{ ok, revision, applied, count }`
+**`draw_apply`** → `{ ok, revision, applied, count }`
 
 ```json
 { "ops": [
@@ -57,7 +57,7 @@ Each element is one of:
 An empty `ops` list is refused rather than treated as a no-op — a tool that silently
 succeeds at doing nothing is worse than one that says it did nothing.
 
-## On the board
+## Drawing
 
 Select/move · Scribble · Box · Arrow · Text · Undo · Delete · Clear.
 Shortcuts: `V` `D` `R` `A` `T`, `⌘Z`, `Delete`.

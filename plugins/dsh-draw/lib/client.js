@@ -1,4 +1,4 @@
-// @muen/dsh-board — browser half.
+// @muen/dsh-draw — browser half.
 //
 // One `board` tab in the right panel. The pane is deliberately thin: it frames the
 // host-served drawing page and says the one thing a person needs to know before
@@ -8,7 +8,7 @@
 //
 // Loader format: one self-contained script registered through window.__ModuleLoader__.
 window.__ModuleLoader__.load({
-  id: '@muen/dsh-board',
+  id: '@muen/dsh-draw',
   factory: (require) => {
     const React = require('react')
     const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
@@ -18,30 +18,30 @@ window.__ModuleLoader__.load({
     const IconBoard = icon('IconEditOutlineRegular', 'IconEditOutline16') ?? icon('IconTextRegular', 'IconText16')
     const IconSparkle = icon('IconSparkleRegular', 'IconSparkle16')
 
-    const PLUGIN_ID = '@muen/dsh-board'
+    const PLUGIN_ID = '@muen/dsh-draw'
     const KIND = 'board'
     const NS = 'board'
-    const BASE = '/plugins/board/'
+    const BASE = '/plugins/draw/'
 
     const EN = {
-      'type.label': 'Board',
+      'type.label': 'Draw',
       'guide.title': 'Draw what you cannot say',
       'guide.description': 'Sketch it on the board — the agent reads it, and can draw back',
-      'pane.reads': 'The agent reads this board',
-      'pane.hint': 'Sketch the thing that is hard to describe. Labels are treated as instructions.',
+      'pane.reads': 'The agent reads what you draw',
+      'pane.hint': 'Sketch the thing that is hard to describe. Words you write on it are treated as instructions.',
       'pane.open': 'Open',
-      'pane.title': 'Board',
+      'pane.title': 'Draw',
       'pane.close': 'Close',
     }
 
     const ZH = {
-      'type.label': '画板',
+      'type.label': '画',
       'guide.title': '画出来，别硬说',
       'guide.description': '在画板上勾一下 — 智能体会读它，也能画回给你',
-      'pane.reads': '智能体会读取这块画板',
+      'pane.reads': '智能体会读取你画的内容',
       'pane.hint': '把说不清的地方画出来。画板上的文字会被当作指令。',
       'pane.open': '新窗口打开',
-      'pane.title': '画板',
+      'pane.title': '画',
       'pane.close': '关闭',
     }
 
@@ -176,21 +176,21 @@ window.__ModuleLoader__.load({
 
     function apply(ctx) {
       const t = ctx.locale.bind(NS)
-      ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'dsh-board.copy')
-      ctx.effect(() => ctx.sidebarRightTabs.register(boardDefinition(t)), 'dsh-board.type')
+      ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'dsh-draw.copy')
+      ctx.effect(() => ctx.sidebarRightTabs.register(boardDefinition(t)), 'dsh-draw.type')
       ctx.effect(
         () =>
           ctx.slots.inject('sidebar.right.pane.tab', () =>
             ctx.slots.register({ name: 'sidebar.right.pane.tab', key: PLUGIN_ID, locale: NS }, BoardPane),
           ),
-        'dsh-board.body',
+        'dsh-draw.body',
       )
       ctx.effect(
         () =>
           ctx.slots.inject('sidebar.right.pane.tab.title', () =>
             ctx.slots.register({ name: 'sidebar.right.pane.tab.title', key: PLUGIN_ID, locale: NS }, BoardTitle),
           ),
-        'dsh-board.title',
+        'dsh-draw.title',
       )
     }
 
